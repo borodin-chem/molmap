@@ -1,0 +1,10 @@
+[package]
+name = "molmap"
+version = "0.1.0"
+edition = "2024"
+license = "MPL-2.0"
+
+[dependencies]
+mendeleev = { version = "0.8.4", default-features = false, features = ["all_lists", "oxidation_states", "atomic_number", "atomic_weight", "group_number", "jmol_color", "name", "symbol", "all_isotope_properties"] }
+nalgebra = "0.34.1"
+slotmap = "1.1.1"
