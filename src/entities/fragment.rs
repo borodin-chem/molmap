@@ -8,40 +8,29 @@
 
 use crate::{AtomId, Atomlike, BondId, FragmentId, Fundamental, IdError, MolMap, PseudoatomId};
 
-// Maybe better to use Nodes after all?
-// Presumably getting the length of a Vec is almost zero cost
-#[derive(Clone, Debug)]
-pub enum FragmentBondingCentre {
-    Ambiguous(Vec<BondId>),
-    Single(Atomlike),
-    Multiple(Vec<Atomlike>),
-}
-
-// Fragments are the smallest non-fundamental grouping in a MolMap
+// Fragments are the smallest grouping in a MolMap
 // Fragments are conceptually equivalent to a non-hydrogen atom and "its" implicit
 // hydrogen atoms in SMILES or in packages that work that way,
 // or to the groups drawn together without explicit bonds in a skeletal formula
 // e.g. –OH, –COOH, –CH3
 // Fragments have an internal structure of Atoms, Pseudoatoms, and Bonds
-// Atoms and Pseudoatoms cannot exist other than inside a Fragment
-// Fragments generally indicate one or more centres to which bonds can be made
+// Fragments generally indicate one or more centres to which bonds can be made,
+// but occasionally bonds are made to a fragment as a whole.
 #[derive(Debug)]
 pub(crate) struct Fragment {
     pub(crate) id: FragmentId,
-    pub(crate) centre: FragmentBondingCentre,
+    pub(crate) centres: Vec<Atomlike>,
     pub(crate) members: Vec<Fundamental>,
+    pub(crate) bonds: Vec<BondId>,
 }
 
 impl Fragment {
-    pub(crate) fn new(
-        id: FragmentId,
-        centre: FragmentBondingCentre,
-        members: &[Fundamental],
-    ) -> Self {
+    pub(crate) fn new(id: FragmentId, members: &[Fundamental]) -> Self {
         Self {
             id,
-            centre,
+            centres: Vec::new(),
             members: members.to_vec(),
+            bonds: Vec::new(),
         }
     }
 }
@@ -61,10 +50,6 @@ impl<'a, E> From<FragmentView<'a, E>> for FragmentId {
 impl<'a, E> FragmentView<'a, E> {
     fn inner(&self) -> &'a Fragment {
         self.molmap.fragments.get(self.id).unwrap()
-    }
-
-    pub fn centre(&self) -> &FragmentBondingCentre {
-        &self.inner().centre
     }
 }
 

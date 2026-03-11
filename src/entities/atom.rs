@@ -13,6 +13,7 @@ pub(crate) struct Atom {
     pub(crate) id: AtomId,
     pub(crate) element: Element,
     pub(crate) isotope: Option<MassNumber>,
+    pub(crate) bonds: Vec<BondId>,
     //pub annotations: Vec<ObjectId>,
 }
 
@@ -22,6 +23,7 @@ impl Atom {
             id,
             element,
             isotope: None,
+            bonds: Vec::new(),
             //annotations: Vec::new(),
         }
     }

@@ -10,13 +10,13 @@ use slotmap::new_key_type;
 
 // Create all the Id types
 new_key_type! {
-    pub struct BondId;
-}
-new_key_type! {
     pub struct AtomId;
 }
 new_key_type! {
     pub struct PseudoatomId;
+}
+new_key_type! {
+    pub struct BondId;
 }
 new_key_type! {
     pub struct FragmentId;
@@ -33,9 +33,9 @@ new_key_type! {
 /// All the members of `MolMap`s that have corresponding ID types.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Entity {
-    Bond(BondId),
     Atom(AtomId),
     Pseudoatom(PseudoatomId),
+    Bond(BondId),
     //Object(ObjectId),
     Fragment(FragmentId),
     Molecule(MoleculeId),
@@ -47,31 +47,19 @@ pub enum Entity {
 /// which is more restrictive.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Bondable {
-    //Bond(BondId),
     Atom(AtomId),
     Pseudoatom(PseudoatomId),
-    AmbiguouslyBondingFragment(FragmentId),
+    //Bond(BondId),
+    Fragment(FragmentId),
 }
 
 impl From<Bondable> for Entity {
     fn from(bondable: Bondable) -> Self {
         match bondable {
-            //Bondable::Bond(id) => Entity::Bond(id),
             Bondable::Atom(id) => Entity::Atom(id),
             Bondable::Pseudoatom(id) => Entity::Pseudoatom(id),
-            Bondable::AmbiguouslyBondingFragment(id) => Entity::Fragment(id),
-        }
-    }
-}
-
-impl From<Bondable> for BondingPartner {
-    fn from(bondable: Bondable) -> Self {
-        match bondable {
-            Bondable::Atom(id) => BondingPartner::Atom(id),
-            Bondable::Pseudoatom(id) => BondingPartner::Pseudoatom(id),
-            Bondable::AmbiguouslyBondingFragment(id) => {
-                BondingPartner::AmbiguouslyBondingFragment(id)
-            }
+            //Bondable::Bond(id) => Entity::Bond(id),
+            Bondable::Fragment(id) => Entity::Fragment(id),
         }
     }
 }
@@ -79,9 +67,9 @@ impl From<Bondable> for BondingPartner {
 /// The endpoints of bonds.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum BondingPartner {
-    // BondingSystem(BondingSystemId),  // future
     Atom(AtomId),
     Pseudoatom(PseudoatomId),
+    // BondingSystem(BondingSystemId),  // future
     AmbiguouslyBondingFragment(FragmentId),
 }
 
@@ -122,6 +110,15 @@ impl From<Atomlike> for Bondable {
     }
 }
 
+impl From<Atomlike> for BondingPartner {
+    fn from(atomlike: Atomlike) -> Self {
+        match atomlike {
+            Atomlike::Atom(id) => BondingPartner::Atom(id),
+            Atomlike::Pseudoatom(id) => BondingPartner::Pseudoatom(id),
+        }
+    }
+}
+
 impl From<Atomlike> for Fundamental {
     fn from(atomlike: Atomlike) -> Self {
         match atomlike {
@@ -134,17 +131,17 @@ impl From<Atomlike> for Fundamental {
 /// The basic building blocks of a `MolMap` that do not group other entities.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Fundamental {
-    Bond(BondId),
     Atom(AtomId),
     Pseudoatom(PseudoatomId),
+    Bond(BondId),
 }
 
 impl From<Fundamental> for Entity {
     fn from(fundamental: Fundamental) -> Self {
         match fundamental {
-            Fundamental::Bond(id) => Entity::Bond(id),
             Fundamental::Atom(id) => Entity::Atom(id),
             Fundamental::Pseudoatom(id) => Entity::Pseudoatom(id),
+            Fundamental::Bond(id) => Entity::Bond(id),
         }
     }
 }
@@ -168,9 +165,9 @@ impl From<Collection> for Entity {
 /// Entities that an `Object` can be attached to.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Anchor {
-    Bond(BondId),
     Atom(AtomId),
     Pseudoatom(PseudoatomId),
+    Bond(BondId),
     Fragment(FragmentId),
     Molecule(MoleculeId),
 }
@@ -178,9 +175,9 @@ pub enum Anchor {
 impl From<Anchor> for Entity {
     fn from(anchor: Anchor) -> Self {
         match anchor {
-            Anchor::Bond(id) => Entity::Bond(id),
             Anchor::Atom(id) => Entity::Atom(id),
             Anchor::Pseudoatom(id) => Entity::Pseudoatom(id),
+            Anchor::Bond(id) => Entity::Bond(id),
             Anchor::Fragment(id) => Entity::Fragment(id),
             Anchor::Molecule(id) => Entity::Molecule(id),
         }
