@@ -250,10 +250,27 @@ impl<E> MolMap<E> {
         let bond_id = self
             .bonds
             .insert_with_key(|id| Bond::new(id, BondType::Covalent, 1.0, start, end));
-        match start {
-            BondingPartner::Atom(id) => self.atoms.get_mut(id).expect("Already checked").bonds.push(bond_id),
-            BondingPartner::Pseudoatom(id) => self.pseudoatoms.get_mut(id).expect("Already checked").bonds.push(bond_id),
-            BondingPartner::AmbiguouslyBondingFragment(id) => self.fragments.get_mut(id).expect("Already checked").bonds.push(bond_id),
+        for partner in [start, end] {
+            match partner {
+                BondingPartner::Atom(id) => self
+                    .atoms
+                    .get_mut(id)
+                    .expect("Already checked")
+                    .bonds
+                    .push(bond_id),
+                BondingPartner::Pseudoatom(id) => self
+                    .pseudoatoms
+                    .get_mut(id)
+                    .expect("Already checked")
+                    .bonds
+                    .push(bond_id),
+                BondingPartner::AmbiguouslyBondingFragment(id) => self
+                    .fragments
+                    .get_mut(id)
+                    .expect("Already checked")
+                    .bonds
+                    .push(bond_id),
+            }
         }
         Ok(bond_id)
     }
