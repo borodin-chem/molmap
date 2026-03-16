@@ -46,8 +46,20 @@ impl<'a, E> AtomView<'a, E> {
         self.molmap.atoms.get(self.id).unwrap()
     }
 
+    pub fn element(&self) -> Element {
+        self.inner().element
+    }
+
     pub fn symbol(&self) -> &str {
         self.inner().element.symbol()
+    }
+
+    pub fn isotope(&self) -> Option<MassNumber> {
+        self.inner().isotope
+    }
+
+    pub fn bonds(&self) -> &[BondId] {
+        &self.inner().bonds
     }
 }
 

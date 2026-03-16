@@ -60,8 +60,17 @@ impl<'a, E> BondView<'a, E> {
         self.molmap.bonds.get(self.id).unwrap()
     }
 
+    pub fn bond_type(&self) -> BondType {
+        self.inner().bond_type
+    }
+
     pub fn order(&self) -> f32 {
         self.inner().order
+    }
+
+    pub fn partners(&self) -> [BondingPartner; 2] {
+        let inner = self.inner();
+        [inner.start, inner.end]
     }
 }
 

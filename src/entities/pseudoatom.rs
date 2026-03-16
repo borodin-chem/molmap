@@ -49,6 +49,10 @@ impl<'a, E> PseudoatomView<'a, E> {
     pub fn symbol(&self) -> &str {
         &self.inner().symbol
     }
+
+    pub fn bonds(&self) -> &[BondId] {
+        &self.inner().bonds
+    }
 }
 
 pub struct PseudoatomViewMut<'a, E> {
