@@ -17,4 +17,4 @@ pub mod map;
 pub use element::Element;
 pub use entities::*;
 pub use id::*;
-pub use map::{MolMap, MolGraph};
+pub use map::{MolMap, MolMap0, MolMapExt};

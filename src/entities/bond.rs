@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{BondId, Bondable, BondingPartner, MolMap};
+use crate::{BondId, Bondable, BondingPartner, MolMap, MolMapExt};
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum BondType {
@@ -41,18 +41,18 @@ impl Bond {
 }
 
 #[derive(Clone, Copy)]
-pub struct BondView<'a, E> {
+pub struct BondView<'a, E: MolMapExt> {
     pub molmap: &'a MolMap<E>,
     pub id: BondId,
 }
 
-impl<'a, E> From<BondView<'a, E>> for BondId {
+impl<'a, E: MolMapExt> From<BondView<'a, E>> for BondId {
     fn from(view: BondView<'a, E>) -> Self {
         view.id
     }
 }
 
-impl<'a, E> BondView<'a, E> {
+impl<'a, E: MolMapExt> BondView<'a, E> {
     fn inner(&self) -> &'a Bond {
         self.molmap.bonds.get(self.id).unwrap()
     }
@@ -71,18 +71,18 @@ impl<'a, E> BondView<'a, E> {
     }
 }
 
-pub struct BondViewMut<'a, E> {
+pub struct BondViewMut<'a, E: MolMapExt> {
     pub molmap: &'a mut MolMap<E>,
     pub id: BondId,
 }
 
-impl<'a, E> From<BondViewMut<'a, E>> for BondId {
+impl<'a, E: MolMapExt> From<BondViewMut<'a, E>> for BondId {
     fn from(view: BondViewMut<'a, E>) -> Self {
         view.id
     }
 }
 
-impl<'a, E> BondViewMut<'a, E> {
+impl<'a, E: MolMapExt> BondViewMut<'a, E> {
     fn as_ref(&self) -> BondView<'_, E> {
         BondView {
             molmap: &*self.molmap,

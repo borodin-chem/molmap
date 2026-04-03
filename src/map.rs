@@ -8,37 +8,41 @@
 
 use slotmap::{SlotMap, basic::Iter};
 
-use std::hash::RandomState;
+use std::{fmt::Debug, hash::RandomState};
 
 use crate::{Element, bond::BondType, entities::*, id::*};
 
 /// An extensible arena-like data structure to represent a set of chemical entities,
 /// their properties, and the relationships between them, as a molecular graph.
-#[derive(Debug)]
-pub struct MolMap<Extension> {
+#[derive(Debug, Default)]
+pub struct MolMap<E: MolMapExt> {
     pub(crate) bonds: SlotMap<BondId, Bond>,
     pub(crate) atoms: SlotMap<AtomId, Atom>,
     pub(crate) pseudoatoms: SlotMap<PseudoatomId, Pseudoatom>,
     pub(crate) fragments: SlotMap<FragmentId, Fragment>,
     pub(crate) molecules: SlotMap<MoleculeId, Molecule>,
     //pub(crate) objects: SlotMap<ObjectId, Object>,
-    pub(crate) extension: Extension,
+    pub(crate) extension: E,
+}
+
+pub trait MolMapExt: Debug + Default {
+    /// Creates an empty `MolMap`.
+    fn new() -> Self;
+
+    /// Creates a new `MolMap` with capacity for approximately `n` atoms.
+    fn with_capacity(n: usize) -> Self;
+}
+
+impl MolMapExt for () {
+    fn new() -> Self {}
+
+    fn with_capacity(n: usize) -> Self {}
 }
 
 /// A convenient alias for `MolMap<()>`, a `MolMap` that represents just a molecular graph.
-pub type MolGraph = MolMap<()>;
+pub type MolMap0 = MolMap<()>;
 
-impl<E: Default> Default for MolMap<E> {
-    /// Creates a `MolMap` with a modest capacity of approximately 5 molecules and 150 atoms.
-    /// 
-    /// Equivalent to `MolMap::with_capacity(5)`
-    fn default() -> Self {
-        Self::with_capacity(5)
-    }
-}
-
-impl<E: Default> MolMap<E> {
-
+impl<E: MolMapExt> MolMap<E> {
     /// Creates an empty `MolMap`.
     /// 
     /// As the constituent `SlotMap`s are created with an initial capacity of 0, reallocations will
@@ -53,35 +57,37 @@ impl<E: Default> MolMap<E> {
             fragments: SlotMap::with_key(),
             molecules: SlotMap::with_key(),
             //objects: SlotMap::with_key(),
-            extension: E::default(),
-        }
-    }
-
-    /// Creates a `MolMap` with capacity for approximately `n` molecules and `30 * n` atoms.
-    /// 
-    /// The required number of entities of each type is guessed based on an assumption that each
-    /// molecule is a small organic molecule containing approximately 10 to 12 carbon atoms.
-    /// 
-    /// The constituent `SlotMap`s are created with initial capacities for the following:
-    /// - `n` molecules
-    /// - `10 * n` fragments
-    /// - `30 * n` atoms
-    /// - `5 * n` pseudoatoms
-    /// - `30 * n` bonds
-    pub fn with_capacity(n: usize) -> Self {
-        Self {
-            bonds: SlotMap::with_capacity_and_key(30 * n),
-            atoms: SlotMap::with_capacity_and_key(30 * n),
-            pseudoatoms: SlotMap::with_capacity_and_key(5 * n),
-            fragments: SlotMap::with_capacity_and_key(10 * n),
-            molecules: SlotMap::with_capacity_and_key(n),
-            //objects: SlotMap::with_capacity_and_key(2 * n),
-            extension: E::default(),
+            extension: E::new(),
         }
     }
 }
 
-impl<E> MolMap<E> {
+//impl<E: MolMapExt> MolMap<E> {
+//    /// Creates a `MolMap` with capacity for approximately `n` molecules and `30 * n` atoms.
+//    /// 
+//    /// The required number of entities of each type is guessed based on an assumption that each
+//    /// molecule is a small organic molecule containing approximately 10 to 12 carbon atoms.
+//    /// 
+//    /// The constituent `SlotMap`s are created with initial capacities for the following:
+//    /// - `n` molecules
+//    /// - `10 * n` fragments
+//    /// - `30 * n` atoms
+//    /// - `5 * n` pseudoatoms
+//    /// - `30 * n` bonds
+//    pub fn with_capacity(n: usize) -> Self {
+//        Self {
+//            bonds: SlotMap::with_capacity_and_key(30 * n),
+//            atoms: SlotMap::with_capacity_and_key(30 * n),
+//            pseudoatoms: SlotMap::with_capacity_and_key(5 * n),
+//            fragments: SlotMap::with_capacity_and_key(10 * n),
+//            molecules: SlotMap::with_capacity_and_key(n),
+//            //objects: SlotMap::with_capacity_and_key(2 * n),
+//            extension: E::default(),
+//        }
+//    }
+//}
+
+impl<E: MolMapExt> MolMap<E> {
     // Getters
     // One method per entity type for:
     // - getting a view
@@ -332,7 +338,7 @@ impl<E> MolMap<E> {
 }
 
 // Private methods
-impl<E> MolMap<E> {
+impl<E: MolMapExt> MolMap<E> {
     /// Gets the actual bonding partner that a `Bondable` refers to, while also validating the ID.
     ///
     /// Fragments generally form bonds from a central atom or pseudoatom, but they might have no

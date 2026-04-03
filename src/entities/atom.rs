@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{AtomId, BondId, Bondable, Element, FragmentId, MolMap};
+use crate::{AtomId, BondId, Bondable, Element, FragmentId, MolMap, MolMapExt};
 
 #[derive(Debug)]
 pub(crate) struct Atom {
@@ -26,18 +26,18 @@ impl Atom {
 }
 
 #[derive(Clone, Copy)]
-pub struct AtomView<'a, E> {
+pub struct AtomView<'a, E: MolMapExt> {
     pub molmap: &'a MolMap<E>,
     pub id: AtomId,
 }
 
-impl<'a, E> From<AtomView<'a, E>> for AtomId {
+impl<'a, E: MolMapExt> From<AtomView<'a, E>> for AtomId {
     fn from(view: AtomView<'a, E>) -> Self {
         view.id
     }
 }
 
-impl<'a, E> AtomView<'a, E> {
+impl<'a, E: MolMapExt> AtomView<'a, E> {
     fn inner(&self) -> &'a Atom {
         self.molmap.atoms.get(self.id).unwrap()
     }
@@ -55,18 +55,18 @@ impl<'a, E> AtomView<'a, E> {
     }
 }
 
-pub struct AtomViewMut<'a, E> {
+pub struct AtomViewMut<'a, E: MolMapExt> {
     pub molmap: &'a mut MolMap<E>,
     pub id: AtomId,
 }
 
-impl<'a, E> From<AtomViewMut<'a, E>> for AtomId {
+impl<'a, E: MolMapExt> From<AtomViewMut<'a, E>> for AtomId {
     fn from(view: AtomViewMut<'a, E>) -> Self {
         view.id
     }
 }
 
-impl<'a, E> AtomViewMut<'a, E> {
+impl<'a, E: MolMapExt> AtomViewMut<'a, E> {
     fn as_ref(&self) -> AtomView<'_, E> {
         AtomView {
             molmap: &*self.molmap,

@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{AtomId, Atomlike, BondId, FragmentId, Fundamental, IdError, MolMap, PseudoatomId};
+use crate::{AtomId, Atomlike, BondId, FragmentId, Fundamental, IdError, MolMap, MolMapExt, PseudoatomId};
 
 // Fragments are the smallest grouping in a MolMap
 // Fragments are conceptually equivalent to a non-hydrogen atom and "its" implicit
@@ -34,35 +34,35 @@ impl Fragment {
 }
 
 #[derive(Clone, Copy)]
-pub struct FragmentView<'a, E> {
+pub struct FragmentView<'a, E: MolMapExt> {
     pub molmap: &'a MolMap<E>,
     pub id: FragmentId,
 }
 
-impl<'a, E> From<FragmentView<'a, E>> for FragmentId {
+impl<'a, E: MolMapExt> From<FragmentView<'a, E>> for FragmentId {
     fn from(view: FragmentView<'a, E>) -> Self {
         view.id
     }
 }
 
-impl<'a, E> FragmentView<'a, E> {
+impl<'a, E: MolMapExt> FragmentView<'a, E> {
     fn inner(&self) -> &'a Fragment {
         self.molmap.fragments.get(self.id).unwrap()
     }
 }
 
-pub struct FragmentViewMut<'a, E> {
+pub struct FragmentViewMut<'a, E: MolMapExt> {
     pub molmap: &'a mut MolMap<E>,
     pub id: FragmentId,
 }
 
-impl<'a, E> From<FragmentViewMut<'a, E>> for FragmentId {
+impl<'a, E: MolMapExt> From<FragmentViewMut<'a, E>> for FragmentId {
     fn from(view: FragmentViewMut<'a, E>) -> Self {
         view.id
     }
 }
 
-impl<'a, E> FragmentViewMut<'a, E> {
+impl<'a, E: MolMapExt> FragmentViewMut<'a, E> {
     fn as_ref(&self) -> FragmentView<'_, E> {
         FragmentView {
             molmap: &*self.molmap,

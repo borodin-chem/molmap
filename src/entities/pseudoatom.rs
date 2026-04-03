@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{BondId, FragmentId, MolMap, PseudoatomId};
+use crate::{BondId, FragmentId, MolMap, MolMapExt, PseudoatomId};
 
 // Something that has a "symbol" like a normal atom but represents something else
 // May have an unknown composition like R, or a known structure like Ph
@@ -28,18 +28,18 @@ impl Pseudoatom {
 }
 
 #[derive(Clone, Copy)]
-pub struct PseudoatomView<'a, E> {
+pub struct PseudoatomView<'a, E: MolMapExt> {
     pub molmap: &'a MolMap<E>,
     pub id: PseudoatomId,
 }
 
-impl<'a, E> From<PseudoatomView<'a, E>> for PseudoatomId {
+impl<'a, E: MolMapExt> From<PseudoatomView<'a, E>> for PseudoatomId {
     fn from(view: PseudoatomView<'a, E>) -> Self {
         view.id
     }
 }
 
-impl<'a, E> PseudoatomView<'a, E> {
+impl<'a, E: MolMapExt> PseudoatomView<'a, E> {
     fn inner(&self) -> &'a Pseudoatom {
         self.molmap.pseudoatoms.get(self.id).unwrap()
     }
@@ -53,18 +53,18 @@ impl<'a, E> PseudoatomView<'a, E> {
     }
 }
 
-pub struct PseudoatomViewMut<'a, E> {
+pub struct PseudoatomViewMut<'a, E: MolMapExt> {
     pub molmap: &'a mut MolMap<E>,
     pub id: PseudoatomId,
 }
 
-impl<'a, E> From<PseudoatomViewMut<'a, E>> for PseudoatomId {
+impl<'a, E: MolMapExt> From<PseudoatomViewMut<'a, E>> for PseudoatomId {
     fn from(view: PseudoatomViewMut<'a, E>) -> Self {
         view.id
     }
 }
 
-impl<'a, E> PseudoatomViewMut<'a, E> {
+impl<'a, E: MolMapExt> PseudoatomViewMut<'a, E> {
     fn as_ref(&self) -> PseudoatomView<'_, E> {
         PseudoatomView {
             molmap: &*self.molmap,
