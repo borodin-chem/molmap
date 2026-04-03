@@ -6,7 +6,21 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{AtomId, Atomlike, BondId, FragmentId, Fundamental, IdError, MolMap, MolMapExt, PseudoatomId};
+use crate::{AtomId, Atomlike, BondId, FragmentId, Fundamental, IdError, MolMap, MolMapExt, MoleculeId, PseudoatomId};
+
+#[derive(Debug)]
+pub(crate) enum FragmentCentre {
+    Ambiguous(Vec<BondId>),
+    Single(Atomlike),
+    Multiple(Vec<Atomlike>),
+}
+
+impl Default for FragmentCentre {
+    /// Creates an ambiguous centre with an empty vector of bonds.
+    fn default() -> Self {
+        FragmentCentre::Ambiguous(Vec::new())
+    }
+}
 
 // Fragments are the smallest grouping in a MolMap
 // Fragments are conceptually equivalent to a non-hydrogen atom and "its" implicit
@@ -18,17 +32,15 @@ use crate::{AtomId, Atomlike, BondId, FragmentId, Fundamental, IdError, MolMap, 
 // but occasionally bonds are made to a fragment as a whole.
 #[derive(Debug)]
 pub(crate) struct Fragment {
-    pub(crate) centres: Vec<Atomlike>,
+    pub(crate) centre: FragmentCentre,
     pub(crate) members: Vec<Fundamental>,
-    pub(crate) bonds: Vec<BondId>,
 }
 
 impl Fragment {
     pub(crate) fn new(members: &[Fundamental]) -> Self {
         Self {
-            centres: Vec::new(),
+            centre: FragmentCentre::default(),
             members: members.to_vec(),
-            bonds: Vec::new(),
         }
     }
 }
