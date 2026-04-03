@@ -12,16 +12,14 @@ use crate::{BondId, FragmentId, MolMap, PseudoatomId};
 // May have an unknown composition like R, or a known structure like Ph
 #[derive(Debug)]
 pub(crate) struct Pseudoatom {
-    pub(crate) id: PseudoatomId,
     pub(crate) symbol: String,
     pub(crate) bonds: Vec<BondId>,
     //pub annotations: Vec<ObjectId>,
 }
 
 impl Pseudoatom {
-    pub(crate) fn new(id: PseudoatomId, symbol: String) -> Self {
+    pub(crate) fn new(symbol: String) -> Self {
         Self {
-            id,
             symbol,
             bonds: Vec::new(),
             //annotations: Vec::new(),

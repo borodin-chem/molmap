@@ -18,16 +18,14 @@ use crate::{AtomId, Atomlike, BondId, FragmentId, Fundamental, IdError, MolMap, 
 // but occasionally bonds are made to a fragment as a whole.
 #[derive(Debug)]
 pub(crate) struct Fragment {
-    pub(crate) id: FragmentId,
     pub(crate) centres: Vec<Atomlike>,
     pub(crate) members: Vec<Fundamental>,
     pub(crate) bonds: Vec<BondId>,
 }
 
 impl Fragment {
-    pub(crate) fn new(id: FragmentId, members: &[Fundamental]) -> Self {
+    pub(crate) fn new(members: &[Fundamental]) -> Self {
         Self {
-            id,
             centres: Vec::new(),
             members: members.to_vec(),
             bonds: Vec::new(),

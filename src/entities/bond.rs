@@ -18,7 +18,6 @@ pub enum BondType {
 
 #[derive(Debug)]
 pub(crate) struct Bond {
-    pub(crate) id: BondId,
     pub(crate) bond_type: BondType,
     pub(crate) order: f32,
     pub(crate) start: BondingPartner,
@@ -27,14 +26,12 @@ pub(crate) struct Bond {
 
 impl Bond {
     pub(crate) fn new(
-        id: BondId,
         bond_type: BondType,
         order: f32,
         start: BondingPartner,
         end: BondingPartner,
     ) -> Self {
         Self {
-            id,
             bond_type,
             order,
             start,

@@ -10,7 +10,7 @@ use slotmap::{SlotMap, basic::Iter};
 
 use std::hash::RandomState;
 
-use crate::{Element, bond::BondType, element::MassNumber, entities::*, id::*};
+use crate::{Element, bond::BondType, entities::*, id::*};
 
 /// An extensible arena-like data structure to represent a set of chemical entities,
 /// their properties, and the relationships between them, as a molecular graph.
@@ -262,13 +262,12 @@ impl<E> MolMap<E> {
 
     /// Adds an `Atom` to the map.
     pub fn add_atom(&mut self, element: Element) -> AtomId {
-        self.atoms.insert_with_key(|id| Atom::new(id, element))
+        self.atoms.insert(Atom::new(element))
     }
 
     /// Adds a `Pseudoatom` to the map.
     pub fn add_pseudoatom(&mut self, symbol: &str) -> PseudoatomId {
-        self.pseudoatoms
-            .insert_with_key(|id| Pseudoatom::new(id, symbol.to_owned()))
+        self.pseudoatoms.insert(Pseudoatom::new(symbol.to_owned()))
     }
 
     /// Creates a new (single covalent) `Bond` between two bondable entities.
@@ -280,7 +279,7 @@ impl<E> MolMap<E> {
         let end = self.convert_bondable(end)?;
         let bond_id = self
             .bonds
-            .insert_with_key(|id| Bond::new(id, BondType::Covalent, 1.0, start, end));
+            .insert(Bond::new(BondType::Covalent, 1.0, start, end));
         for partner in [start, end] {
             match partner {
                 BondingPartner::Atom(id) => self
@@ -313,8 +312,7 @@ impl<E> MolMap<E> {
         if !self.contains_atomlike(centre) {
             return Err(IdError);
         }
-        Ok(self.fragments.insert_with_key(|id| Fragment {
-            id,
+        Ok(self.fragments.insert(Fragment {
             centres: vec![centre],
             members: vec![centre.into()],
             bonds: Vec::new(),
@@ -323,7 +321,7 @@ impl<E> MolMap<E> {
 
     /// Adds an empty `Molecule` to the map.
     pub fn add_molecule(&mut self) -> MoleculeId {
-        self.molecules.insert_with_key(Molecule::new)
+        self.molecules.insert(Molecule::new())
     }
 
     // Methods to add entities to collections
