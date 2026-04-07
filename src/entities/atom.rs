@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{AtomId, BondId, Bondable, Element, FragmentId, MolMap, MolMapExt};
+use crate::{AtomId, BondId, Bondable, Element, FragmentId, MolMap};
 
 #[derive(Debug)]
 pub(crate) struct Atom {
@@ -26,55 +26,55 @@ impl Atom {
 }
 
 #[derive(Clone, Copy)]
-pub struct AtomView<'a, E: MolMapExt> {
-    pub molmap: &'a MolMap<E>,
+pub struct AtomView<'a, M: MolMap> {
+    pub molmap: &'a M,
     pub id: AtomId,
 }
 
-impl<'a, E: MolMapExt> From<AtomView<'a, E>> for AtomId {
-    fn from(view: AtomView<'a, E>) -> Self {
+impl<'a, M: MolMap> From<AtomView<'a, M>> for AtomId {
+    fn from(view: AtomView<'a, M>) -> Self {
         view.id
     }
 }
 
-impl<'a, E: MolMapExt> AtomView<'a, E> {
-    fn inner(&self) -> &'a Atom {
-        self.molmap.atoms.get(self.id).unwrap()
+impl<'a, M: MolMap> AtomView<'a, M> {
+    fn core(&self) -> &'a Atom {
+        self.molmap.core().atoms.get(self.id).unwrap()
     }
 
     pub fn element(&self) -> Element {
-        self.inner().element
+        self.core().element
     }
 
     pub fn symbol(&self) -> &str {
-        self.inner().element.symbol()
+        self.core().element.symbol()
     }
 
     pub fn bonds(&self) -> &[BondId] {
-        &self.inner().bonds
+        &self.core().bonds
     }
 }
 
-pub struct AtomViewMut<'a, E: MolMapExt> {
-    pub molmap: &'a mut MolMap<E>,
+pub struct AtomViewMut<'a, M: MolMap> {
+    pub molmap: &'a mut M,
     pub id: AtomId,
 }
 
-impl<'a, E: MolMapExt> From<AtomViewMut<'a, E>> for AtomId {
-    fn from(view: AtomViewMut<'a, E>) -> Self {
+impl<'a, M: MolMap> From<AtomViewMut<'a, M>> for AtomId {
+    fn from(view: AtomViewMut<'a, M>) -> Self {
         view.id
     }
 }
 
-impl<'a, E: MolMapExt> AtomViewMut<'a, E> {
-    fn as_ref(&self) -> AtomView<'_, E> {
+impl<'a, M: MolMap> AtomViewMut<'a, M> {
+    fn as_ref(&self) -> AtomView<'_, M> {
         AtomView {
             molmap: &*self.molmap,
             id: self.id,
         }
     }
 
-    fn inner(&mut self) -> &mut Atom {
-        self.molmap.atoms.get_mut(self.id).unwrap()
+    fn core(&mut self) -> &mut Atom {
+        self.molmap.core_mut().atoms.get_mut(self.id).unwrap()
     }
 }

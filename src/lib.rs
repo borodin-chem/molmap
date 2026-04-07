@@ -10,11 +10,14 @@
 
 pub mod element;
 pub mod entities;
+mod graph;
+mod molmap0;
 pub mod id;
 pub mod interfaces;
 pub mod map;
 
 pub use element::Element;
 pub use entities::*;
+pub use molmap0::MolMap0;
 pub use id::*;
-pub use map::{MolMap, MolMap0, MolMapExt};
+pub use map::MolMap;

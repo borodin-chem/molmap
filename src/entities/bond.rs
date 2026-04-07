@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{BondId, Bondable, BondingPartner, MolMap, MolMapExt};
+use crate::{BondId, Bondable, BondingPartner, MolMap};
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum BondType {
@@ -41,56 +41,56 @@ impl Bond {
 }
 
 #[derive(Clone, Copy)]
-pub struct BondView<'a, E: MolMapExt> {
-    pub molmap: &'a MolMap<E>,
+pub struct BondView<'a, M: MolMap> {
+    pub molmap: &'a M,
     pub id: BondId,
 }
 
-impl<'a, E: MolMapExt> From<BondView<'a, E>> for BondId {
-    fn from(view: BondView<'a, E>) -> Self {
+impl<'a, M: MolMap> From<BondView<'a, M>> for BondId {
+    fn from(view: BondView<'a, M>) -> Self {
         view.id
     }
 }
 
-impl<'a, E: MolMapExt> BondView<'a, E> {
-    fn inner(&self) -> &'a Bond {
-        self.molmap.bonds.get(self.id).unwrap()
+impl<'a, M: MolMap> BondView<'a, M> {
+    fn core(&self) -> &'a Bond {
+        self.molmap.core().bonds.get(self.id).unwrap()
     }
 
     pub fn bond_type(&self) -> BondType {
-        self.inner().bond_type
+        self.core().bond_type
     }
 
     pub fn order(&self) -> f32 {
-        self.inner().order
+        self.core().order
     }
 
     pub fn partners(&self) -> [BondingPartner; 2] {
-        let inner = self.inner();
+        let inner = self.core();
         [inner.start, inner.end]
     }
 }
 
-pub struct BondViewMut<'a, E: MolMapExt> {
-    pub molmap: &'a mut MolMap<E>,
+pub struct BondViewMut<'a, M: MolMap> {
+    pub molmap: &'a mut M,
     pub id: BondId,
 }
 
-impl<'a, E: MolMapExt> From<BondViewMut<'a, E>> for BondId {
-    fn from(view: BondViewMut<'a, E>) -> Self {
+impl<'a, M: MolMap> From<BondViewMut<'a, M>> for BondId {
+    fn from(view: BondViewMut<'a, M>) -> Self {
         view.id
     }
 }
 
-impl<'a, E: MolMapExt> BondViewMut<'a, E> {
-    fn as_ref(&self) -> BondView<'_, E> {
+impl<'a, M: MolMap> BondViewMut<'a, M> {
+    fn as_ref(&self) -> BondView<'_, M> {
         BondView {
             molmap: &*self.molmap,
             id: self.id,
         }
     }
 
-    fn inner(&mut self) -> &mut Bond {
-        self.molmap.bonds.get_mut(self.id).unwrap()
+    fn core(&mut self) -> &mut Bond {
+        self.molmap.core_mut().bonds.get_mut(self.id).unwrap()
     }
 }

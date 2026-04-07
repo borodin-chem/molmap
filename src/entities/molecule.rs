@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{AtomId, BondId, FragmentId, Fundamental, MolMap, MolMapExt, MoleculeId, PseudoatomId};
+use crate::{AtomId, BondId, FragmentId, Fundamental, MolMap, MoleculeId, PseudoatomId};
 
 #[derive(Debug)]
 pub(crate) struct Molecule {
@@ -24,36 +24,36 @@ impl Molecule {
 }
 
 #[derive(Clone, Copy)]
-pub struct MoleculeView<'a, E: MolMapExt> {
-    pub molmap: &'a MolMap<E>,
+pub struct MoleculeView<'a, M: MolMap> {
+    pub molmap: &'a M,
     pub id: MoleculeId,
 }
 
-impl<'a, E: MolMapExt> From<MoleculeView<'a, E>> for MoleculeId {
-    fn from(view: MoleculeView<'a, E>) -> Self {
+impl<'a, M: MolMap> From<MoleculeView<'a, M>> for MoleculeId {
+    fn from(view: MoleculeView<'a, M>) -> Self {
         view.id
     }
 }
 
-impl<'a, E: MolMapExt> MoleculeView<'a, E> {
-    fn inner(&self) -> &'a Molecule {
-        self.molmap.molecules.get(self.id).unwrap()
+impl<'a, M: MolMap> MoleculeView<'a, M> {
+    fn core(&self) -> &'a Molecule {
+        self.molmap.core().molecules.get(self.id).unwrap()
     }
 }
 
-pub struct MoleculeViewMut<'a, E: MolMapExt> {
-    pub molmap: &'a mut MolMap<E>,
+pub struct MoleculeViewMut<'a, M: MolMap> {
+    pub molmap: &'a mut M,
     pub id: MoleculeId,
 }
 
-impl<'a, E: MolMapExt> From<MoleculeViewMut<'a, E>> for MoleculeId {
-    fn from(view: MoleculeViewMut<'a, E>) -> Self {
+impl<'a, M: MolMap> From<MoleculeViewMut<'a, M>> for MoleculeId {
+    fn from(view: MoleculeViewMut<'a, M>) -> Self {
         view.id
     }
 }
 
-impl<'a, E: MolMapExt> MoleculeViewMut<'a, E> {
-    fn as_ref(&self) -> MoleculeView<'_, E> {
+impl<'a, M: MolMap> MoleculeViewMut<'a, M> {
+    fn as_ref(&self) -> MoleculeView<'_, M> {
         MoleculeView {
             molmap: &*self.molmap,
             id: self.id,
@@ -61,6 +61,6 @@ impl<'a, E: MolMapExt> MoleculeViewMut<'a, E> {
     }
 
     fn inner(mut self) -> &'a mut Molecule {
-        self.molmap.molecules.get_mut(self.id).unwrap()
+        self.molmap.core_mut().molecules.get_mut(self.id).unwrap()
     }
 }

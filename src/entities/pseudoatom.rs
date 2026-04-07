@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{BondId, FragmentId, MolMap, MolMapExt, PseudoatomId};
+use crate::{BondId, FragmentId, MolMap, PseudoatomId};
 
 // Something that has a "symbol" like a normal atom but represents something else
 // May have an unknown composition like R, or a known structure like Ph
@@ -28,51 +28,51 @@ impl Pseudoatom {
 }
 
 #[derive(Clone, Copy)]
-pub struct PseudoatomView<'a, E: MolMapExt> {
-    pub molmap: &'a MolMap<E>,
+pub struct PseudoatomView<'a, M: MolMap> {
+    pub molmap: &'a M,
     pub id: PseudoatomId,
 }
 
-impl<'a, E: MolMapExt> From<PseudoatomView<'a, E>> for PseudoatomId {
-    fn from(view: PseudoatomView<'a, E>) -> Self {
+impl<'a, M: MolMap> From<PseudoatomView<'a, M>> for PseudoatomId {
+    fn from(view: PseudoatomView<'a, M>) -> Self {
         view.id
     }
 }
 
-impl<'a, E: MolMapExt> PseudoatomView<'a, E> {
-    fn inner(&self) -> &'a Pseudoatom {
-        self.molmap.pseudoatoms.get(self.id).unwrap()
+impl<'a, M: MolMap> PseudoatomView<'a, M> {
+    fn core(&self) -> &'a Pseudoatom {
+        self.molmap.core().pseudoatoms.get(self.id).unwrap()
     }
 
     pub fn symbol(&self) -> &str {
-        &self.inner().symbol
+        &self.core().symbol
     }
 
     pub fn bonds(&self) -> &[BondId] {
-        &self.inner().bonds
+        &self.core().bonds
     }
 }
 
-pub struct PseudoatomViewMut<'a, E: MolMapExt> {
-    pub molmap: &'a mut MolMap<E>,
+pub struct PseudoatomViewMut<'a, M: MolMap> {
+    pub molmap: &'a mut M,
     pub id: PseudoatomId,
 }
 
-impl<'a, E: MolMapExt> From<PseudoatomViewMut<'a, E>> for PseudoatomId {
-    fn from(view: PseudoatomViewMut<'a, E>) -> Self {
+impl<'a, M: MolMap> From<PseudoatomViewMut<'a, M>> for PseudoatomId {
+    fn from(view: PseudoatomViewMut<'a, M>) -> Self {
         view.id
     }
 }
 
-impl<'a, E: MolMapExt> PseudoatomViewMut<'a, E> {
-    fn as_ref(&self) -> PseudoatomView<'_, E> {
+impl<'a, M: MolMap> PseudoatomViewMut<'a, M> {
+    fn as_ref(&self) -> PseudoatomView<'_, M> {
         PseudoatomView {
             molmap: &*self.molmap,
             id: self.id,
         }
     }
 
-    fn inner(&mut self) -> &mut Pseudoatom {
-        self.molmap.pseudoatoms.get_mut(self.id).unwrap()
+    fn core(&mut self) -> &mut Pseudoatom {
+        self.molmap.core_mut().pseudoatoms.get_mut(self.id).unwrap()
     }
 }

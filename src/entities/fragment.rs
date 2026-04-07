@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{AtomId, Atomlike, BondId, FragmentId, Fundamental, IdError, MolMap, MolMapExt, MoleculeId, PseudoatomId};
+use crate::{AtomId, Atomlike, BondId, FragmentId, Fundamental, IdError, MolMap, MoleculeId, PseudoatomId};
 
 #[derive(Debug)]
 pub(crate) enum FragmentCentre {
@@ -46,43 +46,43 @@ impl Fragment {
 }
 
 #[derive(Clone, Copy)]
-pub struct FragmentView<'a, E: MolMapExt> {
-    pub molmap: &'a MolMap<E>,
+pub struct FragmentView<'a, M: MolMap> {
+    pub molmap: &'a M,
     pub id: FragmentId,
 }
 
-impl<'a, E: MolMapExt> From<FragmentView<'a, E>> for FragmentId {
-    fn from(view: FragmentView<'a, E>) -> Self {
+impl<'a, M: MolMap> From<FragmentView<'a, M>> for FragmentId {
+    fn from(view: FragmentView<'a, M>) -> Self {
         view.id
     }
 }
 
-impl<'a, E: MolMapExt> FragmentView<'a, E> {
-    fn inner(&self) -> &'a Fragment {
-        self.molmap.fragments.get(self.id).unwrap()
+impl<'a, M: MolMap> FragmentView<'a, M> {
+    fn core(&self) -> &'a Fragment {
+        self.molmap.core().fragments.get(self.id).unwrap()
     }
 }
 
-pub struct FragmentViewMut<'a, E: MolMapExt> {
-    pub molmap: &'a mut MolMap<E>,
+pub struct FragmentViewMut<'a, M: MolMap> {
+    pub molmap: &'a mut M,
     pub id: FragmentId,
 }
 
-impl<'a, E: MolMapExt> From<FragmentViewMut<'a, E>> for FragmentId {
-    fn from(view: FragmentViewMut<'a, E>) -> Self {
+impl<'a, M: MolMap> From<FragmentViewMut<'a, M>> for FragmentId {
+    fn from(view: FragmentViewMut<'a, M>) -> Self {
         view.id
     }
 }
 
-impl<'a, E: MolMapExt> FragmentViewMut<'a, E> {
-    fn as_ref(&self) -> FragmentView<'_, E> {
+impl<'a, M: MolMap> FragmentViewMut<'a, M> {
+    fn as_ref(&self) -> FragmentView<'_, M> {
         FragmentView {
             molmap: &*self.molmap,
             id: self.id,
         }
     }
 
-    fn inner(&mut self) -> &mut Fragment {
-        self.molmap.fragments.get_mut(self.id).unwrap()
+    fn core(&mut self) -> &mut Fragment {
+        self.molmap.core_mut().fragments.get_mut(self.id).unwrap()
     }
 }
