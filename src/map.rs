@@ -10,7 +10,7 @@ use slotmap::{SlotMap, basic::Iter};
 
 use std::{fmt::Debug, hash::RandomState};
 
-use crate::{Element, graph::MolGraph, bond::BondType, entities::*, fragment::FragmentCentre, id::*};
+use crate::{Element, bond::BondType, entities::*, fragment::FragmentCentre, graph::MolGraph, id::*};
 
 /// Trait implemented by all varieties of `MolMap`.
 /// 
@@ -119,6 +119,11 @@ pub trait MolMap: Debug + Default {
         self.core().contains_atom(id).then_some(AtomViewMut { molmap: self, id })
     }
 
+    /// Returns an iterator over views of all atoms in the map.
+    fn atoms(&'_ self) -> impl Iterator<Item = AtomView<'_, Self>> + '_ {
+        self.atom_ids().map(|id| self.atom(id).unwrap())
+    }
+
     /// Constructs an immutable `PseudoatomView` for the given pseudoatom, returning `None` if the
     /// ID is invalid.
     fn pseudoatom(&'_ self, id: PseudoatomId) -> Option<PseudoatomView<'_, Self>> {
@@ -133,6 +138,11 @@ pub trait MolMap: Debug + Default {
         self.core().pseudoatoms
             .contains_key(id)
             .then_some(PseudoatomViewMut { molmap: self, id })
+    }
+
+    /// Returns an iterator over views of all pseudoatoms in the map.
+    fn pseudoatoms(&'_ self) -> impl Iterator<Item = PseudoatomView<'_, Self>> + '_ {
+        self.pseudoatom_ids().map(|id| self.pseudoatom(id).unwrap())
     }
 
     /// Constructs an immutable `BondView` for the given bond, returning `None` if the ID is
@@ -151,6 +161,11 @@ pub trait MolMap: Debug + Default {
             .then_some(BondViewMut { molmap: self, id })
     }
 
+    /// Returns an iterator over views of all atoms in the map.
+    fn bonds(&'_ self) -> impl Iterator<Item = BondView<'_, Self>> + '_ {
+        self.bond_ids().map(|id| self.bond(id).unwrap())
+    }
+
     /// Constructs an immutable `FragmentView` for the given fragment, returning `None` if the ID is
     /// invalid.
     fn fragment(&'_ self, id: FragmentId) -> Option<FragmentView<'_, Self>> {
@@ -167,6 +182,11 @@ pub trait MolMap: Debug + Default {
             .then_some(FragmentViewMut { molmap: self, id })
     }
 
+    /// Returns an iterator over views of all fragments in the map.
+    fn fragments(&'_ self) -> impl Iterator<Item = FragmentView<'_, Self>> + '_ {
+        self.fragment_ids().map(|id| self.fragment(id).unwrap())
+    }
+
     /// Constructs an immutable `MoleculeView` for the given molecule, returning `None` if the ID is
     /// invalid.
     fn molecule(&'_ self, id: MoleculeId) -> Option<MoleculeView<'_, Self>> {
@@ -181,5 +201,10 @@ pub trait MolMap: Debug + Default {
         self.core().molecules
             .contains_key(id)
             .then_some(MoleculeViewMut { molmap: self, id })
+    }
+
+    /// Returns an iterator over views of all molecules in the map.
+    fn molecules(&'_ self) -> impl Iterator<Item = MoleculeView<'_, Self>> + '_ {
+        self.molecule_ids().map(|id| self.molecule(id).unwrap())
     }
 }
