@@ -6,17 +6,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::num::NonZeroU16;
-
 use mendeleev;
 use mendeleev::OxidationStateCategory;
-
-/// The mass number of a nuclide, _Z_.
-///
-/// As _Z_ is never 0, this type wraps `std::num::NonZeroU16`, allowing the
-/// null pointer optimization.
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
-pub struct MassNumber(pub NonZeroU16);
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 //#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

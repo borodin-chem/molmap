@@ -6,16 +6,16 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::MolMap;
+use crate::map::MolMap;
 
 pub trait FormatParser {
-    type E;
+    type M: MolMap;
 
-    fn to_molmap(input: String) -> MolMap<Self::E>;
+    fn to_molmap(input: String) -> Self::M;
 }
 
 pub trait FormatGenerator {
-    type E;
+    type M: MolMap;
 
-    fn from_molmap(molmap: MolMap<Self::E>) -> String;
+    fn from_molmap(molmap: Self::M) -> String;
 }

@@ -10,7 +10,6 @@ pub mod atom;
 pub mod bond;
 pub mod fragment;
 pub mod molecule;
-//pub mod objects;
 pub mod pseudoatom;
 
 pub(crate) use atom::{Atom, AtomView, AtomViewMut};
@@ -18,4 +17,3 @@ pub(crate) use bond::{Bond, BondView, BondViewMut};
 pub(crate) use fragment::{Fragment, FragmentView, FragmentViewMut};
 pub(crate) use molecule::{Molecule, MoleculeView, MoleculeViewMut};
 pub(crate) use pseudoatom::{Pseudoatom, PseudoatomView, PseudoatomViewMut};
-//pub use objects::{Object, ObjectView, ObjectViewMut};

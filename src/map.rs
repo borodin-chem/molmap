@@ -8,186 +8,89 @@
 
 use slotmap::{SlotMap, basic::Iter};
 
-use std::hash::RandomState;
+use std::{fmt::Debug, hash::RandomState};
 
-use crate::{Element, bond::BondType, element::MassNumber, entities::*, id::*};
+use crate::{Element, bond::BondType, entities::*, fragment::FragmentCentre, graph::MolGraph, id::*};
 
-/// An extensible arena-like data structure to represent a set of chemical
-/// entities and the relationships between them, as a molecular graph.
-#[derive(Debug)]
-pub struct MolMap<Extension> {
-    pub(crate) bonds: SlotMap<BondId, Bond>,
-    pub(crate) atoms: SlotMap<AtomId, Atom>,
-    pub(crate) pseudoatoms: SlotMap<PseudoatomId, Pseudoatom>,
-    pub(crate) fragments: SlotMap<FragmentId, Fragment>,
-    pub(crate) molecules: SlotMap<MoleculeId, Molecule>,
-    //pub(crate) objects: SlotMap<ObjectId, Object>,
-    pub(crate) extension: Extension,
-}
+/// Trait implemented by all varieties of `MolMap`.
+/// 
+/// All concrete `MolMap` types wrap a [`MolGraph`], so this trait exposes functionality that
+/// operates on the core graph such that the different varieties of `MolMap` can be used
+/// interchangeably in many instances.
+pub trait MolMap: Debug + Default {
+    /// Creates an empty `MolMap`.
+    ///
+    /// As the constituent `SlotMap`s are created with an initial capacity of 0, reallocations will
+    /// occur frequently if many entities are subsequently inserted.
+    /// If you have an idea of approximately how large the `MolMap` needs to be, it is recommended
+    /// to use `MolMap.with_capacity()` instead.
+    fn new() -> Self;
 
-// Loading from file involves a lot of insertions and therefore if the initial capacity was 0
-// multiple expensive reallocations would occur every time the slotmaps filled up, so try to improve
-// performance by pre-allocating a sensible amount of space (say enough for a well-populated scheme
-// of A4 size) for each slotmap
+    /// Creates a new `MolMap` with capacity for approximately `n` atoms.
+    fn with_capacity(n: usize) -> Self;
 
-impl<E: Default> Default for MolMap<E> {
-    fn default() -> Self {
-        Self {
-            bonds: SlotMap::with_capacity_and_key(500),
-            atoms: SlotMap::with_capacity_and_key(500),
-            pseudoatoms: SlotMap::with_capacity_and_key(500),
-            fragments: SlotMap::with_capacity_and_key(1000),
-            molecules: SlotMap::with_capacity_and_key(50),
-            //objects: SlotMap::with_capacity_and_key(100),
-            extension: E::default(),
-        }
-    }
-}
+    /// Returns the core molecular graph.
+    #[allow(private_interfaces)]
+    fn core(&self) -> &MolGraph;
 
-impl<E: Default> MolMap<E> {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
+    /// Returns the core molecular graph in mutable form.
+    #[allow(private_interfaces)]
+    fn core_mut(&mut self) -> &mut MolGraph;
 
-impl<E> MolMap<E> {
-    // Getters
+    // ID-related methods
+    // These all just defer to the inner core struct
     // One method per entity type for:
-    // - getting a view
-    // - getting a mutable view
     // - iterating over IDs
     // - validating an ID
 
-    /// Constructs an immutable `AtomView` for the given atom,
-    /// returning `None` if the ID is invalid.
-    pub fn atom(&'_ self, id: AtomId) -> Option<AtomView<'_, E>> {
-        self.atoms
-            .contains_key(id)
-            .then_some(AtomView { molmap: self, id })
-    }
-
-    /// Constructs a mutable `AtomViewMut` for the given atom, returning `None` if the ID is
-    /// invalid.
-    pub fn atom_mut(&'_ mut self, id: AtomId) -> Option<AtomViewMut<'_, E>> {
-        self.atoms
-            .contains_key(id)
-            .then_some(AtomViewMut { molmap: self, id })
-    }
-
     /// Returns an iterator over all the IDs of all atoms in the map.
-    pub fn atom_ids(&'_ self) -> impl Iterator<Item = AtomId> + '_ {
-        self.atoms.keys()
-    }
-
-    /// Constructs an immutable `PseudoatomView` for the given pseudoatom, returning `None` if the
-    /// ID is invalid.
-    pub fn pseudoatom(&'_ self, id: PseudoatomId) -> Option<PseudoatomView<'_, E>> {
-        self.pseudoatoms
-            .contains_key(id)
-            .then_some(PseudoatomView { molmap: self, id })
-    }
-
-    /// Constructs a mutable `PseudoatomViewMut` for the given pseudoatom, returning `None` if the
-    /// ID is invalid.
-    pub fn pseudoatom_mut(&'_ mut self, id: PseudoatomId) -> Option<PseudoatomViewMut<'_, E>> {
-        self.pseudoatoms
-            .contains_key(id)
-            .then_some(PseudoatomViewMut { molmap: self, id })
+    fn atom_ids(&'_ self) -> impl Iterator<Item = AtomId> + '_ {
+        self.core().atom_ids()
     }
 
     /// Returns an iterator over all the IDs of all pseudoatoms in the map.
-    pub fn pseudoatom_ids(&'_ self) -> impl Iterator<Item = PseudoatomId> + '_ {
-        self.pseudoatoms.keys()
-    }
-
-    /// Constructs an immutable `BondView` for the given bond, returning `None` if the ID is
-    /// invalid.
-    pub fn bond(&'_ self, id: BondId) -> Option<BondView<'_, E>> {
-        self.bonds
-            .contains_key(id)
-            .then_some(BondView { molmap: self, id })
-    }
-
-    /// Constructs a mutable `BondViewMut` for the given bond, returning `None` if the ID is
-    /// invalid.
-    pub fn bond_mut(&'_ mut self, id: BondId) -> Option<BondViewMut<'_, E>> {
-        self.bonds
-            .contains_key(id)
-            .then_some(BondViewMut { molmap: self, id })
+    fn pseudoatom_ids(&'_ self) -> impl Iterator<Item = PseudoatomId> + '_ {
+        self.core().pseudoatom_ids()
     }
 
     /// Returns an iterator over all the IDs of all bonds in the map.
-    pub fn bond_ids(&'_ self) -> impl Iterator<Item = BondId> + '_ {
-        self.bonds.keys()
-    }
-
-    /// Constructs an immutable `FragmentView` for the given fragment, returning `None` if the ID is
-    /// invalid.
-    pub fn fragment(&'_ self, id: FragmentId) -> Option<FragmentView<'_, E>> {
-        self.fragments
-            .contains_key(id)
-            .then_some(FragmentView { molmap: self, id })
-    }
-
-    /// Constructs a mutable `FragmentViewMut` for the given fragment, returning `None` if the ID is
-    /// invalid.
-    pub fn fragment_mut(&'_ mut self, id: FragmentId) -> Option<FragmentViewMut<'_, E>> {
-        self.fragments
-            .contains_key(id)
-            .then_some(FragmentViewMut { molmap: self, id })
+    fn bond_ids(&'_ self) -> impl Iterator<Item = BondId> + '_ {
+        self.core().bond_ids()
     }
 
     /// Returns an iterator over all the IDs of all fragments in the map.
-    pub fn fragment_ids(&'_ self) -> impl Iterator<Item = FragmentId> + '_ {
-        self.fragments.keys()
-    }
-
-    /// Constructs an immutable `MoleculeView` for the given molecule, returning `None` if the ID is
-    /// invalid.
-    pub fn molecule(&'_ self, id: MoleculeId) -> Option<MoleculeView<'_, E>> {
-        self.molecules
-            .contains_key(id)
-            .then_some(MoleculeView { molmap: self, id })
-    }
-
-    /// Constructs a mutable `MoleculeViewMut` for the given molecule, returning `None` if the ID is
-    /// invalid.
-    pub fn molecule_mut(&'_ mut self, id: MoleculeId) -> Option<MoleculeViewMut<'_, E>> {
-        self.molecules
-            .contains_key(id)
-            .then_some(MoleculeViewMut { molmap: self, id })
+    fn fragment_ids(&'_ self) -> impl Iterator<Item = FragmentId> + '_ {
+        self.core().fragment_ids()
     }
 
     /// Returns an iterator over all the IDs of all molecules in the map.
-    pub fn molecule_ids(&'_ self) -> impl Iterator<Item = MoleculeId> + '_ {
-        self.molecules.keys()
+    fn molecule_ids(&'_ self) -> impl Iterator<Item = MoleculeId> + '_ {
+        self.core().molecule_ids()
     }
-
-    // Methods to check the validity of IDs and entity enums
 
     /// Checks if the given ID is valid.
     fn contains_atom(&self, id: AtomId) -> bool {
-        self.atoms.contains_key(id)
+        self.core().contains_atom(id)
     }
 
     /// Checks if the given ID is valid.
     fn contains_pseudoatom(&self, id: PseudoatomId) -> bool {
-        self.pseudoatoms.contains_key(id)
+        self.core().contains_pseudoatom(id)
     }
 
     /// Checks if the given ID is valid.
     fn contains_bond(&self, id: BondId) -> bool {
-        self.bonds.contains_key(id)
+        self.core().contains_bond(id)
     }
 
     /// Checks if the given ID is valid.
     fn contains_fragment(&self, id: FragmentId) -> bool {
-        self.fragments.contains_key(id)
+        self.core().contains_fragment(id)
     }
 
     /// Checks if the given ID is valid.
     fn contains_molecule(&self, id: MoleculeId) -> bool {
-        self.molecules.contains_key(id)
+        self.core().contains_molecule(id)
     }
 
     /// Checks if the given enum wraps a valid ID.
@@ -198,137 +101,110 @@ impl<E> MolMap<E> {
         }
     }
 
-    /// Checks if the given enum wraps a valid ID.
-    fn contains_fundamental(&self, fundamental: Fundamental) -> bool {
-        match fundamental {
-            Fundamental::Atom(id) => self.contains_atom(id),
-            Fundamental::Pseudoatom(id) => self.contains_pseudoatom(id),
-            Fundamental::Bond(id) => self.contains_bond(id),
-        }
+    // Getters
+    // One method per entity type for:
+    // - getting a view
+    // - getting a mutable view
+    // - iterating over (immutable) views
+
+    /// Constructs an immutable `AtomView` for the given atom,
+    /// returning `None` if the ID is invalid.
+    fn atom(&'_ self, id: AtomId) -> Option<AtomView<'_, Self>> {
+        self.core().contains_atom(id).then_some(AtomView { molmap: self, id })
     }
 
-    /// Checks if the given enum wraps a valid ID.
-    fn contains_bondable(&self, bondable: Bondable) -> bool {
-        match bondable {
-            Bondable::Atom(id) => self.contains_atom(id),
-            Bondable::Pseudoatom(id) => self.contains_pseudoatom(id),
-            Bondable::Fragment(id) => self.contains_fragment(id),
-        }
+    /// Constructs a mutable `AtomViewMut` for the given atom, returning `None` if the ID is
+    /// invalid.
+    fn atom_mut(&'_ mut self, id: AtomId) -> Option<AtomViewMut<'_, Self>> {
+        self.core().contains_atom(id).then_some(AtomViewMut { molmap: self, id })
     }
 
-    /// Checks if the map contains the entity with the wrapped ID.
-    fn contains_entity(&self, entity: Entity) -> bool {
-        match entity {
-            Entity::Atom(id) => self.contains_atom(id),
-            Entity::Pseudoatom(id) => self.contains_pseudoatom(id),
-            Entity::Bond(id) => self.contains_bond(id),
-            Entity::Fragment(id) => self.contains_fragment(id),
-            Entity::Molecule(id) => self.contains_molecule(id),
-        }
+    /// Returns an iterator over views of all atoms in the map.
+    fn atoms(&'_ self) -> impl Iterator<Item = AtomView<'_, Self>> + '_ {
+        self.atom_ids().map(|id| self.atom(id).unwrap())
     }
 
-    // Methods to add entities
-
-    /// Adds an `Atom` to the map.
-    pub fn add_atom(&mut self, element: Element) -> AtomId {
-        self.atoms.insert_with_key(|id| Atom::new(id, element))
+    /// Constructs an immutable `PseudoatomView` for the given pseudoatom, returning `None` if the
+    /// ID is invalid.
+    fn pseudoatom(&'_ self, id: PseudoatomId) -> Option<PseudoatomView<'_, Self>> {
+        self.core().pseudoatoms
+            .contains_key(id)
+            .then_some(PseudoatomView { molmap: self, id })
     }
 
-    /// Adds a `Pseudoatom` to the map.
-    pub fn add_pseudoatom(&mut self, symbol: &str) -> PseudoatomId {
-        self.pseudoatoms
-            .insert_with_key(|id| Pseudoatom::new(id, symbol.to_owned()))
+    /// Constructs a mutable `PseudoatomViewMut` for the given pseudoatom, returning `None` if the
+    /// ID is invalid.
+    fn pseudoatom_mut(&'_ mut self, id: PseudoatomId) -> Option<PseudoatomViewMut<'_, Self>> {
+        self.core().pseudoatoms
+            .contains_key(id)
+            .then_some(PseudoatomViewMut { molmap: self, id })
     }
 
-    /// Creates a new (single covalent) `Bond` between two bondable entities.
-    ///
-    /// Fails if either of `start` and `end` are invalid.
-    pub fn create_bond(&mut self, start: Bondable, end: Bondable) -> Result<BondId, IdError> {
-        // Converting the bondables into `BondingPartner`s checks the IDs at the same time
-        let start = self.convert_bondable(start)?;
-        let end = self.convert_bondable(end)?;
-        let bond_id = self
-            .bonds
-            .insert_with_key(|id| Bond::new(id, BondType::Covalent, 1.0, start, end));
-        for partner in [start, end] {
-            match partner {
-                BondingPartner::Atom(id) => self
-                    .atoms
-                    .get_mut(id)
-                    .expect("Already checked")
-                    .bonds
-                    .push(bond_id),
-                BondingPartner::Pseudoatom(id) => self
-                    .pseudoatoms
-                    .get_mut(id)
-                    .expect("Already checked")
-                    .bonds
-                    .push(bond_id),
-                BondingPartner::AmbiguouslyBondingFragment(id) => self
-                    .fragments
-                    .get_mut(id)
-                    .expect("Already checked")
-                    .bonds
-                    .push(bond_id),
-            }
-        }
-        Ok(bond_id)
+    /// Returns an iterator over views of all pseudoatoms in the map.
+    fn pseudoatoms(&'_ self) -> impl Iterator<Item = PseudoatomView<'_, Self>> + '_ {
+        self.pseudoatom_ids().map(|id| self.pseudoatom(id).unwrap())
     }
 
-    /// Adds a `Fragment` to the map with a single initial atom.
-    ///
-    /// Fails if `centre` is invalid.
-    pub fn add_fragment(&mut self, centre: Atomlike) -> Result<FragmentId, IdError> {
-        if !self.contains_atomlike(centre) {
-            return Err(IdError);
-        }
-        Ok(self.fragments.insert_with_key(|id| Fragment {
-            id,
-            centres: vec![centre],
-            members: vec![centre.into()],
-            bonds: Vec::new(),
-        }))
+    /// Constructs an immutable `BondView` for the given bond, returning `None` if the ID is
+    /// invalid.
+    fn bond(&'_ self, id: BondId) -> Option<BondView<'_, Self>> {
+        self.core().bonds
+            .contains_key(id)
+            .then_some(BondView { molmap: self, id })
     }
 
-    /// Adds an empty `Molecule` to the map.
-    pub fn add_molecule(&mut self) -> MoleculeId {
-        self.molecules.insert_with_key(Molecule::new)
+    /// Constructs a mutable `BondViewMut` for the given bond, returning `None` if the ID is
+    /// invalid.
+    fn bond_mut(&'_ mut self, id: BondId) -> Option<BondViewMut<'_, Self>> {
+        self.core().bonds
+            .contains_key(id)
+            .then_some(BondViewMut { molmap: self, id })
     }
 
-    // Methods to add entities to collections
+    /// Returns an iterator over views of all atoms in the map.
+    fn bonds(&'_ self) -> impl Iterator<Item = BondView<'_, Self>> + '_ {
+        self.bond_ids().map(|id| self.bond(id).unwrap())
+    }
 
-    // Methods to remove entities from collections
+    /// Constructs an immutable `FragmentView` for the given fragment, returning `None` if the ID is
+    /// invalid.
+    fn fragment(&'_ self, id: FragmentId) -> Option<FragmentView<'_, Self>> {
+        self.core().fragments
+            .contains_key(id)
+            .then_some(FragmentView { molmap: self, id })
+    }
 
-    // Methods to remove entities entirely
-}
+    /// Constructs a mutable `FragmentViewMut` for the given fragment, returning `None` if the ID is
+    /// invalid.
+    fn fragment_mut(&'_ mut self, id: FragmentId) -> Option<FragmentViewMut<'_, Self>> {
+        self.core().fragments
+            .contains_key(id)
+            .then_some(FragmentViewMut { molmap: self, id })
+    }
 
-// Private methods
-impl<E> MolMap<E> {
-    /// Gets the actual bonding partner that a `Bondable` refers to, while also validating the ID.
-    ///
-    /// Fragments generally form bonds from a central atom or pseudoatom, but they might have no
-    /// specified centre, or they might have multiple centres.
-    /// In the first case, the bond goes to the fragment as a whole; in the second case the first
-    /// centre in `centres` is used for the new bond.
-    fn convert_bondable(&self, bondable: Bondable) -> Result<BondingPartner, IdError> {
-        match bondable {
-            Bondable::Atom(id) => self
-                .contains_atom(id)
-                .then_some(BondingPartner::Atom(id))
-                .ok_or(IdError),
-            Bondable::Pseudoatom(id) => self
-                .contains_pseudoatom(id)
-                .then_some(BondingPartner::Pseudoatom(id))
-                .ok_or(IdError),
-            Bondable::Fragment(id) => {
-                // Get the fragment's data while also checking the ID
-                let fragment = self.fragments.get(id).ok_or(IdError)?;
-                // Use the first centre if any specified, the entire fragment if not
-                match fragment.centres.first() {
-                    Some(atomlike) => Ok((*atomlike).into()),
-                    None => Ok(BondingPartner::AmbiguouslyBondingFragment(id)),
-                }
-            }
-        }
+    /// Returns an iterator over views of all fragments in the map.
+    fn fragments(&'_ self) -> impl Iterator<Item = FragmentView<'_, Self>> + '_ {
+        self.fragment_ids().map(|id| self.fragment(id).unwrap())
+    }
+
+    /// Constructs an immutable `MoleculeView` for the given molecule, returning `None` if the ID is
+    /// invalid.
+    fn molecule(&'_ self, id: MoleculeId) -> Option<MoleculeView<'_, Self>> {
+        self.core().molecules
+            .contains_key(id)
+            .then_some(MoleculeView { molmap: self, id })
+    }
+
+    /// Constructs a mutable `MoleculeViewMut` for the given molecule, returning `None` if the ID is
+    /// invalid.
+    fn molecule_mut(&'_ mut self, id: MoleculeId) -> Option<MoleculeViewMut<'_, Self>> {
+        self.core().molecules
+            .contains_key(id)
+            .then_some(MoleculeViewMut { molmap: self, id })
+    }
+
+    /// Returns an iterator over views of all molecules in the map.
+    fn molecules(&'_ self) -> impl Iterator<Item = MoleculeView<'_, Self>> + '_ {
+        self.molecule_ids().map(|id| self.molecule(id).unwrap())
     }
 }

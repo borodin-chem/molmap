@@ -12,65 +12,65 @@ use crate::{BondId, FragmentId, MolMap, PseudoatomId};
 // May have an unknown composition like R, or a known structure like Ph
 #[derive(Debug)]
 pub(crate) struct Pseudoatom {
-    pub(crate) id: PseudoatomId,
     pub(crate) symbol: String,
     pub(crate) bonds: Vec<BondId>,
-    //pub annotations: Vec<ObjectId>,
 }
 
 impl Pseudoatom {
-    pub(crate) fn new(id: PseudoatomId, symbol: String) -> Self {
+    pub(crate) fn new(symbol: String) -> Self {
         Self {
-            id,
             symbol,
             bonds: Vec::new(),
-            //annotations: Vec::new(),
         }
     }
 }
 
 #[derive(Clone, Copy)]
-pub struct PseudoatomView<'a, E> {
-    pub molmap: &'a MolMap<E>,
+pub struct PseudoatomView<'a, M: MolMap> {
+    pub molmap: &'a M,
     pub id: PseudoatomId,
 }
 
-impl<'a, E> From<PseudoatomView<'a, E>> for PseudoatomId {
-    fn from(view: PseudoatomView<'a, E>) -> Self {
+impl<'a, M: MolMap> From<PseudoatomView<'a, M>> for PseudoatomId {
+    fn from(view: PseudoatomView<'a, M>) -> Self {
         view.id
     }
 }
 
-impl<'a, E> PseudoatomView<'a, E> {
-    fn inner(&self) -> &'a Pseudoatom {
-        self.molmap.pseudoatoms.get(self.id).unwrap()
+impl<'a, M: MolMap> PseudoatomView<'a, M> {
+    fn core(&self) -> &'a Pseudoatom {
+        self.molmap.core().pseudoatoms.get(self.id).unwrap()
     }
 
     pub fn symbol(&self) -> &str {
-        &self.inner().symbol
+        &self.core().symbol
+    }
+
+    pub fn bonds(&self) -> &[BondId] {
+        &self.core().bonds
     }
 }
 
-pub struct PseudoatomViewMut<'a, E> {
-    pub molmap: &'a mut MolMap<E>,
+pub struct PseudoatomViewMut<'a, M: MolMap> {
+    pub molmap: &'a mut M,
     pub id: PseudoatomId,
 }
 
-impl<'a, E> From<PseudoatomViewMut<'a, E>> for PseudoatomId {
-    fn from(view: PseudoatomViewMut<'a, E>) -> Self {
+impl<'a, M: MolMap> From<PseudoatomViewMut<'a, M>> for PseudoatomId {
+    fn from(view: PseudoatomViewMut<'a, M>) -> Self {
         view.id
     }
 }
 
-impl<'a, E> PseudoatomViewMut<'a, E> {
-    fn as_ref(&self) -> PseudoatomView<'_, E> {
+impl<'a, M: MolMap> PseudoatomViewMut<'a, M> {
+    fn as_ref(&self) -> PseudoatomView<'_, M> {
         PseudoatomView {
             molmap: &*self.molmap,
             id: self.id,
         }
     }
 
-    fn inner(&mut self) -> &mut Pseudoatom {
-        self.molmap.pseudoatoms.get_mut(self.id).unwrap()
+    fn core(&mut self) -> &mut Pseudoatom {
+        self.molmap.core_mut().pseudoatoms.get_mut(self.id).unwrap()
     }
 }
