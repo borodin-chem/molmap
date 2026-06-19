@@ -9,6 +9,7 @@
 use mendeleev;
 use mendeleev::OxidationStateCategory;
 
+/// The known chemical elements.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 //#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Element {
@@ -133,6 +134,7 @@ pub enum Element {
 }
 
 impl Element {
+    /// Returns the equivalent variant of the `mendeleev` crate's `Element` type.
     const fn into_mendeleev(self) -> mendeleev::Element {
         match self {
             Self::H => mendeleev::Element::H,
@@ -256,6 +258,7 @@ impl Element {
         }
     }
 
+    /// Provides a default valency for the element based on the primary oxidation state.
     pub fn default_valency(&self) -> u8 {
         self.into_mendeleev()
             .oxidation_states(OxidationStateCategory::Main)[0]
@@ -264,6 +267,7 @@ impl Element {
             .expect("Oxidation state should be positive after taking absolute value")
     }
 
+    /// Returns the element's symbol.
     pub fn symbol(&self) -> &str {
         self.into_mendeleev().symbol()
     }

@@ -6,20 +6,4 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#![allow(unused)]
-
-mod element;
-mod entities;
-mod error;
-mod graph;
-mod maps;
-
-pub mod ids;
-pub mod traits;
-pub mod views;
-
-pub use element::Element;
-pub use entities::bond::BondType;
-pub use error::{MolMapError, MolMapResult};
-pub use maps::zero::MolMap0;
-pub use traits::MolMap;
+pub(crate) mod zero;

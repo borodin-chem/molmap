@@ -6,20 +6,16 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#![allow(unused)]
+use crate::traits::MolMap;
 
-mod element;
-mod entities;
-mod error;
-mod graph;
-mod maps;
+pub trait FormatParser {
+    type M: MolMap;
 
-pub mod ids;
-pub mod traits;
-pub mod views;
+    fn to_molmap(input: String) -> Self::M;
+}
 
-pub use element::Element;
-pub use entities::bond::BondType;
-pub use error::{MolMapError, MolMapResult};
-pub use maps::zero::MolMap0;
-pub use traits::MolMap;
+pub trait FormatGenerator {
+    type M: MolMap;
+
+    fn from_molmap(molmap: Self::M) -> String;
+}

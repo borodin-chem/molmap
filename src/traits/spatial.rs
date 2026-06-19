@@ -9,8 +9,10 @@
 use nalgebra::{Point, Point2};
 use slotmap::SecondaryMap;
 
-use crate::{AtomId, Element, MolMap, graph::MolGraph};
+use crate::{Element, graph::MolGraph, ids::AtomId, traits::MolMap};
 
+/// A [`MolMap`] that also holds the spatial positions (with dimensionality `D`)
+/// of its entities.
 pub trait SpatialMolMap<const D: usize>: MolMap {
     fn atom_position(&self, id: AtomId) -> Point<f64, D>;
 }
@@ -18,7 +20,7 @@ pub trait SpatialMolMap<const D: usize>: MolMap {
 #[derive(Debug, Default)]
 pub struct MolMap2 {
     pub(crate) core: MolGraph,
-    pub(crate) atom_positions: SecondaryMap<AtomId, Point2<f64>>
+    pub(crate) atom_positions: SecondaryMap<AtomId, Point2<f64>>,
 }
 
 impl MolMap for MolMap2 {
@@ -29,19 +31,25 @@ impl MolMap for MolMap2 {
         }
     }
 
-    fn with_capacity(n: usize) -> Self {
-        Self {
-            core: MolGraph::with_capacity(n),
-            atom_positions: SecondaryMap::with_capacity(n),
-        }
-    }
-
     fn core(&self) -> &MolGraph {
         &self.core
     }
 
     fn core_mut(&mut self) -> &mut MolGraph {
         &mut self.core
+    }
+
+    fn with_capacities(
+        atoms: usize,
+        pseudoatoms: usize,
+        bonds: usize,
+        substituents: usize,
+        molecules: usize,
+    ) -> Self {
+        Self {
+            core: MolGraph::with_capacities(atoms, pseudoatoms, bonds, substituents, molecules),
+            atom_positions: SecondaryMap::with_capacity(atoms),
+        }
     }
 }
 
