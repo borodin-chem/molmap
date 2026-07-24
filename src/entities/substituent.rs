@@ -10,16 +10,11 @@ use slotmap::new_key_type;
 
 use crate::{
     MolMapError, MolMapResult,
-    ids::{AtomlikeId, BondId, FundamentalId},
+    ids::{AtomlikeId, BondId, FundamentalId, Id, SubstituentId, TaggedAtomlike, TaggedEntity},
     traits::MolMap,
 };
 
-new_key_type! {
-    /// An ID corresponding to a specific substituent entity in a `MolMap`.
-    pub struct SubstituentId;
-}
-
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub enum SubstituentCentre {
     None,
     Single(AtomlikeId),
@@ -28,15 +23,19 @@ pub enum SubstituentCentre {
 
 /// The core data of a substituent entity.
 ///
-/// Substituents are the smallest grouping in a MolMap
-/// Substituents are conceptually equivalent to a non-hydrogen atom and "its" implicit
-/// hydrogen atoms in SMILES or in packages that work that way,
-/// or to the groups drawn together without explicit bonds in a skeletal formula
-/// e.g. –OH, –COOH, –CH3
-/// Substituents have an internal structure of Atoms, Pseudoatoms, and Bonds
-/// Substituents generally indicate one or more centres to which bonds can be made,
-/// but occasionally bonds are made to a substituent as a whole.
-#[derive(Debug)]
+/// Substituents are the smallest collection in a `MolMap` and represent the units
+/// that chemists tend to actually think, rather than individual atoms. For example,
+/// a substituent is conceptually equivalent to:
+/// - a non-hydrogen atom and "its" implicit hydrogen atoms in SMILES or in packages
+/// that work that way (all hydrogen atoms are explicit in a MolMap)
+/// - the carbon atom and hydrogen atoms at a vertex in a skeletal formula
+/// - atoms drawn together as a group without explicit bonds in a skeletal formula
+///   e.g. –OH, –COOH, –CH₃
+///
+/// Substituents generally indicate one or more centres, so that bonds can be made
+/// "to" the centre. This allows molecules to be built up conveniently by adding and
+/// connecting substituents rather than individual atoms.
+#[derive(Clone, Debug)]
 pub(crate) struct Substituent {
     pub(crate) centre: SubstituentCentre,
     pub(crate) members: Vec<FundamentalId>,
@@ -52,7 +51,7 @@ impl Substituent {
 }
 
 /// An immutable view over a specific substituent entity in a specific `MolMap`.
-#[derive(Clone, Copy)]
+#[derive(Copy, Clone, Debug)]
 pub struct SubstituentView<'a, M: MolMap> {
     pub molmap: &'a M,
     pub id: SubstituentId,
@@ -70,21 +69,24 @@ impl<'a, M: MolMap> SubstituentView<'a, M> {
         self.molmap.core().substituents.get(self.id).unwrap()
     }
 
+    /// Returns details of the centre(s) of the substituent.
     pub fn centre(&self) -> &SubstituentCentre {
         &self.core().centre
     }
 
-    pub fn members(&self) -> &[FundamentalId] {
-        &self.core().members
+    /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.
+    pub fn members(&self) -> impl Iterator<Item = FundamentalId> {
+        self.core().members.iter().copied()
     }
 
     /// Checks if the substituent contains the given atom, pseudoatom, or bond.
     pub fn contains(&self, fundamental: FundamentalId) -> bool {
-        self.members().contains(&fundamental)
+        self.core().members.contains(&fundamental)
     }
 }
 
 /// A mutable view over a specific substituent entity in a specific `MolMap`.
+#[derive(Debug)]
 pub struct SubstituentViewMut<'a, M: MolMap> {
     pub molmap: &'a mut M,
     pub id: SubstituentId,
@@ -129,22 +131,22 @@ impl<'a, M: MolMap> SubstituentViewMut<'a, M> {
             .ok_or(MolMapError::Membership(new.into()))?;
         // A closure that determines if an atom or pseudoatom has bonds already
         let atomlike_has_bonds = |id: AtomlikeId| -> bool {
-            let bonds = match id {
-                AtomlikeId::Atom(atom_id) => {
+            let bonds = match id.to_tagged() {
+                TaggedAtomlike::Atom(id) => {
                     &self
                         .molmap
                         .core()
                         .atoms
-                        .get(atom_id)
+                        .get(id.try_into().unwrap())
                         .expect("Wouldn't be listed as the centre if it had been removed")
                         .bonds
                 }
-                AtomlikeId::Pseudoatom(pseudoatom_id) => {
+                TaggedAtomlike::Pseudoatom(id) => {
                     &self
                         .molmap
                         .core()
                         .pseudoatoms
-                        .get(pseudoatom_id)
+                        .get(id)
                         .expect("Wouldn't be listed as the centre if it had been removed")
                         .bonds
                 }

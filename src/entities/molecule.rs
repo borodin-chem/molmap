@@ -6,31 +6,31 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::collections::HashSet;
+
 use slotmap::new_key_type;
 
-use crate::{ids::FundamentalId, traits::MolMap};
-
-new_key_type! {
-    /// An ID corresponding to a specific molecule entity in a `MolMap`.
-    pub struct MoleculeId;
-}
+use crate::{
+    ids::{FundamentalId, MoleculeId},
+    traits::MolMap,
+};
 
 /// The core data of a molecule entity.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct Molecule {
-    pub(crate) members: Vec<FundamentalId>,
+    pub(crate) members: HashSet<FundamentalId>,
 }
 
 impl Molecule {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            members: Vec::new(),
+            members: HashSet::new(),
         }
     }
 }
 
 /// An immutable view over a specific molecule entity in a specific `MolMap`.
-#[derive(Clone, Copy)]
+#[derive(Copy, Clone, Debug)]
 pub struct MoleculeView<'a, M: MolMap> {
     pub molmap: &'a M,
     pub id: MoleculeId,
@@ -48,17 +48,19 @@ impl<'a, M: MolMap> MoleculeView<'a, M> {
         self.molmap.core().molecules.get(self.id).unwrap()
     }
 
-    pub fn members(&self) -> &[FundamentalId] {
-        &self.core().members
+    /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.
+    pub fn members(&self) -> impl Iterator<Item = FundamentalId> {
+        self.core().members.iter().copied()
     }
 
     /// Checks if the molecule contains the given atom, pseudoatom, or bond.
     pub fn contains(&self, fundamental: FundamentalId) -> bool {
-        self.members().contains(&fundamental)
+        self.core().members.contains(&fundamental)
     }
 }
 
 /// A mutable view over a specific molecule entity in a specific `MolMap`.
+#[derive(Debug)]
 pub struct MoleculeViewMut<'a, M: MolMap> {
     pub molmap: &'a mut M,
     pub id: MoleculeId,

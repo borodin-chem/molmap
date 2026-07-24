@@ -10,6 +10,8 @@ mod interfaces;
 mod molmap;
 mod spatial;
 
+pub(crate) use molmap::MolMapCore;
+
 pub use interfaces::{FormatGenerator, FormatParser};
 pub use molmap::MolMap;
 pub use spatial::SpatialMolMap;

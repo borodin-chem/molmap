@@ -8,35 +8,34 @@
 
 use slotmap::new_key_type;
 
-use crate::{ids::BondId, traits::MolMap};
-
-new_key_type! {
-    /// An ID corresponding to a specific pseudoatom entity in a `MolMap`.
-    pub struct PseudoatomId;
-}
+use crate::{
+    Pseudoelement,
+    ids::{BondId, KeyId, PseudoatomId},
+    traits::MolMap,
+};
 
 /// The core data of a pseudoatom entity.
 ///
 /// A pseudoatom is something that has a "symbol" like a normal atom but
 /// represents something else.
 /// It may have an unknown composition like R, or a known structure like Ph.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct Pseudoatom {
-    pub(crate) symbol: String,
+    pub(crate) pseudoelement: Pseudoelement,
     pub(crate) bonds: Vec<BondId>,
 }
 
 impl Pseudoatom {
-    pub(crate) fn new(symbol: String) -> Self {
+    pub fn new(pseudoelement: Pseudoelement) -> Self {
         Self {
-            symbol,
+            pseudoelement,
             bonds: Vec::new(),
         }
     }
 }
 
 /// An immutable view over a specific pseudoatom entity in a specific `MolMap`.
-#[derive(Clone, Copy)]
+#[derive(Copy, Clone, Debug)]
 pub struct PseudoatomView<'a, M: MolMap> {
     pub molmap: &'a M,
     pub id: PseudoatomId,
@@ -54,16 +53,13 @@ impl<'a, M: MolMap> PseudoatomView<'a, M> {
         self.molmap.core().pseudoatoms.get(self.id).unwrap()
     }
 
-    pub fn symbol(&self) -> &str {
-        &self.core().symbol
-    }
-
     pub fn bonds(&self) -> &[BondId] {
         &self.core().bonds
     }
 }
 
 /// A mutable view over a specific pseudoatom entity in a specific `MolMap`.
+#[derive(Debug)]
 pub struct PseudoatomViewMut<'a, M: MolMap> {
     pub molmap: &'a mut M,
     pub id: PseudoatomId,
@@ -91,9 +87,9 @@ impl<'a, M: MolMap> PseudoatomViewMut<'a, M> {
 
     // Public methods, which should consume the view
 
-    /// Set the symbol of the pseudoatom without any additional effects.
-    pub fn set_symbol(mut self, symbol: String) {
-        self.core().symbol = symbol
+    /// Set the pseudoelement of the pseudoatom without any additional effects.
+    pub fn set_pseudoelement(mut self, pseudoelement: Pseudoelement) {
+        self.core().pseudoelement = pseudoelement
     }
 
     /// Removes the pseudoatom from the map, as well as any bonds to it.
