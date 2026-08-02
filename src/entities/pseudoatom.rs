@@ -37,7 +37,7 @@ impl Pseudoatom {
 /// An immutable view over a specific pseudoatom entity in a specific `MolMap`.
 #[derive(Copy, Clone, Debug)]
 pub struct PseudoatomView<'a, M: MolMap> {
-    pub molmap: &'a M,
+    pub map: &'a M,
     pub id: PseudoatomId,
 }
 
@@ -50,7 +50,7 @@ impl<'a, M: MolMap> From<PseudoatomView<'a, M>> for PseudoatomId {
 impl<'a, M: MolMap> PseudoatomView<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&self) -> &'a Pseudoatom {
-        self.molmap.core().pseudoatoms.get(self.id).unwrap()
+        self.map.core().pseudoatoms.get(self.id).unwrap()
     }
 
     pub fn bonds(&self) -> &[BondId] {
@@ -61,7 +61,7 @@ impl<'a, M: MolMap> PseudoatomView<'a, M> {
 /// A mutable view over a specific pseudoatom entity in a specific `MolMap`.
 #[derive(Debug)]
 pub struct PseudoatomViewMut<'a, M: MolMap> {
-    pub molmap: &'a mut M,
+    pub map: &'a mut M,
     pub id: PseudoatomId,
 }
 
@@ -74,13 +74,13 @@ impl<'a, M: MolMap> From<PseudoatomViewMut<'a, M>> for PseudoatomId {
 impl<'a, M: MolMap> PseudoatomViewMut<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&mut self) -> &mut Pseudoatom {
-        self.molmap.core_mut().pseudoatoms.get_mut(self.id).unwrap()
+        self.map.core_mut().pseudoatoms.get_mut(self.id).unwrap()
     }
 
     /// Returns an immutable view over the same pseudoatom.
-    fn as_ref(&self) -> PseudoatomView<'_, M> {
+    fn as_view(&self) -> PseudoatomView<'_, M> {
         PseudoatomView {
-            molmap: &*self.molmap,
+            map: &*self.map,
             id: self.id,
         }
     }
@@ -94,6 +94,6 @@ impl<'a, M: MolMap> PseudoatomViewMut<'a, M> {
 
     /// Removes the pseudoatom from the map, as well as any bonds to it.
     pub fn delete(mut self) {
-        self.molmap.core_mut().delete_pseudoatom(self.id);
+        self.map.core_mut().delete_pseudoatom(self.id);
     }
 }

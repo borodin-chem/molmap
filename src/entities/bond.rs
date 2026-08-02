@@ -45,7 +45,7 @@ impl Bond {
 /// An immutable view over a specific bond entity in a specific `MolMap`.
 #[derive(Copy, Clone, Debug)]
 pub struct BondView<'a, M: MolMap> {
-    pub molmap: &'a M,
+    pub map: &'a M,
     pub id: BondId,
 }
 
@@ -58,7 +58,7 @@ impl<'a, M: MolMap> From<BondView<'a, M>> for BondId {
 impl<'a, M: MolMap> BondView<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&self) -> &'a Bond {
-        self.molmap.core().bonds.get(self.id).unwrap()
+        self.map.core().bonds.get(self.id).unwrap()
     }
 
     pub fn bond_type(&self) -> BondType {
@@ -81,7 +81,7 @@ impl<'a, M: MolMap> BondView<'a, M> {
 /// removed and a new one added between the desired new bonding partners.
 #[derive(Debug)]
 pub struct BondViewMut<'a, M: MolMap> {
-    pub molmap: &'a mut M,
+    pub map: &'a mut M,
     pub id: BondId,
 }
 
@@ -94,13 +94,13 @@ impl<'a, M: MolMap> From<BondViewMut<'a, M>> for BondId {
 impl<'a, M: MolMap> BondViewMut<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&mut self) -> &mut Bond {
-        self.molmap.core_mut().bonds.get_mut(self.id).unwrap()
+        self.map.core_mut().bonds.get_mut(self.id).unwrap()
     }
 
     /// Returns an immutable view over the same bond.
-    fn as_ref(&self) -> BondView<'_, M> {
+    fn as_view(&self) -> BondView<'_, M> {
         BondView {
-            molmap: &*self.molmap,
+            map: &*self.map,
             id: self.id,
         }
     }
@@ -119,6 +119,6 @@ impl<'a, M: MolMap> BondViewMut<'a, M> {
 
     /// Removes the bond from the map (but not its bonding partners).
     pub fn delete(mut self) {
-        self.molmap.core_mut().delete_bond(self.id);
+        self.map.core_mut().delete_bond(self.id);
     }
 }

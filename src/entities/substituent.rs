@@ -53,7 +53,7 @@ impl Substituent {
 /// An immutable view over a specific substituent entity in a specific `MolMap`.
 #[derive(Copy, Clone, Debug)]
 pub struct SubstituentView<'a, M: MolMap> {
-    pub molmap: &'a M,
+    pub map: &'a M,
     pub id: SubstituentId,
 }
 
@@ -66,7 +66,7 @@ impl<'a, M: MolMap> From<SubstituentView<'a, M>> for SubstituentId {
 impl<'a, M: MolMap> SubstituentView<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&self) -> &'a Substituent {
-        self.molmap.core().substituents.get(self.id).unwrap()
+        self.map.core().substituents.get(self.id).unwrap()
     }
 
     /// Returns details of the centre(s) of the substituent.
@@ -88,7 +88,7 @@ impl<'a, M: MolMap> SubstituentView<'a, M> {
 /// A mutable view over a specific substituent entity in a specific `MolMap`.
 #[derive(Debug)]
 pub struct SubstituentViewMut<'a, M: MolMap> {
-    pub molmap: &'a mut M,
+    pub map: &'a mut M,
     pub id: SubstituentId,
 }
 
@@ -101,17 +101,13 @@ impl<'a, M: MolMap> From<SubstituentViewMut<'a, M>> for SubstituentId {
 impl<'a, M: MolMap> SubstituentViewMut<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&mut self) -> &mut Substituent {
-        self.molmap
-            .core_mut()
-            .substituents
-            .get_mut(self.id)
-            .unwrap()
+        self.map.core_mut().substituents.get_mut(self.id).unwrap()
     }
 
     /// Returns an immutable view over the same substituent.
-    fn as_ref(&self) -> SubstituentView<'_, M> {
+    fn as_view(&self) -> SubstituentView<'_, M> {
         SubstituentView {
-            molmap: &*self.molmap,
+            map: &*self.map,
             id: self.id,
         }
     }
@@ -136,7 +132,7 @@ impl<'a, M: MolMap> SubstituentViewMut<'a, M> {
             let bonds = match id.to_tagged() {
                 TaggedAtomlike::Atom(id) => {
                     &self
-                        .molmap
+                        .map
                         .core()
                         .atoms
                         .get(id.try_into().unwrap())
@@ -145,7 +141,7 @@ impl<'a, M: MolMap> SubstituentViewMut<'a, M> {
                 }
                 TaggedAtomlike::Pseudoatom(id) => {
                     &self
-                        .molmap
+                        .map
                         .core()
                         .pseudoatoms
                         .get(id)
@@ -156,7 +152,7 @@ impl<'a, M: MolMap> SubstituentViewMut<'a, M> {
             !bonds.is_empty()
         };
         // Check that there aren't already bonds to the current centre
-        let already_bonded = match self.as_ref().centre().clone() {
+        let already_bonded = match self.as_view().centre().clone() {
             SubstituentCentre::None => false,
             SubstituentCentre::Single(atomlike_id) => atomlike_has_bonds(atomlike_id),
             SubstituentCentre::Multiple(atomlike_ids) => {
@@ -175,6 +171,6 @@ impl<'a, M: MolMap> SubstituentViewMut<'a, M> {
 
     /// Removes the substituent from the map, as well as all of its members.
     pub fn delete(mut self) {
-        self.molmap.core_mut().delete_substituent(self.id);
+        self.map.core_mut().delete_substituent(self.id);
     }
 }

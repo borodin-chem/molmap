@@ -31,7 +31,7 @@ impl Atom {
 /// An immutable view over a specific atom entity in a specific `MolMap`.
 #[derive(Copy, Clone, Debug)]
 pub struct AtomView<'a, M: MolMap> {
-    pub molmap: &'a M,
+    pub map: &'a M,
     pub id: AtomId,
 }
 
@@ -44,7 +44,7 @@ impl<'a, M: MolMap> From<AtomView<'a, M>> for AtomId {
 impl<'a, M: MolMap> AtomView<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&self) -> &'a Atom {
-        self.molmap.core().atoms.get(self.id).unwrap()
+        self.map.core().atoms.get(self.id).unwrap()
     }
 
     pub fn element(&self) -> Element {
@@ -63,7 +63,7 @@ impl<'a, M: MolMap> AtomView<'a, M> {
 /// A mutable view over a specific atom entity in a specific `MolMap`.
 #[derive(Debug)]
 pub struct AtomViewMut<'a, M: MolMap> {
-    pub molmap: &'a mut M,
+    pub map: &'a mut M,
     pub id: AtomId,
 }
 
@@ -76,13 +76,13 @@ impl<'a, M: MolMap> From<AtomViewMut<'a, M>> for AtomId {
 impl<'a, M: MolMap> AtomViewMut<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&mut self) -> &mut Atom {
-        self.molmap.core_mut().atoms.get_mut(self.id).unwrap()
+        self.map.core_mut().atoms.get_mut(self.id).unwrap()
     }
 
     /// Returns an immutable view over the same atom.
-    fn as_ref(&self) -> AtomView<'_, M> {
+    fn as_view(&self) -> AtomView<'_, M> {
         AtomView {
-            molmap: &*self.molmap,
+            map: &*self.map,
             id: self.id,
         }
     }
@@ -96,6 +96,6 @@ impl<'a, M: MolMap> AtomViewMut<'a, M> {
 
     /// Removes the atom from the map, as well as any bonds to it.
     pub fn delete(mut self) {
-        self.molmap.core_mut().delete_atom(self.id);
+        self.map.core_mut().delete_atom(self.id);
     }
 }
