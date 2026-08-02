@@ -120,6 +120,8 @@ impl<'a, M: MolMap> SubstituentViewMut<'a, M> {
 
     /// Attempts to change the centre of the substituent to the one requested.
     ///
+    /// # Errors
+    ///
     /// Fails if the requested centre is not already a member of the substituent,
     /// or if there are already bonds to the current centre(s).
     pub fn change_centre(mut self, new: AtomlikeId) -> MolMapResult<()> {
