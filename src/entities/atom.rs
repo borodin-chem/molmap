@@ -6,6 +6,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use slotmap::basic::Keys;
+
 use crate::{
     Element, MolMapError, MolMapResult,
     ids::{AtomId, BondId},
@@ -97,5 +99,33 @@ impl<'a, M: MolMap> AtomViewMut<'a, M> {
     /// Removes the atom from the map, as well as any bonds to it.
     pub fn delete(mut self) {
         self.map.core_mut().delete_atom(self.id);
+    }
+}
+
+/// An iterator that yields an [`AtomView`] over each atom entity in a [`MolMap`] in turn.
+pub struct Atoms<'a, M: MolMap> {
+    map: &'a M,
+    ids: Keys<'a, AtomId, Atom>,
+}
+
+impl<'a, M: MolMap> Atoms<'a, M> {
+    /// Creates a new iterator over the given map's atoms.
+    pub(crate) fn new(map: &'a M) -> Self {
+        Self {
+            map,
+            ids: map.core().atom_ids(),
+        }
+    }
+}
+
+impl<'a, M: MolMap> Iterator for Atoms<'a, M> {
+    type Item = AtomView<'a, M>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(id) = self.ids.next() {
+            Some(AtomView { map: self.map, id })
+        } else {
+            None
+        }
     }
 }

@@ -8,7 +8,7 @@
 
 use std::collections::HashSet;
 
-use slotmap::new_key_type;
+use slotmap::{basic::Keys, new_key_type};
 
 use crate::{
     ids::{FundamentalId, MoleculeId},
@@ -91,5 +91,33 @@ impl<'a, M: MolMap> MoleculeViewMut<'a, M> {
     /// Removes the molecule from the map, as well as all of its members.
     pub fn delete(mut self) {
         self.map.core_mut().delete_molecule(self.id);
+    }
+}
+
+/// An iterator that yields a [`MoleculeView`] over each molecule entity in a [`MolMap`] in turn.
+pub struct Molecules<'a, M: MolMap> {
+    map: &'a M,
+    ids: Keys<'a, MoleculeId, Molecule>,
+}
+
+impl<'a, M: MolMap> Molecules<'a, M> {
+    /// Creates a new iterator over the given map's molecules.
+    pub(crate) fn new(map: &'a M) -> Self {
+        Self {
+            map,
+            ids: map.core().molecule_ids(),
+        }
+    }
+}
+
+impl<'a, M: MolMap> Iterator for Molecules<'a, M> {
+    type Item = MoleculeView<'a, M>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(id) = self.ids.next() {
+            Some(MoleculeView { map: self.map, id })
+        } else {
+            None
+        }
     }
 }

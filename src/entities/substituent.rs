@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use slotmap::new_key_type;
+use slotmap::{basic::Keys, new_key_type};
 
 use crate::{
     MolMapError, MolMapResult,
@@ -172,5 +172,33 @@ impl<'a, M: MolMap> SubstituentViewMut<'a, M> {
     /// Removes the substituent from the map, as well as all of its members.
     pub fn delete(mut self) {
         self.map.core_mut().delete_substituent(self.id);
+    }
+}
+
+/// An iterator that yields a [`SubstituentView`] over each substituent entity in a [`MolMap`] in turn.
+pub struct Substituents<'a, M: MolMap> {
+    map: &'a M,
+    ids: Keys<'a, SubstituentId, Substituent>,
+}
+
+impl<'a, M: MolMap> Substituents<'a, M> {
+    /// Creates a new iterator over the given map's substituents.
+    pub(crate) fn new(map: &'a M) -> Self {
+        Self {
+            map,
+            ids: map.core().substituent_ids(),
+        }
+    }
+}
+
+impl<'a, M: MolMap> Iterator for Substituents<'a, M> {
+    type Item = SubstituentView<'a, M>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(id) = self.ids.next() {
+            Some(SubstituentView { map: self.map, id })
+        } else {
+            None
+        }
     }
 }

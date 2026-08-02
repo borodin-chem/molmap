@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use slotmap::new_key_type;
+use slotmap::{basic::Keys, new_key_type};
 
 use crate::{
     ids::{AtomId, AtomlikeId, BondId, BondableId, KeyId, PseudoatomId, SubstituentId},
@@ -120,5 +120,33 @@ impl<'a, M: MolMap> BondViewMut<'a, M> {
     /// Removes the bond from the map (but not its bonding partners).
     pub fn delete(mut self) {
         self.map.core_mut().delete_bond(self.id);
+    }
+}
+
+/// An iterator that yields a [`BondView`] over each bond entity in a [`MolMap`] in turn.
+pub struct Bonds<'a, M: MolMap> {
+    map: &'a M,
+    ids: Keys<'a, BondId, Bond>,
+}
+
+impl<'a, M: MolMap> Bonds<'a, M> {
+    /// Creates a new iterator over the given map's bonds.
+    pub(crate) fn new(map: &'a M) -> Self {
+        Self {
+            map,
+            ids: map.core().bond_ids(),
+        }
+    }
+}
+
+impl<'a, M: MolMap> Iterator for Bonds<'a, M> {
+    type Item = BondView<'a, M>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(id) = self.ids.next() {
+            Some(BondView { map: self.map, id })
+        } else {
+            None
+        }
     }
 }

@@ -181,8 +181,8 @@ pub trait MolMap: Sized + MolMapCore {
     }
 
     /// Returns an iterator over views of all atoms in the map.
-    fn atoms(&'_ self) -> impl Iterator<Item = AtomView<'_, Self>> + '_ {
-        self.atom_ids().map(|id| self.atom(id).unwrap())
+    fn atoms(&'_ self) -> Atoms<'_, Self> {
+        Atoms::new(self)
     }
 
     /// Constructs an immutable `PseudoatomView` for the given pseudoatom, returning `None` if the
@@ -204,8 +204,8 @@ pub trait MolMap: Sized + MolMapCore {
     }
 
     /// Returns an iterator over views of all pseudoatoms in the map.
-    fn pseudoatoms(&'_ self) -> impl Iterator<Item = PseudoatomView<'_, Self>> + '_ {
-        self.pseudoatom_ids().map(|id| self.pseudoatom(id).unwrap())
+    fn pseudoatoms(&'_ self) -> Pseudoatoms<'_, Self> {
+        Pseudoatoms::new(self)
     }
 
     /// Constructs an immutable `BondView` for the given bond, returning `None` if the ID is
@@ -227,8 +227,8 @@ pub trait MolMap: Sized + MolMapCore {
     }
 
     /// Returns an iterator over views of all atoms in the map.
-    fn bonds(&'_ self) -> impl Iterator<Item = BondView<'_, Self>> + '_ {
-        self.bond_ids().map(|id| self.bond(id).unwrap())
+    fn bonds(&'_ self) -> Bonds<'_, Self> {
+        Bonds::new(self)
     }
 
     /// Constructs an immutable `SubstituentView` for the given substituent, returning `None` if the ID is
@@ -250,9 +250,8 @@ pub trait MolMap: Sized + MolMapCore {
     }
 
     /// Returns an iterator over views of all substituents in the map.
-    fn substituents(&'_ self) -> impl Iterator<Item = SubstituentView<'_, Self>> + '_ {
-        self.substituent_ids()
-            .map(|id| self.substituent(id).unwrap())
+    fn substituents(&'_ self) -> Substituents<'_, Self> {
+        Substituents::new(self)
     }
 
     /// Constructs an immutable `MoleculeView` for the given molecule, returning `None` if the ID is
@@ -274,7 +273,7 @@ pub trait MolMap: Sized + MolMapCore {
     }
 
     /// Returns an iterator over views of all molecules in the map.
-    fn molecules(&'_ self) -> impl Iterator<Item = MoleculeView<'_, Self>> + '_ {
-        self.molecule_ids().map(|id| self.molecule(id).unwrap())
+    fn molecules(&'_ self) -> Molecules<'_, Self> {
+        Molecules::new(self)
     }
 }
