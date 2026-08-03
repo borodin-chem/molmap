@@ -7,7 +7,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::fmt::{Debug, Formatter};
-use std::num::{IntErrorKind, NonZeroU16};
+use std::num::{IntErrorKind, NonZeroU16, NonZeroU32, NonZeroU64};
 
 use slotmap::{Key, KeyData};
 
@@ -18,9 +18,9 @@ use crate::{MolMapError, MolMapResult};
 #[repr(u8)]
 //#[non_exhaustive]
 pub enum EntityKind {
-    Bond = 0x01, // Start at 1 so that a discriminant in EntityId of 0 is invalid
-    Atom = 0x02,
-    Pseudoatom = 0x03,
+    Atom = 0x00,
+    Bond = 0x01,
+    Pseudoatom = 0x02,
     Substituent = 0x10,
     Molecule = 0x1F,
 }
@@ -37,9 +37,9 @@ impl TryFrom<u8> for EntityKind {
 
     fn try_from(value: u8) -> MolMapResult<Self> {
         match value {
+            0x00 => Ok(Self::Atom),
             0x01 => Ok(Self::Bond),
-            0x02 => Ok(Self::Atom),
-            0x03 => Ok(Self::Pseudoatom),
+            0x02 => Ok(Self::Pseudoatom),
             0x10 => Ok(Self::Substituent),
             0x1F => Ok(Self::Molecule),
             _ => Err(MolMapError::UnknownEntityKind(value)),
@@ -81,87 +81,88 @@ pub enum TaggedEntity {
     Molecule(MoleculeId) = EntityKind::Molecule as u8,
 }
 
-// We use composite IDs, not traits, to classify entities and narrow
+// We use composite "category" IDs, not traits, to classify entities and narrow
 // functionality. The strategy originally pursued was to wrap the basic ID types
-// in enums, but this makes the composite ID types 12 bytes vs 8, and as they
+// in enums, but this makes the category ID types 12 bytes vs 8, and as they
 // are widely used, that just means a lot of unnecessary memory use.
 //
 // Instead, we convert the SlotMap keys to the raw `u64` using the `as_ffi`
-// method and use the most significant 8 bits to store a discriminant, and have
-// the whole thing be the ID.
+// method and use the high 8 bits of the index field to store a discriminant,
+// and the whole thing is then the ID.
 //
-// This means that the maximum attainable version of the underlying SlotMap keys
-// before issues arise is reduced from ~2^31 to ~2^23, as versions above that
-// will not survive a round trip. However, this still allows over 8 million
-// deletion-addition cycles before overflow, which should be plenty for chemical
-// applications. Taking the bits from the index field would reduce the maximum
-// possible number of atoms, which is much more likely to be a limiting factor.
+// The version of a SlotMap key wraps, so even if 2^31 deletion-addition cycles
+// occur at the same slot, there will be no issues; the only situation in which
+// a stale key will spuriously refer to something other than it originally did
+// is if *exactly* 2^31 deletion-addition cycles have occurred at the same slot
+// since the original key was generated and access is attempted with the stale
+// original key. This is exceptionally unlikely.
+//
+// If the bits for the discriminant are stolen from the version field, the
+// version has to be hard capped at the maximum value of the remaining bits i.e.
+// 2^27, as anything higher will not survive a round trip.
+//
+// As such, it is better to take the bits from the index field, as that already
+// has a hard cap (we just reduce it). This means the number of atoms is limited
+// to 2^24, as is the number of bonds (or indeed any individual entity).
+//
+// As the discriminant is encoded by 8 bits, the number of different entity
+// types is limited to 256. Only those in the range of 0 to 127 are used in the
+// core `MolGraph`; the rest are left for use by extensions that wish to add
+// additional entity types but still use unified IDs.
 
 /// The ID of any kind of entity.
-///
-/// This is equivalent to [`SlotMap::KeyData`] but with the version limited to
-/// 24 bits.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct EntityId(u64);
+pub struct EntityId(NonZeroU64);
 
-// Layout: |kk|vv|vv|vv|ii|ii|ii|ii|
-// - Bits 63–56 = discriminant/kind
-// - Bits 55–32 = version (truncated (to 24 bits from 32) `version` field of `KeyData`)
-// - Bits 31–0  = index (identical to `idx` field of `KeyData`)
+// Layout:
+// - Bits 63–32 = version (`version` field of `KeyData`)
+// - Bits 31–24 = discriminant/kind
+// - Bits 23–0  = index (`idx` field of `KeyData` truncated to 28 bits)
 
 impl EntityId {
-    const DISC_MASK: u64 = 0xFF << 56;
+    const DISC_OFFSET: u64 = 24;
+    const DISC_MASK: u64 = 0xFF << EntityId::DISC_OFFSET;
+    // Like for KeyData, the maximum index is reserved for use as the null value
+    const MAX_IDX: u32 = 0x0FFFFFFF;
 
     /// Extracts the discriminant field.
     #[inline]
     fn discriminant(&self) -> u8 {
-        ((self.0 & Self::DISC_MASK) >> 56) as u8
+        ((u64::from(self.0) & Self::DISC_MASK) >> Self::DISC_OFFSET) as u8
     }
 
     /// Extracts the version field.
     #[inline]
     fn version(&self) -> u32 {
-        ((self.0 & !Self::DISC_MASK) >> 32) as u32
+        (u64::from(self.0) >> 32) as u32
     }
 
     /// Extracts the index field.
     #[inline]
     fn index(&self) -> u32 {
-        self.0 as u32
+        (u64::from(self.0) & !Self::DISC_MASK) as u32
     }
 
     /// Wraps the key data of a key to create an ID.
     ///
     /// # Panics
     ///
-    /// When the `debug-assertions` compiler setting is active (e.g. with the `dev` or
-    /// `test` profiles, but not `release`), panic occurs when the key version has
-    /// overflowed.
-    ///
-    /// Normally, overflow occurs for `SlotMap` [after 2^31 deletions and insertions](https://docs.rs/slotmap/latest/slotmap/#performance-characteristics-and-implementation-details)
-    /// to the same slot. For `molmap`'s ID types this is considerably lower: 2^23.
-    /// At over 8 million cycles, this is still comfortably high for chemical
-    /// applications.
+    /// Panics if the key's index equals or exceeds [`EntityId::MAX_IDX`] = 2<sup>28</sup> − 1,
+    /// in which case the `MolMap` is full.
     #[inline]
     fn from_key_data(kind: EntityKind, key_data: KeyData) -> Self {
         let ffi = key_data.as_ffi();
-        // Runtime validation check should only take place if overflow checks are
-        // enabled, otherwise prioritize performance and just drop the byte, which
-        // invalidates the ID/key by causing it to hold a stale version number
-        // However, `cfg(overflow_checks)` is currently unstable
-        //if cfg!(overflow_checks) {
-        //    assert_eq!(
-        //        ffi & Self::DISC_MASK,
-        //        0,
-        //        "Key version overflow – maximum deletion/insertion cycles exceeded!"
-        //    )
-        //} else {
-        debug_assert_eq!(
-            ffi & Self::DISC_MASK,
-            0,
-            "Key version overflow – maximum deletion/insertion cycles exceeded!"
-        );
-        EntityId(((kind as u64) << 56) | (ffi & !Self::DISC_MASK))
+        // Max index indicates the null key, which is fine
+        if (ffi as u32 >= Self::MAX_IDX) && (ffi as u32 != u32::MAX) {
+            panic!("MolMap is full!");
+        }
+        // The version is non-zero and therefore the FFI representation is too,
+        // so this is safe to do
+        EntityId(unsafe {
+            NonZeroU64::new_unchecked(
+                ((kind as u64) << Self::DISC_OFFSET) | (ffi & !Self::DISC_MASK),
+            )
+        })
     }
 
     /// Returns the equivalent key data.
@@ -174,7 +175,21 @@ impl EntityId {
     /// Returns the inner value without the discriminant.
     #[inline]
     fn to_raw_key(self) -> u64 {
-        self.0 & !Self::DISC_MASK
+        u64::from(self.0) & !Self::DISC_MASK
+    }
+
+    /// Returns the inner value with the discriminant as a normal `u64`.
+    #[inline]
+    fn to_raw(self) -> u64 {
+        u64::from(self.0)
+    }
+
+    /// Checks if an ID represents the null key.
+    ///
+    /// Following `slotmap`, the null key is the one with the maximum index.
+    #[inline]
+    fn is_null(&self) -> bool {
+        self.index() == Self::MAX_IDX
     }
 }
 
@@ -271,6 +286,13 @@ macro_rules! define_key_id {
                 #[inline]
                 fn data(&self) -> KeyData {
                     self.0.to_key_data()
+                }
+
+                // Have to override default is_null method because it goes via
+                // the KeyData, and unfortunately the null key is not round-trippable
+                #[inline]
+                fn is_null(&self) -> bool {
+                    self.0.is_null()
                 }
             }
 
@@ -549,12 +571,13 @@ mod tests {
 
     // Some raw keys for use when testing, so that they only need updating in
     // one place if anything changes
-    const NULL_RAW: u64 = 0x00_000001_FFFFFFFF; // kind: None, idx: u32::MAX, version: 1
+    const ATOM_NULL_RAW: u64 = 0x0000001_00_FFFFFF; // The null atom key
+    const KD_NULL_RAW: u64 = 0x0000001_FF_FFFFFF; // What KeyData considers to be null
 
-    const BOND_RAW: u64 = 0x01_000001_00000008; // kind: Bond, idx: 8, version: 1
-    const ATOM_RAW: u64 = 0x02_000003_00000010; // kind: Atom, idx: 16, version: 3 (version always odd for occupied slots)
-    const PSEUDOATOM_RAW: u64 = 0x03_000001_0000000A; // kind: Pseudoatom, idx: 10, version: 1
-    const MOL_RAW: u64 = 0x1F_000001_00000001; // kind: Molecule, idx: 1, version: 1
+    const BOND_RAW: NonZeroU64 = NonZeroU64::new(0x1_01_000008).unwrap(); // version: 1, kind: Bond, idx: 8
+    const ATOM_RAW: NonZeroU64 = NonZeroU64::new(0x3_00_000010).unwrap(); // version: 3, kind: Atom, idx: 16, (version always odd for occupied slots)
+    const PSEUDOATOM_RAW: NonZeroU64 = NonZeroU64::new(0x1_03_00000A).unwrap(); // version: 1, kind: Pseudoatom, idx: 10
+    const MOL_RAW: NonZeroU64 = NonZeroU64::new(0x1_1F_000001).unwrap(); // version: 1, kind: Molecule, idx: 1
 
     const BOND: BondId = BondId(EntityId(BOND_RAW));
     const ATOM: AtomId = AtomId(EntityId(ATOM_RAW));
@@ -568,7 +591,7 @@ mod tests {
         // being a SemVer breaking change, but it would be a breaking change for us)
         // idx should be the lower 32 bits, version the higher 32
         let null = KeyData::default(); // idx: u32::MAX, version: 1
-        assert_eq!(null.as_ffi(), NULL_RAW);
+        assert_eq!(null.as_ffi(), KD_NULL_RAW);
         let mut sm: SlotMap<DefaultKey, usize> = SlotMap::new();
         let first = sm.insert(1); // idx: 1, version: 1
         assert_eq!(first.data().as_ffi(), 0x00000001_00000001);
@@ -583,49 +606,43 @@ mod tests {
     #[test]
     fn entity_getters() {
         let e = EntityId(ATOM_RAW);
-        assert_eq!(e.discriminant(), 2);
+        assert_eq!(e.discriminant(), 0);
         assert_eq!(e.version(), 3);
         assert_eq!(e.index(), 16);
     }
 
     #[test]
     fn from_key_data() {
-        let null = KeyData::default(); // idx: u32::MAX, version: 1
-        let id = EntityId::from_key_data(EntityKind::Atom, null);
-        // Atom has discriminant of 2
-        assert_eq!(id.0, 0x02_000001_FFFFFFFF);
+        let k = KeyData::from_ffi(0x1_00000001); // idx: 1, version: 1
+        let id = EntityId::from_key_data(EntityKind::Atom, k);
+        // Atom has discriminant of 0
+        assert_eq!(id.to_raw(), 0x1_00000001);
         let mut sm: SlotMap<AtomId, usize> = SlotMap::with_key();
         let first = sm.insert(1); // idx: 1, version: 1
-        assert_eq!(first.0.0, 0x02_000001_00000001);
+        assert_eq!(first.0.to_raw(), 0x1_00000001);
         let second = sm.insert(2); // idx: 2, version: 1
-        assert_eq!(second.0.0, 0x02_000001_00000002);
+        assert_eq!(second.0.to_raw(), 0x1_00000002);
     }
 
     #[test]
     #[should_panic]
-    fn rejects_overflowed_version_debug_mode() {
-        let overflowed = KeyData::from_ffi(0x01111111_00000001);
-        // Checking only occurs in debug mode
-        if cfg!(debug_assertions) {
-            let _ = MoleculeId::from(overflowed);
-        } else {
-            let spurious = MoleculeId::from(overflowed); // This succeeds!
-            // But what we have isn't what we put in
-            assert_ne!(spurious.data(), overflowed);
-            assert_ne!(spurious.0.to_raw_key(), 0x01111111_00000001);
-            assert_eq!(spurious.0.to_raw_key(), 0x00111111_00000001);
-            // Because we overwrote the version with the discriminant
-            assert_eq!(spurious.0.0, 0x1F111111_00000001);
-            panic!("Not running in debug mode, so need to panic manually to pass test")
-        }
+    fn panics_on_overflow() {
+        let overflowed = KeyData::from_ffi(0x1_10000000);
+        let _ = MoleculeId::from(overflowed);
     }
 
     #[test]
     fn key_data_round_trip() {
-        let null = KeyData::default();
-        let atom_null: AtomId = null.into();
-        let recovered_null = atom_null.data();
-        assert_eq!(null, recovered_null);
+        // Round trip is survived by any valid key that hasn't overflowed
+        let kd = KeyData::from_ffi(0x1_00123456); // idx: 123456, version: 1
+        let atom: AtomId = kd.into();
+        let recovered = atom.data();
+        assert_eq!(kd, recovered);
+        // Unfortunately, a null key doesn't survive a round trip
+        //let null = KeyData::default();
+        //let atom_null: AtomId = null.into();
+        //let recovered_null = atom_null.data();
+        //assert_eq!(null, recovered_null);
     }
 
     #[test]
@@ -645,8 +662,8 @@ mod tests {
     #[test]
     fn different_discriminants_same_keys() {
         // First assigned key in two different slotmaps
-        let atom = AtomId(EntityId(0x02_000001_00000001));
-        let bond = BondId(EntityId(0x01_000001_00000001));
+        let atom = AtomId(EntityId(0x1_02_000001.try_into().unwrap()));
+        let bond = BondId(EntityId(0x1_01_000001.try_into().unwrap()));
         assert_eq!(atom.0.to_raw_key(), bond.0.to_raw_key());
     }
 
