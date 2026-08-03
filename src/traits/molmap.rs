@@ -169,7 +169,7 @@ pub trait MolMap: Sized + MolMapCore {
     fn atom(&'_ self, id: AtomId) -> Option<AtomView<'_, Self>> {
         self.core()
             .contains_atom(id)
-            .then_some(AtomView { molmap: self, id })
+            .then_some(AtomView { map: self, id })
     }
 
     /// Constructs a mutable `AtomViewMut` for the given atom, returning `None` if the ID is
@@ -177,12 +177,12 @@ pub trait MolMap: Sized + MolMapCore {
     fn atom_mut(&'_ mut self, id: AtomId) -> Option<AtomViewMut<'_, Self>> {
         self.core()
             .contains_atom(id)
-            .then_some(AtomViewMut { molmap: self, id })
+            .then_some(AtomViewMut { map: self, id })
     }
 
     /// Returns an iterator over views of all atoms in the map.
-    fn atoms(&'_ self) -> impl Iterator<Item = AtomView<'_, Self>> + '_ {
-        self.atom_ids().map(|id| self.atom(id).unwrap())
+    fn atoms(&'_ self) -> Atoms<'_, Self> {
+        Atoms::new(self)
     }
 
     /// Constructs an immutable `PseudoatomView` for the given pseudoatom, returning `None` if the
@@ -191,7 +191,7 @@ pub trait MolMap: Sized + MolMapCore {
         self.core()
             .pseudoatoms
             .contains_key(id)
-            .then_some(PseudoatomView { molmap: self, id })
+            .then_some(PseudoatomView { map: self, id })
     }
 
     /// Constructs a mutable `PseudoatomViewMut` for the given pseudoatom, returning `None` if the
@@ -200,12 +200,12 @@ pub trait MolMap: Sized + MolMapCore {
         self.core()
             .pseudoatoms
             .contains_key(id)
-            .then_some(PseudoatomViewMut { molmap: self, id })
+            .then_some(PseudoatomViewMut { map: self, id })
     }
 
     /// Returns an iterator over views of all pseudoatoms in the map.
-    fn pseudoatoms(&'_ self) -> impl Iterator<Item = PseudoatomView<'_, Self>> + '_ {
-        self.pseudoatom_ids().map(|id| self.pseudoatom(id).unwrap())
+    fn pseudoatoms(&'_ self) -> Pseudoatoms<'_, Self> {
+        Pseudoatoms::new(self)
     }
 
     /// Constructs an immutable `BondView` for the given bond, returning `None` if the ID is
@@ -214,7 +214,7 @@ pub trait MolMap: Sized + MolMapCore {
         self.core()
             .bonds
             .contains_key(id)
-            .then_some(BondView { molmap: self, id })
+            .then_some(BondView { map: self, id })
     }
 
     /// Constructs a mutable `BondViewMut` for the given bond, returning `None` if the ID is
@@ -223,12 +223,12 @@ pub trait MolMap: Sized + MolMapCore {
         self.core()
             .bonds
             .contains_key(id)
-            .then_some(BondViewMut { molmap: self, id })
+            .then_some(BondViewMut { map: self, id })
     }
 
     /// Returns an iterator over views of all atoms in the map.
-    fn bonds(&'_ self) -> impl Iterator<Item = BondView<'_, Self>> + '_ {
-        self.bond_ids().map(|id| self.bond(id).unwrap())
+    fn bonds(&'_ self) -> Bonds<'_, Self> {
+        Bonds::new(self)
     }
 
     /// Constructs an immutable `SubstituentView` for the given substituent, returning `None` if the ID is
@@ -237,7 +237,7 @@ pub trait MolMap: Sized + MolMapCore {
         self.core()
             .substituents
             .contains_key(id)
-            .then_some(SubstituentView { molmap: self, id })
+            .then_some(SubstituentView { map: self, id })
     }
 
     /// Constructs a mutable `SubstituentViewMut` for the given substituent, returning `None` if the ID is
@@ -246,13 +246,12 @@ pub trait MolMap: Sized + MolMapCore {
         self.core()
             .substituents
             .contains_key(id)
-            .then_some(SubstituentViewMut { molmap: self, id })
+            .then_some(SubstituentViewMut { map: self, id })
     }
 
     /// Returns an iterator over views of all substituents in the map.
-    fn substituents(&'_ self) -> impl Iterator<Item = SubstituentView<'_, Self>> + '_ {
-        self.substituent_ids()
-            .map(|id| self.substituent(id).unwrap())
+    fn substituents(&'_ self) -> Substituents<'_, Self> {
+        Substituents::new(self)
     }
 
     /// Constructs an immutable `MoleculeView` for the given molecule, returning `None` if the ID is
@@ -261,7 +260,7 @@ pub trait MolMap: Sized + MolMapCore {
         self.core()
             .molecules
             .contains_key(id)
-            .then_some(MoleculeView { molmap: self, id })
+            .then_some(MoleculeView { map: self, id })
     }
 
     /// Constructs a mutable `MoleculeViewMut` for the given molecule, returning `None` if the ID is
@@ -270,11 +269,11 @@ pub trait MolMap: Sized + MolMapCore {
         self.core()
             .molecules
             .contains_key(id)
-            .then_some(MoleculeViewMut { molmap: self, id })
+            .then_some(MoleculeViewMut { map: self, id })
     }
 
     /// Returns an iterator over views of all molecules in the map.
-    fn molecules(&'_ self) -> impl Iterator<Item = MoleculeView<'_, Self>> + '_ {
-        self.molecule_ids().map(|id| self.molecule(id).unwrap())
+    fn molecules(&'_ self) -> Molecules<'_, Self> {
+        Molecules::new(self)
     }
 }

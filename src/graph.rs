@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use slotmap::SlotMap;
+use slotmap::{SlotMap, basic::Keys};
 
 use crate::{
     BondType, Element, Pseudoelement,
@@ -69,27 +69,27 @@ impl MolGraph {
 /// Methods for querying entity IDs.
 impl MolGraph {
     /// Returns an iterator over all the IDs of all atoms in the map.
-    pub(crate) fn atom_ids(&'_ self) -> impl Iterator<Item = AtomId> + '_ {
+    pub(crate) fn atom_ids(&'_ self) -> Keys<'_, AtomId, Atom> {
         self.atoms.keys()
     }
 
     /// Returns an iterator over all the IDs of all pseudoatoms in the map.
-    pub(crate) fn pseudoatom_ids(&'_ self) -> impl Iterator<Item = PseudoatomId> + '_ {
+    pub(crate) fn pseudoatom_ids(&'_ self) -> Keys<'_, PseudoatomId, Pseudoatom> {
         self.pseudoatoms.keys()
     }
 
     /// Returns an iterator over all the IDs of all bonds in the map.
-    pub(crate) fn bond_ids(&'_ self) -> impl Iterator<Item = BondId> + '_ {
+    pub(crate) fn bond_ids(&'_ self) -> Keys<'_, BondId, Bond> {
         self.bonds.keys()
     }
 
     /// Returns an iterator over all the IDs of all substituents in the map.
-    pub(crate) fn substituent_ids(&'_ self) -> impl Iterator<Item = SubstituentId> + '_ {
+    pub(crate) fn substituent_ids(&'_ self) -> Keys<'_, SubstituentId, Substituent> {
         self.substituents.keys()
     }
 
     /// Returns an iterator over all the IDs of all molecules in the map.
-    pub(crate) fn molecule_ids(&'_ self) -> impl Iterator<Item = MoleculeId> + '_ {
+    pub(crate) fn molecule_ids(&'_ self) -> Keys<'_, MoleculeId, Molecule> {
         self.molecules.keys()
     }
 
@@ -436,6 +436,8 @@ impl MolGraph {
         fundamental: FundamentalId,
     ) -> bool {
         let sub = self.substituents.get_mut(substituent).unwrap();
+        // members is just a Vec, so have to manually make sure we don't end up with
+        // any ID in the substituent twice
         if !sub.members.contains(&fundamental) {
             sub.members.push(fundamental);
             true
@@ -462,6 +464,39 @@ impl MolGraph {
     ) -> bool {
         let mol = self.molecules.get_mut(molecule).unwrap();
         mol.members.insert(fundamental)
+    }
+
+    /// Adds atoms, pseudoatoms, or bonds from an iterator to a substituent.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `substituent` is invalid, but is unaffected if any of the fundamental
+    /// IDs are invalid.
+    pub(crate) fn extend_substituent<T>(&mut self, substituent: SubstituentId, fundamentals: T)
+    where
+        T: IntoIterator<Item = FundamentalId>,
+    {
+        let sub = self.substituents.get_mut(substituent).unwrap();
+        // Can't just call extend, because we don't allow the IDs to be added twice
+        for fundamental in fundamentals {
+            if !sub.members.contains(&fundamental) {
+                sub.members.push(fundamental);
+            }
+        }
+    }
+
+    /// Adds atoms, pseudoatoms, or bonds from an iterator to a molecule.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `molecule` is invalid, but is unaffected if any of the fundamental
+    /// IDs are invalid.
+    pub(crate) fn extend_molecule<T>(&mut self, molecule: MoleculeId, fundamentals: T)
+    where
+        T: IntoIterator<Item = FundamentalId>,
+    {
+        let mol = self.molecules.get_mut(molecule).unwrap();
+        mol.members.extend(fundamentals)
     }
 
     /// Removes an atom, pseudoatom, or bond from a substituent.

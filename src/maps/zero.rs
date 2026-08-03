@@ -67,6 +67,8 @@ impl MolMap0 {
 
     /// Creates a new (single covalent) bond between two bondable entities.
     ///
+    /// # Errors
+    ///
     /// Fails if either of `start` and `end` are invalid.
     pub fn add_bond(&mut self, start: BondableId, end: BondableId) -> MolMapResult<BondId> {
         if !self.core.contains_bondable(start) {
@@ -78,6 +80,8 @@ impl MolMap0 {
     }
 
     /// Adds a substituent to the map with a single central atom.
+    ///
+    /// # Errors
     ///
     /// Fails if `centre` is invalid.
     pub fn add_substituent(&mut self, centre: AtomlikeId) -> MolMapResult<SubstituentId> {

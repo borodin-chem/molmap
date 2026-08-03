@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use slotmap::new_key_type;
+use slotmap::{basic::Keys, new_key_type};
 
 use crate::{
     ids::{AtomId, AtomlikeId, BondId, BondableId, KeyId, PseudoatomId, SubstituentId},
@@ -45,7 +45,7 @@ impl Bond {
 /// An immutable view over a specific bond entity in a specific `MolMap`.
 #[derive(Copy, Clone, Debug)]
 pub struct BondView<'a, M: MolMap> {
-    pub molmap: &'a M,
+    pub map: &'a M,
     pub id: BondId,
 }
 
@@ -58,7 +58,7 @@ impl<'a, M: MolMap> From<BondView<'a, M>> for BondId {
 impl<'a, M: MolMap> BondView<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&self) -> &'a Bond {
-        self.molmap.core().bonds.get(self.id).unwrap()
+        self.map.core().bonds.get(self.id).unwrap()
     }
 
     pub fn bond_type(&self) -> BondType {
@@ -81,7 +81,7 @@ impl<'a, M: MolMap> BondView<'a, M> {
 /// removed and a new one added between the desired new bonding partners.
 #[derive(Debug)]
 pub struct BondViewMut<'a, M: MolMap> {
-    pub molmap: &'a mut M,
+    pub map: &'a mut M,
     pub id: BondId,
 }
 
@@ -94,13 +94,13 @@ impl<'a, M: MolMap> From<BondViewMut<'a, M>> for BondId {
 impl<'a, M: MolMap> BondViewMut<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&mut self) -> &mut Bond {
-        self.molmap.core_mut().bonds.get_mut(self.id).unwrap()
+        self.map.core_mut().bonds.get_mut(self.id).unwrap()
     }
 
     /// Returns an immutable view over the same bond.
-    fn as_ref(&self) -> BondView<'_, M> {
+    fn as_view(&self) -> BondView<'_, M> {
         BondView {
-            molmap: &*self.molmap,
+            map: &*self.map,
             id: self.id,
         }
     }
@@ -119,6 +119,34 @@ impl<'a, M: MolMap> BondViewMut<'a, M> {
 
     /// Removes the bond from the map (but not its bonding partners).
     pub fn delete(mut self) {
-        self.molmap.core_mut().delete_bond(self.id);
+        self.map.core_mut().delete_bond(self.id);
+    }
+}
+
+/// An iterator that yields a [`BondView`] over each bond entity in a [`MolMap`] in turn.
+pub struct Bonds<'a, M: MolMap> {
+    map: &'a M,
+    ids: Keys<'a, BondId, Bond>,
+}
+
+impl<'a, M: MolMap> Bonds<'a, M> {
+    /// Creates a new iterator over the given map's bonds.
+    pub(crate) fn new(map: &'a M) -> Self {
+        Self {
+            map,
+            ids: map.core().bond_ids(),
+        }
+    }
+}
+
+impl<'a, M: MolMap> Iterator for Bonds<'a, M> {
+    type Item = BondView<'a, M>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(id) = self.ids.next() {
+            Some(BondView { map: self.map, id })
+        } else {
+            None
+        }
     }
 }

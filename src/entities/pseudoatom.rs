@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use slotmap::new_key_type;
+use slotmap::{basic::Keys, new_key_type};
 
 use crate::{
     Pseudoelement,
@@ -37,7 +37,7 @@ impl Pseudoatom {
 /// An immutable view over a specific pseudoatom entity in a specific `MolMap`.
 #[derive(Copy, Clone, Debug)]
 pub struct PseudoatomView<'a, M: MolMap> {
-    pub molmap: &'a M,
+    pub map: &'a M,
     pub id: PseudoatomId,
 }
 
@@ -50,7 +50,7 @@ impl<'a, M: MolMap> From<PseudoatomView<'a, M>> for PseudoatomId {
 impl<'a, M: MolMap> PseudoatomView<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&self) -> &'a Pseudoatom {
-        self.molmap.core().pseudoatoms.get(self.id).unwrap()
+        self.map.core().pseudoatoms.get(self.id).unwrap()
     }
 
     pub fn bonds(&self) -> &[BondId] {
@@ -61,7 +61,7 @@ impl<'a, M: MolMap> PseudoatomView<'a, M> {
 /// A mutable view over a specific pseudoatom entity in a specific `MolMap`.
 #[derive(Debug)]
 pub struct PseudoatomViewMut<'a, M: MolMap> {
-    pub molmap: &'a mut M,
+    pub map: &'a mut M,
     pub id: PseudoatomId,
 }
 
@@ -74,13 +74,13 @@ impl<'a, M: MolMap> From<PseudoatomViewMut<'a, M>> for PseudoatomId {
 impl<'a, M: MolMap> PseudoatomViewMut<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&mut self) -> &mut Pseudoatom {
-        self.molmap.core_mut().pseudoatoms.get_mut(self.id).unwrap()
+        self.map.core_mut().pseudoatoms.get_mut(self.id).unwrap()
     }
 
     /// Returns an immutable view over the same pseudoatom.
-    fn as_ref(&self) -> PseudoatomView<'_, M> {
+    fn as_view(&self) -> PseudoatomView<'_, M> {
         PseudoatomView {
-            molmap: &*self.molmap,
+            map: &*self.map,
             id: self.id,
         }
     }
@@ -94,6 +94,34 @@ impl<'a, M: MolMap> PseudoatomViewMut<'a, M> {
 
     /// Removes the pseudoatom from the map, as well as any bonds to it.
     pub fn delete(mut self) {
-        self.molmap.core_mut().delete_pseudoatom(self.id);
+        self.map.core_mut().delete_pseudoatom(self.id);
+    }
+}
+
+/// An iterator that yields a [`PseudoatomView`] over each pseudoatom entity in a [`MolMap`] in turn.
+pub struct Pseudoatoms<'a, M: MolMap> {
+    map: &'a M,
+    ids: Keys<'a, PseudoatomId, Pseudoatom>,
+}
+
+impl<'a, M: MolMap> Pseudoatoms<'a, M> {
+    /// Creates a new iterator over the given map's pseudoatoms.
+    pub(crate) fn new(map: &'a M) -> Self {
+        Self {
+            map,
+            ids: map.core().pseudoatom_ids(),
+        }
+    }
+}
+
+impl<'a, M: MolMap> Iterator for Pseudoatoms<'a, M> {
+    type Item = PseudoatomView<'a, M>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(id) = self.ids.next() {
+            Some(PseudoatomView { map: self.map, id })
+        } else {
+            None
+        }
     }
 }

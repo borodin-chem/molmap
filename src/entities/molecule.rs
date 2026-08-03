@@ -8,7 +8,7 @@
 
 use std::collections::HashSet;
 
-use slotmap::new_key_type;
+use slotmap::{basic::Keys, new_key_type};
 
 use crate::{
     ids::{FundamentalId, MoleculeId},
@@ -32,7 +32,7 @@ impl Molecule {
 /// An immutable view over a specific molecule entity in a specific `MolMap`.
 #[derive(Copy, Clone, Debug)]
 pub struct MoleculeView<'a, M: MolMap> {
-    pub molmap: &'a M,
+    pub map: &'a M,
     pub id: MoleculeId,
 }
 
@@ -45,7 +45,7 @@ impl<'a, M: MolMap> From<MoleculeView<'a, M>> for MoleculeId {
 impl<'a, M: MolMap> MoleculeView<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&self) -> &'a Molecule {
-        self.molmap.core().molecules.get(self.id).unwrap()
+        self.map.core().molecules.get(self.id).unwrap()
     }
 
     /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.
@@ -62,7 +62,7 @@ impl<'a, M: MolMap> MoleculeView<'a, M> {
 /// A mutable view over a specific molecule entity in a specific `MolMap`.
 #[derive(Debug)]
 pub struct MoleculeViewMut<'a, M: MolMap> {
-    pub molmap: &'a mut M,
+    pub map: &'a mut M,
     pub id: MoleculeId,
 }
 
@@ -75,13 +75,13 @@ impl<'a, M: MolMap> From<MoleculeViewMut<'a, M>> for MoleculeId {
 impl<'a, M: MolMap> MoleculeViewMut<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&mut self) -> &mut Molecule {
-        self.molmap.core_mut().molecules.get_mut(self.id).unwrap()
+        self.map.core_mut().molecules.get_mut(self.id).unwrap()
     }
 
     /// Returns an immutable view over the same molecule.
-    fn as_ref(&self) -> MoleculeView<'_, M> {
+    fn as_view(&self) -> MoleculeView<'_, M> {
         MoleculeView {
-            molmap: &*self.molmap,
+            map: &*self.map,
             id: self.id,
         }
     }
@@ -90,6 +90,34 @@ impl<'a, M: MolMap> MoleculeViewMut<'a, M> {
 
     /// Removes the molecule from the map, as well as all of its members.
     pub fn delete(mut self) {
-        self.molmap.core_mut().delete_molecule(self.id);
+        self.map.core_mut().delete_molecule(self.id);
+    }
+}
+
+/// An iterator that yields a [`MoleculeView`] over each molecule entity in a [`MolMap`] in turn.
+pub struct Molecules<'a, M: MolMap> {
+    map: &'a M,
+    ids: Keys<'a, MoleculeId, Molecule>,
+}
+
+impl<'a, M: MolMap> Molecules<'a, M> {
+    /// Creates a new iterator over the given map's molecules.
+    pub(crate) fn new(map: &'a M) -> Self {
+        Self {
+            map,
+            ids: map.core().molecule_ids(),
+        }
+    }
+}
+
+impl<'a, M: MolMap> Iterator for Molecules<'a, M> {
+    type Item = MoleculeView<'a, M>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(id) = self.ids.next() {
+            Some(MoleculeView { map: self.map, id })
+        } else {
+            None
+        }
     }
 }
