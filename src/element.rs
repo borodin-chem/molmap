@@ -13,7 +13,7 @@ use mendeleev::OxidationStateCategory;
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 //#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Element {
-    H,
+    H = 1,
     He,
     Li,
     Be,
@@ -270,5 +270,24 @@ impl Element {
     /// Returns the element's symbol.
     pub fn symbol(&self) -> &str {
         self.into_mendeleev().symbol()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_valency_matches_smiles_plus() {
+        assert_eq!(Element::B.default_valency(), 3);
+        assert_eq!(Element::C.default_valency(), 4);
+        assert_eq!(Element::N.default_valency(), 3);
+        assert_eq!(Element::O.default_valency(), 2);
+        assert_eq!(Element::F.default_valency(), 1);
+        assert_eq!(Element::Cl.default_valency(), 1);
+        assert_eq!(Element::Br.default_valency(), 1);
+        assert_eq!(Element::I.default_valency(), 1);
+        assert_eq!(Element::P.default_valency(), 3); // SMILES+ doesn't have a default, determined by inspection
+        assert_eq!(Element::S.default_valency(), 2); // SMILES+ doesn't have a default, determined by inspection
     }
 }
