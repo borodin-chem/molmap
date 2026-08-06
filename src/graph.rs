@@ -198,7 +198,7 @@ impl MolGraph {
     /// Adds an empty substituent to the map.
     ///
     /// If the atomlike that is going to be the substituent's centre already
-    /// exists, prefer `add_substituent_with_centre()`.
+    /// exists, prefer `add_substituent_with_centre`.
     pub(crate) fn add_substituent(&mut self) -> SubstituentId {
         self.substituents.insert(Substituent {
             centre: SubstituentCentre::None,

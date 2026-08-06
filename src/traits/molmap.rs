@@ -32,10 +32,10 @@ pub trait MolMapCore {
 ///
 /// This trait provides methods for:
 /// 1. obtaining an immutable or mutable view of an entity from its ID e.g.
-///    [`MolMap::atom()`] and [`MolMap::atom_mut()`]
-/// 2. verifying an ID e.g. [`MolMap::contains_atom()`]
-/// 3. iterating over views of all of a given kind of entity e.g. [`MolMap::atoms()`]
-/// 4. iterating over all IDs of a given kind of entity e.g. [`MolMap::atom_ids()`]
+///    [`MolMap::atom`] and [`MolMap::atom_mut`]
+/// 2. verifying an ID e.g. [`MolMap::contains_atom`]
+/// 3. iterating over views of all of a given kind of entity e.g. [`MolMap::atoms`]
+/// 4. iterating over all IDs of a given kind of entity e.g. [`MolMap::atom_ids`]
 ///
 /// This trait is sealed and is not intended for implementation outside of `molmap`.
 pub trait MolMap: Sized + MolMapCore {
@@ -44,7 +44,7 @@ pub trait MolMap: Sized + MolMapCore {
     /// As the constituent `SlotMap`s are created with an initial capacity of 0, reallocations
     /// will occur frequently if many entities are subsequently inserted.
     /// If you have an idea of approximately how large the `MolMap` needs to be, it is
-    /// recommended to use `MolMap.with_capacity()` or `with_capacities()` instead.
+    /// recommended to use `MolMap.with_capacity` or `with_capacities` instead.
     fn new() -> Self;
 
     /// Creates a new `MolMap` with the specified initial capacities for each kind of entity.
