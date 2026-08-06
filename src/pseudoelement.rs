@@ -11,7 +11,7 @@ use crate::entities::definition::DefinitionId;
 /// The "element" of a pseudoatom, represented in a chemical formula by a symbol
 /// like a real element, but representing a group of atoms.
 ///
-/// While there is a significant number of such [symbols in common use(https://en.wikipedia.org/wiki/Skeletal_formula#Pseudoelement_symbols),
+/// While there are a significant number of such [symbols in common use](https://en.wikipedia.org/wiki/Skeletal_formula#Pseudoelement_symbols),
 /// and many are widely accepted and thus essentially unambiguous in what they
 /// refer to, only the few listed explicitly in the
 /// [2008 IUPAC Recommendations for chemical structure diagrams](https://doi.org/10.1351/pac200880020277)
