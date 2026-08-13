@@ -60,6 +60,45 @@ impl MolMap0 {
         self.core.add_atom(element)
     }
 
+    /// Adds an atom to the map along with the requested number of hydrogen atoms
+    /// (and single covalent bonds from the central atom to them).
+    ///
+    /// Returns the ID of the added central atom as well as a slice over the IDs
+    /// of the new bonds.
+    pub fn add_atom_with_hydrogen(
+        &mut self,
+        element: Element,
+        n_hydrogen: u8,
+    ) -> (AtomId, &[BondId]) {
+        let centre = self.add_atom(element);
+        for i in 0..n_hydrogen {
+            let new_h = self.add_atom(Element::H);
+            self.core.add_bond(centre.into(), new_h.into());
+        }
+        // Don't waste memory allocating a new Vec to hold the bond IDs, since
+        // they are already stored on the new central atom – return a slice instead
+        (
+            centre,
+            self.core()
+                .atoms
+                .get(centre)
+                .expect("We just created this atom, so ID must be valid")
+                .bonds
+                .as_slice(),
+        )
+    }
+
+    /// Adds an atom to the map along with the number of additional hydrogen atoms
+    /// required to satisfy the most common valency for the central atom (and single
+    /// covalent bonds from the central atom to them).
+    ///
+    /// Returns the ID of the added central atom as well as a slice over the IDs
+    /// of the new bonds.
+    pub fn add_atom_and_saturate(&mut self, element: Element) -> (AtomId, &[BondId]) {
+        let n_hydrogen = element.default_valency();
+        self.add_atom_with_hydrogen(element, n_hydrogen)
+    }
+
     /// Adds a pseudoatom to the map.
     pub fn add_pseudoatom(&mut self, pseudoelement: Pseudoelement) -> PseudoatomId {
         self.core.add_pseudoatom(pseudoelement)
@@ -79,16 +118,63 @@ impl MolMap0 {
         Ok(self.core.add_bond(start, end))
     }
 
-    /// Adds a substituent to the map with a single central atom.
+    /// Adds an empty substituent to the map.
+    pub fn add_substituent(&mut self) -> SubstituentId {
+        self.core.add_substituent()
+    }
+
+    /// Adds a substituent to the map with a single, newly-created central atom.
     ///
-    /// # Errors
+    /// Returns the IDs of the added substituent and central atom.
+    pub fn add_substituent_with_atom(&mut self, element: Element) -> (SubstituentId, AtomId) {
+        let centre = self.add_atom(element);
+        let sub = self.core.add_substituent_with_centre(centre.into());
+        (sub, centre)
+    }
+
+    /// Adds a substituent to the map with a newly-created central atom and the
+    /// requested number of peripheral hydrogen atoms
+    /// (and single covalent bonds from the central atom to them).
     ///
-    /// Fails if `centre` is invalid.
-    pub fn add_substituent(&mut self, centre: AtomlikeId) -> MolMapResult<SubstituentId> {
-        if !self.core.contains_atomlike(centre) {
-            return Err(MolMapError::Id(centre.into()));
+    /// Returns the IDs of the added substituent, central atom, and a slice over
+    /// the IDs of the new bonds.
+    pub fn add_substituent_with_hydrogen(
+        &mut self,
+        element: Element,
+        n_hydrogen: u8,
+    ) -> (SubstituentId, AtomId, &[BondId]) {
+        let (sub, centre) = self.add_substituent_with_atom(element);
+        for i in 0..n_hydrogen {
+            let new_h = self.add_atom(Element::H);
+            let new_bond = self.core.add_bond(centre.into(), new_h.into());
+            self.core.insert_into_substituent(sub, new_h.into());
+            self.core.insert_into_substituent(sub, new_bond.into());
         }
-        Ok(self.core.add_substituent_with_centre(centre))
+        (
+            sub,
+            centre,
+            self.core()
+                .atoms
+                .get(centre)
+                .expect("We just created this atom, so ID must be valid")
+                .bonds
+                .as_slice(),
+        )
+    }
+
+    /// Adds a substituent to the map with a newly-created central atom and the
+    /// number of additional hydrogen atoms required to satisfy the most common
+    /// valency for the central atom (and single covalent bonds from the central
+    /// atom to them).
+    ///
+    /// Returns the ID of the added substituent, central atom, and a slice over
+    /// the IDs of the new bonds.
+    pub fn add_substituent_and_saturate(
+        &mut self,
+        element: Element,
+    ) -> (SubstituentId, AtomId, &[BondId]) {
+        let n_hydrogen = element.default_valency();
+        self.add_substituent_with_hydrogen(element, n_hydrogen)
     }
 
     /// Adds an empty molecule to the map.
@@ -204,14 +290,14 @@ mod tests {
     //    assert!(!mm.core.atoms.get(h2).unwrap().bonds.contains(&b1));
     //}
 
-    #[test]
-    fn add_substituent() {
-        let mut mm = MolMap0::new();
-        let h1 = mm.add_atom(Element::H);
-        let h2 = mm.add_atom(Element::H);
-        let h3 = mm.add_atom(Element::H);
-        let h4 = mm.add_atom(Element::H);
-        let c1 = mm.add_atom(Element::C);
-        let sub = mm.add_substituent(c1.into()).unwrap();
-    }
+    //#[test]
+    //fn add_substituent() {
+    //    let mut mm = MolMap0::new();
+    //    let h1 = mm.add_atom(Element::H);
+    //    let h2 = mm.add_atom(Element::H);
+    //    let h3 = mm.add_atom(Element::H);
+    //    let h4 = mm.add_atom(Element::H);
+    //    let c1 = mm.add_atom(Element::C);
+    //    let sub = mm.add_substituent();
+    //}
 }

@@ -260,11 +260,21 @@ impl Element {
 
     /// Provides a default valency for the element based on the primary oxidation state.
     pub fn default_valency(&self) -> u8 {
+        // Don't think this will turn out reliable enough but it will do for now.
+        // Mendeleev returns the common oxidation states from most negative to most
+        // positive, so the number returned will be the absolute value of the most
+        // negative oxidation state.
+        // Essentially, if the element typically forms a hydride we will return
+        // the number of hydrogen atoms in the highest order hydride; if an
+        // element only has positive or neutral oxidation states then the lowest
+        // will be returned, which for metals generally corresponds to the most
+        // common chloride.
         self.into_mendeleev()
-            .oxidation_states(OxidationStateCategory::Main)[0]
-            .abs()
-            .try_into()
-            .expect("Oxidation state should be positive after taking absolute value")
+            .oxidation_states(OxidationStateCategory::Main)
+            .first()
+            .cloned()
+            .unwrap_or_default() // If something has no listed ox states (e.g. He) just return 0
+            .unsigned_abs()
     }
 
     /// Returns the element's symbol.
@@ -289,5 +299,17 @@ mod tests {
         assert_eq!(Element::I.default_valency(), 1);
         assert_eq!(Element::P.default_valency(), 3); // SMILES+ doesn't have a default, determined by inspection
         assert_eq!(Element::S.default_valency(), 2); // SMILES+ doesn't have a default, determined by inspection
+    }
+
+    #[test]
+    fn default_valency_expectations() {
+        assert_eq!(Element::He.default_valency(), 0);
+        assert_eq!(Element::Na.default_valency(), 1);
+        assert_eq!(Element::Ca.default_valency(), 2);
+        assert_eq!(Element::Al.default_valency(), 3);
+        assert_eq!(Element::Si.default_valency(), 4);
+        assert_eq!(Element::Fe.default_valency(), 2);
+        assert_eq!(Element::Au.default_valency(), 3);
+        assert_eq!(Element::U.default_valency(), 6);
     }
 }

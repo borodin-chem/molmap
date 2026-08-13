@@ -93,72 +93,74 @@ impl MolGraph {
         self.molecules.keys()
     }
 
-    /// Checks if the given ID is valid.
+    /// Checks if the map currently contains the atom with the given ID.
     pub(crate) fn contains_atom(&self, id: AtomId) -> bool {
         self.atoms.contains_key(id)
     }
 
-    /// Checks if the given ID is valid.
+    /// Checks if the map currently contains the pseudoatom with the given ID.
     pub(crate) fn contains_pseudoatom(&self, id: PseudoatomId) -> bool {
         self.pseudoatoms.contains_key(id)
     }
 
-    /// Checks if the given ID is valid.
+    /// Checks if the map currently contains the bond with the given ID.
     pub(crate) fn contains_bond(&self, id: BondId) -> bool {
         self.bonds.contains_key(id)
     }
 
-    /// Checks if the given ID is valid.
+    /// Checks if the map currently contains the substituent with the given ID.
     pub(crate) fn contains_substituent(&self, id: SubstituentId) -> bool {
         self.substituents.contains_key(id)
     }
 
-    /// Checks if the given ID is valid.
+    /// Checks if the map currently contains the molecule with the given ID.
     pub(crate) fn contains_molecule(&self, id: MoleculeId) -> bool {
         self.molecules.contains_key(id)
     }
 
     /// Checks if the map currently contains the atomlike with the given ID.
-    pub(crate) fn contains_atomlike(&self, atomlike: AtomlikeId) -> bool {
-        match atomlike.to_tagged() {
-            TaggedAtomlike::Atom(id) => self.contains_atom(id),
-            TaggedAtomlike::Pseudoatom(id) => self.contains_pseudoatom(id),
+    pub(crate) fn contains_atomlike(&self, id: AtomlikeId) -> bool {
+        match id.to_tagged() {
+            TaggedAtomlike::Atom(atom_id) => self.contains_atom(atom_id),
+            TaggedAtomlike::Pseudoatom(pseudoatom_id) => self.contains_pseudoatom(pseudoatom_id),
         }
     }
 
     /// Checks if the map currently contains the fundamental with the given ID.
-    pub(crate) fn contains_fundamental(&self, fundamental: FundamentalId) -> bool {
-        match fundamental.to_tagged() {
-            TaggedFundamental::Atom(id) => self.contains_atom(id),
-            TaggedFundamental::Pseudoatom(id) => self.contains_pseudoatom(id),
-            TaggedFundamental::Bond(id) => self.contains_bond(id),
+    pub(crate) fn contains_fundamental(&self, id: FundamentalId) -> bool {
+        match id.to_tagged() {
+            TaggedFundamental::Atom(atom_id) => self.contains_atom(atom_id),
+            TaggedFundamental::Pseudoatom(pseudoatom_id) => self.contains_pseudoatom(pseudoatom_id),
+            TaggedFundamental::Bond(bond_id) => self.contains_bond(bond_id),
         }
     }
 
     /// Checks if the map currently contains the bondable with the given ID.
-    pub(crate) fn contains_bondable(&self, bondable: BondableId) -> bool {
-        match bondable.to_tagged() {
-            TaggedBondable::Atom(id) => self.contains_atom(id),
-            TaggedBondable::Pseudoatom(id) => self.contains_pseudoatom(id),
+    pub(crate) fn contains_bondable(&self, id: BondableId) -> bool {
+        match id.to_tagged() {
+            TaggedBondable::Atom(atom_id) => self.contains_atom(atom_id),
+            TaggedBondable::Pseudoatom(pseudoatom_id) => self.contains_pseudoatom(pseudoatom_id),
         }
     }
 
     /// Checks if the map currently contains the collection with the given ID.
-    pub(crate) fn contains_collection(&self, collection: CollectionId) -> bool {
-        match collection.to_tagged() {
-            TaggedCollection::Substituent(id) => self.contains_substituent(id),
-            TaggedCollection::Molecule(id) => self.contains_molecule(id),
+    pub(crate) fn contains_collection(&self, id: CollectionId) -> bool {
+        match id.to_tagged() {
+            TaggedCollection::Substituent(substituent_id) => {
+                self.contains_substituent(substituent_id)
+            }
+            TaggedCollection::Molecule(molecule_id) => self.contains_molecule(molecule_id),
         }
     }
 
     /// Checks if the map currently contains the entity with the given ID.
     pub(crate) fn contains(&self, entity: EntityId) -> bool {
         match entity.to_tagged() {
-            TaggedEntity::Atom(id) => self.contains_atom(id),
-            TaggedEntity::Pseudoatom(id) => self.contains_pseudoatom(id),
-            TaggedEntity::Bond(id) => self.contains_bond(id),
-            TaggedEntity::Substituent(id) => self.contains_substituent(id),
-            TaggedEntity::Molecule(id) => self.contains_molecule(id),
+            TaggedEntity::Atom(atom_id) => self.contains_atom(atom_id),
+            TaggedEntity::Pseudoatom(pseudoatom_id) => self.contains_pseudoatom(pseudoatom_id),
+            TaggedEntity::Bond(bond_id) => self.contains_bond(bond_id),
+            TaggedEntity::Substituent(substituent_id) => self.contains_substituent(substituent_id),
+            TaggedEntity::Molecule(molecule_id) => self.contains_molecule(molecule_id),
         }
     }
 }
@@ -701,10 +703,10 @@ impl MolGraph {
     }
 }
 
-/// Private helper methods.
+/// Methods to ascertain membership.
 impl MolGraph {
     /// Determines the substituent that contains the atom, pseudoatom, or bond, if any.
-    fn parent_substituent(&self, fundamental: FundamentalId) -> Option<SubstituentId> {
+    pub(crate) fn parent_substituent(&self, fundamental: FundamentalId) -> Option<SubstituentId> {
         for (substituent_id, substituent) in self.substituents.iter() {
             if substituent.members.contains(&fundamental) {
                 return Some(substituent_id);
@@ -714,7 +716,7 @@ impl MolGraph {
     }
 
     /// Determines the molecule that contains the atom, pseudoatom, or bond, if any.
-    fn parent_molecule(&self, fundamental: FundamentalId) -> Option<MoleculeId> {
+    pub(crate) fn parent_molecule(&self, fundamental: FundamentalId) -> Option<MoleculeId> {
         for (mol_id, mol) in self.molecules.iter() {
             if mol.members.contains(&fundamental) {
                 return Some(mol_id);

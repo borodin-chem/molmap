@@ -37,8 +37,16 @@ pub trait MolMapCore {
 /// 3. iterating over views of all of a given kind of entity e.g. [`MolMap::atoms`]
 /// 4. iterating over all IDs of a given kind of entity e.g. [`MolMap::atom_ids`]
 ///
+/// All implementors of `MolMap` should also always provide methods for adding new
+/// entities, but the signature for these will vary according to the needs of the
+/// concrete map type.
+///
 /// This trait is sealed and is not intended for implementation outside of `molmap`.
 pub trait MolMap: Sized + MolMapCore {
+    // ---------------------
+    // Required constructors
+    // ---------------------
+
     /// Creates an empty `MolMap`.
     ///
     /// As the constituent `SlotMap`s are created with an initial capacity of 0, reallocations
@@ -68,11 +76,10 @@ pub trait MolMap: Sized + MolMapCore {
         Self::with_capacities(n, n / 10, n, n / 3, (n / 100) + 1)
     }
 
+    // ------------------
     // ID-related methods
+    // ------------------
     // These all just defer to the inner core struct
-    // One method per entity kind for:
-    // - iterating over IDs
-    // - validating an ID
 
     /// Returns an iterator over all the IDs of all atoms in the map.
     fn atom_ids(&'_ self) -> impl Iterator<Item = AtomId> + '_ {
@@ -99,72 +106,67 @@ pub trait MolMap: Sized + MolMapCore {
         self.core().molecule_ids()
     }
 
-    /// Checks if the given ID corresponds to an atom currently in the map.
+    /// Checks if the map currently contains the atom with the given ID.
     fn contains_atom(&self, id: AtomId) -> bool {
         self.core().contains_atom(id)
     }
 
-    /// Checks if the given ID corresponds to a pseudoatom currently in the map.
+    /// Checks if the map currently contains the pseudoatom with the given ID.
     fn contains_pseudoatom(&self, id: PseudoatomId) -> bool {
         self.core().contains_pseudoatom(id)
     }
 
-    /// Checks if the given ID corresponds to a bond currently in the map.
+    /// Checks if the map currently contains the bond with the given ID.
     fn contains_bond(&self, id: BondId) -> bool {
         self.core().contains_bond(id)
     }
 
-    /// Checks if the given ID corresponds to a substituent currently in the map.
+    /// Checks if the map currently contains the substituent with the given ID.
     fn contains_substituent(&self, id: SubstituentId) -> bool {
         self.core().contains_substituent(id)
     }
 
-    /// Checks if the given ID corresponds to a molecule currently in the map.
+    /// Checks if the map currently contains the molecule with the given ID.
     fn contains_molecule(&self, id: MoleculeId) -> bool {
         self.core().contains_molecule(id)
     }
 
-    fn contains_atomlike(&self, atomlike: AtomlikeId) -> bool {
-        match atomlike.to_tagged() {
-            TaggedAtomlike::Atom(id) => self.contains_atom(id),
-            TaggedAtomlike::Pseudoatom(id) => self.contains_pseudoatom(id),
-        }
+    /// Checks if the map currently contains the atomlike with the given ID.
+    fn contains_atomlike(&self, id: AtomlikeId) -> bool {
+        self.core().contains_atomlike(id)
     }
 
-    fn contains_bondable(&self, bondable: BondableId) -> bool {
-        match bondable.to_tagged() {
-            TaggedBondable::Atom(id) => self.contains_atom(id),
-            TaggedBondable::Pseudoatom(id) => self.contains_pseudoatom(id),
-        }
+    /// Checks if the map currently contains the fundamental with the given ID.
+    fn contains_fundamental(&self, id: FundamentalId) -> bool {
+        self.core().contains_fundamental(id)
     }
 
-    /// Checks if the given ID corresponds to an atom, pseudoatom, or bond currently in the map.
-    fn contains_fundamental(&self, fundamental: FundamentalId) -> bool {
-        match fundamental.to_tagged() {
-            TaggedFundamental::Atom(id) => self.contains_atom(id),
-            TaggedFundamental::Pseudoatom(id) => self.contains_pseudoatom(id),
-            TaggedFundamental::Bond(id) => self.contains_bond(id),
-        }
+    /// Checks if the map currently contains the bondable with the given ID.
+    fn contains_bondable(&self, id: BondableId) -> bool {
+        self.core().contains_bondable(id)
+    }
+
+    /// Checks if the map currently contains the collection with the given ID.
+    fn contains_collection(&self, id: CollectionId) -> bool {
+        self.core().contains_collection(id)
     }
 
     /// Checks if the map currently contains the entity with the given ID.
-    fn contains(&self, entity: EntityId) -> bool {
-        match entity.to_tagged() {
-            TaggedEntity::Atom(id) => self.contains_atom(id),
-            TaggedEntity::Pseudoatom(id) => self.contains_pseudoatom(id),
-            TaggedEntity::Bond(id) => self.contains_bond(id),
-            TaggedEntity::Substituent(id) => self.contains_substituent(id),
-            TaggedEntity::Molecule(id) => self.contains_molecule(id),
-        }
+    fn contains(&self, id: EntityId) -> bool {
+        self.core().contains(id)
     }
 
+    // -------
     // Getters
+    // -------
     // One method per entity kind for:
     // - getting a view
     // - getting a mutable view
     // - iterating over (immutable) views
+    // These can be implemented as default methods for all maps, as the views
+    // are generic in the concrete map type.
 
-    /// Constructs an immutable `AtomView` for the given atom,
+    /// Constructs an immutable `AtomView` of the given atom,
     /// returning `None` if the ID is invalid.
     fn atom(&'_ self, id: AtomId) -> Option<AtomView<'_, Self>> {
         self.core()
@@ -172,7 +174,7 @@ pub trait MolMap: Sized + MolMapCore {
             .then_some(AtomView { map: self, id })
     }
 
-    /// Constructs a mutable `AtomViewMut` for the given atom, returning `None` if the ID is
+    /// Constructs a mutable `AtomViewMut` of the given atom, returning `None` if the ID is
     /// invalid.
     fn atom_mut(&'_ mut self, id: AtomId) -> Option<AtomViewMut<'_, Self>> {
         self.core()
@@ -185,7 +187,7 @@ pub trait MolMap: Sized + MolMapCore {
         Atoms::new(self)
     }
 
-    /// Constructs an immutable `PseudoatomView` for the given pseudoatom, returning `None` if the
+    /// Constructs an immutable `PseudoatomView` of the given pseudoatom, returning `None` if the
     /// ID is invalid.
     fn pseudoatom(&'_ self, id: PseudoatomId) -> Option<PseudoatomView<'_, Self>> {
         self.core()
@@ -194,7 +196,7 @@ pub trait MolMap: Sized + MolMapCore {
             .then_some(PseudoatomView { map: self, id })
     }
 
-    /// Constructs a mutable `PseudoatomViewMut` for the given pseudoatom, returning `None` if the
+    /// Constructs a mutable `PseudoatomViewMut` of the given pseudoatom, returning `None` if the
     /// ID is invalid.
     fn pseudoatom_mut(&'_ mut self, id: PseudoatomId) -> Option<PseudoatomViewMut<'_, Self>> {
         self.core()
@@ -208,7 +210,7 @@ pub trait MolMap: Sized + MolMapCore {
         Pseudoatoms::new(self)
     }
 
-    /// Constructs an immutable `BondView` for the given bond, returning `None` if the ID is
+    /// Constructs an immutable `BondView` of the given bond, returning `None` if the ID is
     /// invalid.
     fn bond(&'_ self, id: BondId) -> Option<BondView<'_, Self>> {
         self.core()
@@ -217,7 +219,7 @@ pub trait MolMap: Sized + MolMapCore {
             .then_some(BondView { map: self, id })
     }
 
-    /// Constructs a mutable `BondViewMut` for the given bond, returning `None` if the ID is
+    /// Constructs a mutable `BondViewMut` of the given bond, returning `None` if the ID is
     /// invalid.
     fn bond_mut(&'_ mut self, id: BondId) -> Option<BondViewMut<'_, Self>> {
         self.core()
@@ -226,12 +228,12 @@ pub trait MolMap: Sized + MolMapCore {
             .then_some(BondViewMut { map: self, id })
     }
 
-    /// Returns an iterator over views of all atoms in the map.
+    /// Returns an iterator over views of all bonds in the map.
     fn bonds(&'_ self) -> Bonds<'_, Self> {
         Bonds::new(self)
     }
 
-    /// Constructs an immutable `SubstituentView` for the given substituent, returning `None` if the ID is
+    /// Constructs an immutable `SubstituentView` of the given substituent, returning `None` if the ID is
     /// invalid.
     fn substituent(&'_ self, id: SubstituentId) -> Option<SubstituentView<'_, Self>> {
         self.core()
@@ -240,7 +242,7 @@ pub trait MolMap: Sized + MolMapCore {
             .then_some(SubstituentView { map: self, id })
     }
 
-    /// Constructs a mutable `SubstituentViewMut` for the given substituent, returning `None` if the ID is
+    /// Constructs a mutable `SubstituentViewMut` of the given substituent, returning `None` if the ID is
     /// invalid.
     fn substituent_mut(&'_ mut self, id: SubstituentId) -> Option<SubstituentViewMut<'_, Self>> {
         self.core()
@@ -254,7 +256,7 @@ pub trait MolMap: Sized + MolMapCore {
         Substituents::new(self)
     }
 
-    /// Constructs an immutable `MoleculeView` for the given molecule, returning `None` if the ID is
+    /// Constructs an immutable `MoleculeView` of the given molecule, returning `None` if the ID is
     /// invalid.
     fn molecule(&'_ self, id: MoleculeId) -> Option<MoleculeView<'_, Self>> {
         self.core()
@@ -263,7 +265,7 @@ pub trait MolMap: Sized + MolMapCore {
             .then_some(MoleculeView { map: self, id })
     }
 
-    /// Constructs a mutable `MoleculeViewMut` for the given molecule, returning `None` if the ID is
+    /// Constructs a mutable `MoleculeViewMut` of the given molecule, returning `None` if the ID is
     /// invalid.
     fn molecule_mut(&'_ mut self, id: MoleculeId) -> Option<MoleculeViewMut<'_, Self>> {
         self.core()
