@@ -23,6 +23,7 @@ pub mod views;
 
 pub mod ids {
     pub use crate::entities::ids::*;
+    pub use crate::entities::iter::{AtomIds, BondIds, MoleculeIds, PseudoatomIds, SubstituentIds};
 }
 
 pub use element::Element;

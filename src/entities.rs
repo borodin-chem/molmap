@@ -22,6 +22,7 @@ pub(crate) mod atom;
 pub(crate) mod bond;
 pub(crate) mod definition;
 pub(crate) mod ids;
+pub(crate) mod iter;
 pub(crate) mod molecule;
 pub(crate) mod pseudoatom;
 pub(crate) mod substituent;

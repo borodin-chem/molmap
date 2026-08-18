@@ -183,8 +183,11 @@ pub trait MolMap: Sized + MolMapCore {
     }
 
     /// Returns an iterator over views of all atoms in the map.
-    fn atoms(&'_ self) -> Atoms<'_, Self> {
-        Atoms::new(self)
+    fn atoms(&'_ self) -> AtomViews<'_, Self, impl Iterator<Item = AtomId> + ExactSizeIterator> {
+        AtomViews {
+            map: self,
+            ids: AtomIds(self.core().atoms.keys()),
+        }
     }
 
     /// Constructs an immutable `PseudoatomView` of the given pseudoatom, returning `None` if the
@@ -206,8 +209,13 @@ pub trait MolMap: Sized + MolMapCore {
     }
 
     /// Returns an iterator over views of all pseudoatoms in the map.
-    fn pseudoatoms(&'_ self) -> Pseudoatoms<'_, Self> {
-        Pseudoatoms::new(self)
+    fn pseudoatoms(
+        &'_ self,
+    ) -> PseudoatomViews<'_, Self, impl Iterator<Item = PseudoatomId> + ExactSizeIterator> {
+        PseudoatomViews {
+            map: self,
+            ids: PseudoatomIds(self.core().pseudoatoms.keys()),
+        }
     }
 
     /// Constructs an immutable `BondView` of the given bond, returning `None` if the ID is
@@ -229,8 +237,11 @@ pub trait MolMap: Sized + MolMapCore {
     }
 
     /// Returns an iterator over views of all bonds in the map.
-    fn bonds(&'_ self) -> Bonds<'_, Self> {
-        Bonds::new(self)
+    fn bonds(&'_ self) -> BondViews<'_, Self, impl Iterator<Item = BondId> + ExactSizeIterator> {
+        BondViews {
+            map: self,
+            ids: BondIds(self.core().bonds.keys()),
+        }
     }
 
     /// Constructs an immutable `SubstituentView` of the given substituent, returning `None` if the ID is
@@ -252,8 +263,13 @@ pub trait MolMap: Sized + MolMapCore {
     }
 
     /// Returns an iterator over views of all substituents in the map.
-    fn substituents(&'_ self) -> Substituents<'_, Self> {
-        Substituents::new(self)
+    fn substituents(
+        &'_ self,
+    ) -> SubstituentViews<'_, Self, impl Iterator<Item = SubstituentId> + ExactSizeIterator> {
+        SubstituentViews {
+            map: self,
+            ids: SubstituentIds(self.core().substituents.keys()),
+        }
     }
 
     /// Constructs an immutable `MoleculeView` of the given molecule, returning `None` if the ID is
@@ -275,7 +291,12 @@ pub trait MolMap: Sized + MolMapCore {
     }
 
     /// Returns an iterator over views of all molecules in the map.
-    fn molecules(&'_ self) -> Molecules<'_, Self> {
-        Molecules::new(self)
+    fn molecules(
+        &'_ self,
+    ) -> MoleculeViews<'_, Self, impl Iterator<Item = MoleculeId> + ExactSizeIterator> {
+        MoleculeViews {
+            map: self,
+            ids: MoleculeIds(self.core().molecules.keys()),
+        }
     }
 }

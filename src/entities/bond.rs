@@ -45,8 +45,8 @@ impl Bond {
 /// An immutable view over a specific bond entity in a specific `MolMap`.
 #[derive(Copy, Clone, Debug)]
 pub struct BondView<'a, M: MolMap> {
-    pub map: &'a M,
-    pub id: BondId,
+    pub(crate) map: &'a M,
+    pub(crate) id: BondId,
 }
 
 impl<'a, M: MolMap> From<BondView<'a, M>> for BondId {
@@ -59,6 +59,10 @@ impl<'a, M: MolMap> BondView<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&self) -> &'a Bond {
         self.map.core().bonds.get(self.id).unwrap()
+    }
+
+    pub fn id(&self) -> BondId {
+        self.id
     }
 
     pub fn bond_type(&self) -> BondType {
@@ -81,8 +85,8 @@ impl<'a, M: MolMap> BondView<'a, M> {
 /// removed and a new one added between the desired new bonding partners.
 #[derive(Debug)]
 pub struct BondViewMut<'a, M: MolMap> {
-    pub map: &'a mut M,
-    pub id: BondId,
+    pub(crate) map: &'a mut M,
+    pub(crate) id: BondId,
 }
 
 impl<'a, M: MolMap> From<BondViewMut<'a, M>> for BondId {
@@ -120,33 +124,5 @@ impl<'a, M: MolMap> BondViewMut<'a, M> {
     /// Removes the bond from the map (but not its bonding partners).
     pub fn delete(mut self) {
         self.map.core_mut().delete_bond(self.id);
-    }
-}
-
-/// An iterator that yields a [`BondView`] over each bond entity in a [`MolMap`] in turn.
-pub struct Bonds<'a, M: MolMap> {
-    map: &'a M,
-    ids: Keys<'a, BondId, Bond>,
-}
-
-impl<'a, M: MolMap> Bonds<'a, M> {
-    /// Creates a new iterator over the given map's bonds.
-    pub(crate) fn new(map: &'a M) -> Self {
-        Self {
-            map,
-            ids: map.core().bond_ids(),
-        }
-    }
-}
-
-impl<'a, M: MolMap> Iterator for Bonds<'a, M> {
-    type Item = BondView<'a, M>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(id) = self.ids.next() {
-            Some(BondView { map: self.map, id })
-        } else {
-            None
-        }
     }
 }

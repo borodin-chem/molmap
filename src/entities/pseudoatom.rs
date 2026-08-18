@@ -37,8 +37,8 @@ impl Pseudoatom {
 /// An immutable view over a specific pseudoatom entity in a specific `MolMap`.
 #[derive(Copy, Clone, Debug)]
 pub struct PseudoatomView<'a, M: MolMap> {
-    pub map: &'a M,
-    pub id: PseudoatomId,
+    pub(crate) map: &'a M,
+    pub(crate) id: PseudoatomId,
 }
 
 impl<'a, M: MolMap> From<PseudoatomView<'a, M>> for PseudoatomId {
@@ -53,6 +53,10 @@ impl<'a, M: MolMap> PseudoatomView<'a, M> {
         self.map.core().pseudoatoms.get(self.id).unwrap()
     }
 
+    pub fn id(&self) -> PseudoatomId {
+        self.id
+    }
+
     pub fn bonds(&self) -> &[BondId] {
         &self.core().bonds
     }
@@ -61,8 +65,8 @@ impl<'a, M: MolMap> PseudoatomView<'a, M> {
 /// A mutable view over a specific pseudoatom entity in a specific `MolMap`.
 #[derive(Debug)]
 pub struct PseudoatomViewMut<'a, M: MolMap> {
-    pub map: &'a mut M,
-    pub id: PseudoatomId,
+    pub(crate) map: &'a mut M,
+    pub(crate) id: PseudoatomId,
 }
 
 impl<'a, M: MolMap> From<PseudoatomViewMut<'a, M>> for PseudoatomId {
@@ -95,33 +99,5 @@ impl<'a, M: MolMap> PseudoatomViewMut<'a, M> {
     /// Removes the pseudoatom from the map, as well as any bonds to it.
     pub fn delete(mut self) {
         self.map.core_mut().delete_pseudoatom(self.id);
-    }
-}
-
-/// An iterator that yields a [`PseudoatomView`] over each pseudoatom entity in a [`MolMap`] in turn.
-pub struct Pseudoatoms<'a, M: MolMap> {
-    map: &'a M,
-    ids: Keys<'a, PseudoatomId, Pseudoatom>,
-}
-
-impl<'a, M: MolMap> Pseudoatoms<'a, M> {
-    /// Creates a new iterator over the given map's pseudoatoms.
-    pub(crate) fn new(map: &'a M) -> Self {
-        Self {
-            map,
-            ids: map.core().pseudoatom_ids(),
-        }
-    }
-}
-
-impl<'a, M: MolMap> Iterator for Pseudoatoms<'a, M> {
-    type Item = PseudoatomView<'a, M>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(id) = self.ids.next() {
-            Some(PseudoatomView { map: self.map, id })
-        } else {
-            None
-        }
     }
 }

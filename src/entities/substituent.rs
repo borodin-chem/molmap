@@ -6,6 +6,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::ops::Sub;
+
 use slotmap::{basic::Keys, new_key_type};
 
 use crate::{
@@ -53,8 +55,8 @@ impl Substituent {
 /// An immutable view over a specific substituent entity in a specific `MolMap`.
 #[derive(Copy, Clone, Debug)]
 pub struct SubstituentView<'a, M: MolMap> {
-    pub map: &'a M,
-    pub id: SubstituentId,
+    pub(crate) map: &'a M,
+    pub(crate) id: SubstituentId,
 }
 
 impl<'a, M: MolMap> From<SubstituentView<'a, M>> for SubstituentId {
@@ -67,6 +69,10 @@ impl<'a, M: MolMap> SubstituentView<'a, M> {
     /// Returns the corresponding data from the core `MolGraph`.
     fn core(&self) -> &'a Substituent {
         self.map.core().substituents.get(self.id).unwrap()
+    }
+
+    pub fn id(&self) -> SubstituentId {
+        self.id
     }
 
     /// Returns details of the centre(s) of the substituent.
@@ -88,8 +94,8 @@ impl<'a, M: MolMap> SubstituentView<'a, M> {
 /// A mutable view over a specific substituent entity in a specific `MolMap`.
 #[derive(Debug)]
 pub struct SubstituentViewMut<'a, M: MolMap> {
-    pub map: &'a mut M,
-    pub id: SubstituentId,
+    pub(crate) map: &'a mut M,
+    pub(crate) id: SubstituentId,
 }
 
 impl<'a, M: MolMap> From<SubstituentViewMut<'a, M>> for SubstituentId {
@@ -172,33 +178,5 @@ impl<'a, M: MolMap> SubstituentViewMut<'a, M> {
     /// Removes the substituent from the map, as well as all of its members.
     pub fn delete(mut self) {
         self.map.core_mut().delete_substituent(self.id);
-    }
-}
-
-/// An iterator that yields a [`SubstituentView`] over each substituent entity in a [`MolMap`] in turn.
-pub struct Substituents<'a, M: MolMap> {
-    map: &'a M,
-    ids: Keys<'a, SubstituentId, Substituent>,
-}
-
-impl<'a, M: MolMap> Substituents<'a, M> {
-    /// Creates a new iterator over the given map's substituents.
-    pub(crate) fn new(map: &'a M) -> Self {
-        Self {
-            map,
-            ids: map.core().substituent_ids(),
-        }
-    }
-}
-
-impl<'a, M: MolMap> Iterator for Substituents<'a, M> {
-    type Item = SubstituentView<'a, M>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(id) = self.ids.next() {
-            Some(SubstituentView { map: self.map, id })
-        } else {
-            None
-        }
     }
 }
