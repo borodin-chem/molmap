@@ -11,7 +11,8 @@ use std::collections::HashSet;
 use slotmap::{basic::Keys, new_key_type};
 
 use crate::{
-    ids::{FundamentalId, MoleculeId},
+    entities::macros::define_entity_views,
+    ids::{FundamentalId, MoleculeId, MoleculeIds},
     traits::MolMap,
 };
 
@@ -29,29 +30,9 @@ impl Molecule {
     }
 }
 
-/// An immutable view over a specific molecule entity in a specific `MolMap`.
-#[derive(Copy, Clone, Debug)]
-pub struct MoleculeView<'a, M: MolMap> {
-    pub(crate) map: &'a M,
-    pub(crate) id: MoleculeId,
-}
-
-impl<'a, M: MolMap> From<MoleculeView<'a, M>> for MoleculeId {
-    fn from(view: MoleculeView<'a, M>) -> Self {
-        view.id
-    }
-}
+define_entity_views!(Molecule);
 
 impl<'a, M: MolMap> MoleculeView<'a, M> {
-    /// Returns the corresponding data from the core `MolGraph`.
-    fn core(&self) -> &'a Molecule {
-        self.map.core().molecules.get(self.id).unwrap()
-    }
-
-    pub fn id(&self) -> MoleculeId {
-        self.id
-    }
-
     /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.
     pub fn members(&self) -> impl Iterator<Item = FundamentalId> {
         self.core().members.iter().copied()
@@ -60,40 +41,5 @@ impl<'a, M: MolMap> MoleculeView<'a, M> {
     /// Checks if the molecule contains the given atom, pseudoatom, or bond.
     pub fn contains(&self, fundamental: FundamentalId) -> bool {
         self.core().members.contains(&fundamental)
-    }
-}
-
-/// A mutable view over a specific molecule entity in a specific `MolMap`.
-#[derive(Debug)]
-pub struct MoleculeViewMut<'a, M: MolMap> {
-    pub(crate) map: &'a mut M,
-    pub(crate) id: MoleculeId,
-}
-
-impl<'a, M: MolMap> From<MoleculeViewMut<'a, M>> for MoleculeId {
-    fn from(view: MoleculeViewMut<'a, M>) -> Self {
-        view.id
-    }
-}
-
-impl<'a, M: MolMap> MoleculeViewMut<'a, M> {
-    /// Returns the corresponding data from the core `MolGraph`.
-    fn core(&mut self) -> &mut Molecule {
-        self.map.core_mut().molecules.get_mut(self.id).unwrap()
-    }
-
-    /// Returns an immutable view over the same molecule.
-    fn as_view(&self) -> MoleculeView<'_, M> {
-        MoleculeView {
-            map: &*self.map,
-            id: self.id,
-        }
-    }
-
-    // Public methods, which should consume the view
-
-    /// Removes the molecule from the map, as well as all of its members.
-    pub fn delete(mut self) {
-        self.map.core_mut().delete_molecule(self.id);
     }
 }

@@ -9,7 +9,8 @@
 use slotmap::{basic::Keys, new_key_type};
 
 use crate::{
-    ids::{AtomId, AtomlikeId, BondId, BondableId, KeyId, PseudoatomId, SubstituentId},
+    entities::macros::define_entity_views,
+    ids::{AtomId, AtomlikeId, BondId, BondIds, BondableId, KeyId, PseudoatomId, SubstituentId},
     traits::MolMap,
 };
 
@@ -42,29 +43,9 @@ impl Bond {
     }
 }
 
-/// An immutable view over a specific bond entity in a specific `MolMap`.
-#[derive(Copy, Clone, Debug)]
-pub struct BondView<'a, M: MolMap> {
-    pub(crate) map: &'a M,
-    pub(crate) id: BondId,
-}
-
-impl<'a, M: MolMap> From<BondView<'a, M>> for BondId {
-    fn from(view: BondView<'a, M>) -> Self {
-        view.id
-    }
-}
+define_entity_views!(Bond);
 
 impl<'a, M: MolMap> BondView<'a, M> {
-    /// Returns the corresponding data from the core `MolGraph`.
-    fn core(&self) -> &'a Bond {
-        self.map.core().bonds.get(self.id).unwrap()
-    }
-
-    pub fn id(&self) -> BondId {
-        self.id
-    }
-
     pub fn bond_type(&self) -> BondType {
         self.core().bond_type
     }
@@ -76,53 +57,5 @@ impl<'a, M: MolMap> BondView<'a, M> {
     pub fn partners(&self) -> [BondableId; 2] {
         let inner = self.core();
         [inner.start, inner.end]
-    }
-}
-
-/// A mutable view over a specific bond entity in a specific `MolMap`.
-///
-/// Note that the bonding partners of a bond cannot be changed; the bond must be
-/// removed and a new one added between the desired new bonding partners.
-#[derive(Debug)]
-pub struct BondViewMut<'a, M: MolMap> {
-    pub(crate) map: &'a mut M,
-    pub(crate) id: BondId,
-}
-
-impl<'a, M: MolMap> From<BondViewMut<'a, M>> for BondId {
-    fn from(view: BondViewMut<'a, M>) -> Self {
-        view.id
-    }
-}
-
-impl<'a, M: MolMap> BondViewMut<'a, M> {
-    /// Returns the corresponding data from the core `MolGraph`.
-    fn core(&mut self) -> &mut Bond {
-        self.map.core_mut().bonds.get_mut(self.id).unwrap()
-    }
-
-    /// Returns an immutable view over the same bond.
-    fn as_view(&self) -> BondView<'_, M> {
-        BondView {
-            map: &*self.map,
-            id: self.id,
-        }
-    }
-
-    // Public methods, which should consume the view
-
-    /// Set the type of the bond without any additional effects.
-    pub fn set_bond_type(mut self, bond_type: BondType) {
-        self.core().bond_type = bond_type;
-    }
-
-    /// Set the order of the bond without any additional effects.
-    pub fn set_bond_order(mut self, order: f32) {
-        self.core().order = order;
-    }
-
-    /// Removes the bond from the map (but not its bonding partners).
-    pub fn delete(mut self) {
-        self.map.core_mut().delete_bond(self.id);
     }
 }

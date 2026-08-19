@@ -12,7 +12,11 @@ use slotmap::{basic::Keys, new_key_type};
 
 use crate::{
     MolMapError, MolMapResult,
-    ids::{AtomlikeId, BondId, FundamentalId, Id, SubstituentId, TaggedAtomlike, TaggedEntity},
+    entities::macros::define_entity_views,
+    ids::{
+        AtomlikeId, BondId, FundamentalId, Id, SubstituentId, SubstituentIds, TaggedAtomlike,
+        TaggedEntity,
+    },
     traits::MolMap,
 };
 
@@ -52,29 +56,9 @@ impl Substituent {
     }
 }
 
-/// An immutable view over a specific substituent entity in a specific `MolMap`.
-#[derive(Copy, Clone, Debug)]
-pub struct SubstituentView<'a, M: MolMap> {
-    pub(crate) map: &'a M,
-    pub(crate) id: SubstituentId,
-}
-
-impl<'a, M: MolMap> From<SubstituentView<'a, M>> for SubstituentId {
-    fn from(view: SubstituentView<'a, M>) -> Self {
-        view.id
-    }
-}
+define_entity_views!(Substituent);
 
 impl<'a, M: MolMap> SubstituentView<'a, M> {
-    /// Returns the corresponding data from the core `MolGraph`.
-    fn core(&self) -> &'a Substituent {
-        self.map.core().substituents.get(self.id).unwrap()
-    }
-
-    pub fn id(&self) -> SubstituentId {
-        self.id
-    }
-
     /// Returns details of the centre(s) of the substituent.
     pub fn centre(&self) -> &SubstituentCentre {
         &self.core().centre
@@ -91,92 +75,59 @@ impl<'a, M: MolMap> SubstituentView<'a, M> {
     }
 }
 
-/// A mutable view over a specific substituent entity in a specific `MolMap`.
-#[derive(Debug)]
-pub struct SubstituentViewMut<'a, M: MolMap> {
-    pub(crate) map: &'a mut M,
-    pub(crate) id: SubstituentId,
-}
-
-impl<'a, M: MolMap> From<SubstituentViewMut<'a, M>> for SubstituentId {
-    fn from(view: SubstituentViewMut<'a, M>) -> Self {
-        view.id
-    }
-}
-
 impl<'a, M: MolMap> SubstituentViewMut<'a, M> {
-    /// Returns the corresponding data from the core `MolGraph`.
-    fn core(&mut self) -> &mut Substituent {
-        self.map.core_mut().substituents.get_mut(self.id).unwrap()
-    }
-
-    /// Returns an immutable view over the same substituent.
-    fn as_view(&self) -> SubstituentView<'_, M> {
-        SubstituentView {
-            map: &*self.map,
-            id: self.id,
-        }
-    }
-
-    // Public methods, which should consume the view
-
-    /// Attempts to change the centre of the substituent to the one requested.
-    ///
-    /// # Errors
-    ///
-    /// Fails if the requested centre is not already a member of the substituent,
-    /// or if there are already bonds to the current centre(s).
-    pub fn change_centre(mut self, new: AtomlikeId) -> MolMapResult<()> {
-        // First confirm that `new` is actually a member of `self`
-        self.core()
-            .members
-            .contains(&new.into())
-            .then_some(())
-            .ok_or(MolMapError::Membership(new.into()))?;
-        // A closure that determines if an atom or pseudoatom has bonds already
-        let atomlike_has_bonds = |id: AtomlikeId| -> bool {
-            let bonds = match id.to_tagged() {
-                TaggedAtomlike::Atom(id) => {
-                    &self
-                        .map
-                        .core()
-                        .atoms
-                        .get(id.try_into().unwrap())
-                        .expect("Wouldn't be listed as the centre if it had been removed")
-                        .bonds
-                }
-                TaggedAtomlike::Pseudoatom(id) => {
-                    &self
-                        .map
-                        .core()
-                        .pseudoatoms
-                        .get(id)
-                        .expect("Wouldn't be listed as the centre if it had been removed")
-                        .bonds
-                }
-            };
-            !bonds.is_empty()
-        };
-        // Check that there aren't already bonds to the current centre
-        let already_bonded = match self.as_view().centre().clone() {
-            SubstituentCentre::None => false,
-            SubstituentCentre::Single(atomlike_id) => atomlike_has_bonds(atomlike_id),
-            SubstituentCentre::Multiple(atomlike_ids) => {
-                atomlike_ids.into_iter().any(atomlike_has_bonds)
-            }
-        };
-        if already_bonded {
-            Err(MolMapError::Disallowed(String::from(
-                "Substituent already has at least one bond to its centre(s)",
-            )))
-        } else {
-            self.core().centre = SubstituentCentre::Single(new.into());
-            Ok(())
-        }
-    }
-
-    /// Removes the substituent from the map, as well as all of its members.
-    pub fn delete(mut self) {
-        self.map.core_mut().delete_substituent(self.id);
-    }
+    ///// Attempts to change the centre of the substituent to the one requested.
+    /////
+    ///// # Errors
+    /////
+    ///// Fails if the requested centre is not already a member of the substituent,
+    ///// or if there are already bonds to the current centre(s).
+    //pub fn change_centre(mut self, new: AtomlikeId) -> MolMapResult<()> {
+    //    // First confirm that `new` is actually a member of `self`
+    //    self.core()
+    //        .members
+    //        .contains(&new.into())
+    //        .then_some(())
+    //        .ok_or(MolMapError::Membership(new.into()))?;
+    //    // A closure that determines if an atom or pseudoatom has bonds already
+    //    let atomlike_has_bonds = |id: AtomlikeId| -> bool {
+    //        let bonds = match id.to_tagged() {
+    //            TaggedAtomlike::Atom(id) => {
+    //                &self
+    //                    .map
+    //                    .core()
+    //                    .atoms
+    //                    .get(id.try_into().unwrap())
+    //                    .expect("Wouldn't be listed as the centre if it had been removed")
+    //                    .bonds
+    //            }
+    //            TaggedAtomlike::Pseudoatom(id) => {
+    //                &self
+    //                    .map
+    //                    .core()
+    //                    .pseudoatoms
+    //                    .get(id)
+    //                    .expect("Wouldn't be listed as the centre if it had been removed")
+    //                    .bonds
+    //            }
+    //        };
+    //        !bonds.is_empty()
+    //    };
+    //    // Check that there aren't already bonds to the current centre
+    //    let already_bonded = match self.as_view().centre().clone() {
+    //        SubstituentCentre::None => false,
+    //        SubstituentCentre::Single(atomlike_id) => atomlike_has_bonds(atomlike_id),
+    //        SubstituentCentre::Multiple(atomlike_ids) => {
+    //            atomlike_ids.into_iter().any(atomlike_has_bonds)
+    //        }
+    //    };
+    //    if already_bonded {
+    //        Err(MolMapError::Disallowed(String::from(
+    //            "Substituent already has at least one bond to its centre(s)",
+    //        )))
+    //    } else {
+    //        self.core().centre = SubstituentCentre::Single(new.into());
+    //        Ok(())
+    //    }
+    //}
 }

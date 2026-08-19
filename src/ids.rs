@@ -7,6 +7,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::fmt::{Debug, Formatter};
+use std::iter::FusedIterator;
 use std::num::{IntErrorKind, NonZeroU16, NonZeroU32, NonZeroU64};
 
 use slotmap::{Key, KeyData};
@@ -225,6 +226,40 @@ impl Id for EntityId {
     }
 }
 
+/// Defines an iterators over a particular ID type.
+macro_rules! define_id_iterator {
+    ($name:ident) => {
+        paste::paste! {
+            #[doc = concat!(
+                "An iterator over a set of ", stringify!([<$name:lower>]), " IDs"
+            )]
+            pub struct [<$name Ids>]<I: Iterator<Item = [<$name Id>]>>(pub(crate) I);
+
+            impl<I> Iterator for [<$name Ids>]<I>
+                where I: Iterator<Item = [<$name Id>]>
+            {
+                type Item = [<$name Id>];
+
+                fn next(&mut self) -> Option<Self::Item> {
+                    self.0.next()
+                }
+            }
+
+            impl<I> ExactSizeIterator for [<$name Ids>]<I>
+                where I: Iterator<Item = [<$name Id>]> + ExactSizeIterator
+            {
+                fn len(&self) -> usize {
+                    self.0.len()
+                }
+            }
+
+            impl<I> FusedIterator for [<$name Ids>]<I>
+                where I: Iterator<Item = [<$name Id>]> + FusedIterator
+            {}
+        }
+    };
+}
+
 /// An ID for a kind of entity that is also a key for the corresponding `SlotMap`.
 ///
 /// Like category ID types, they wrap an [`EntityId`] (i.e. a `u64`), but key ID
@@ -332,6 +367,8 @@ macro_rules! define_key_id {
                     }
                 }
             }
+
+            define_id_iterator!($name);
         }
     };
 }
@@ -494,6 +531,8 @@ macro_rules! define_category_id {
                     }
                 }
             )+
+
+            define_id_iterator!($name);
         }
     };
 }

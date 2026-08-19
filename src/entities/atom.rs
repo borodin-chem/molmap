@@ -10,7 +10,8 @@ use slotmap::basic::Keys;
 
 use crate::{
     Element, MolMapError, MolMapResult,
-    ids::{AtomId, BondId},
+    entities::macros::define_entity_views,
+    ids::{AtomId, AtomIds, BondId},
     traits::MolMap,
 };
 
@@ -30,29 +31,9 @@ impl Atom {
     }
 }
 
-/// An immutable view over a specific atom entity in a specific `MolMap`.
-#[derive(Copy, Clone, Debug)]
-pub struct AtomView<'a, M: MolMap> {
-    pub(crate) map: &'a M,
-    pub(crate) id: AtomId,
-}
-
-impl<'a, M: MolMap> From<AtomView<'a, M>> for AtomId {
-    fn from(view: AtomView<'a, M>) -> Self {
-        view.id
-    }
-}
+define_entity_views!(Atom);
 
 impl<'a, M: MolMap> AtomView<'a, M> {
-    /// Returns the corresponding data from the core `MolGraph`.
-    fn core(&self) -> &'a Atom {
-        self.map.core().atoms.get(self.id).unwrap()
-    }
-
-    pub fn id(&self) -> AtomId {
-        self.id
-    }
-
     pub fn element(&self) -> Element {
         self.core().element
     }
@@ -63,45 +44,5 @@ impl<'a, M: MolMap> AtomView<'a, M> {
 
     pub fn bonds(&self) -> &[BondId] {
         &self.core().bonds
-    }
-}
-
-/// A mutable view over a specific atom entity in a specific `MolMap`.
-#[derive(Debug)]
-pub struct AtomViewMut<'a, M: MolMap> {
-    pub(crate) map: &'a mut M,
-    pub(crate) id: AtomId,
-}
-
-impl<'a, M: MolMap> From<AtomViewMut<'a, M>> for AtomId {
-    fn from(view: AtomViewMut<'a, M>) -> Self {
-        view.id
-    }
-}
-
-impl<'a, M: MolMap> AtomViewMut<'a, M> {
-    /// Returns the corresponding data from the core `MolGraph`.
-    fn core(&mut self) -> &mut Atom {
-        self.map.core_mut().atoms.get_mut(self.id).unwrap()
-    }
-
-    /// Returns an immutable view over the same atom.
-    fn as_view(&self) -> AtomView<'_, M> {
-        AtomView {
-            map: &*self.map,
-            id: self.id,
-        }
-    }
-
-    // Public methods, which should consume the view
-
-    /// Set the element of the atom without any additional effects.
-    pub fn set_element(mut self, element: Element) {
-        self.core().element = element
-    }
-
-    /// Removes the atom from the map, as well as any bonds to it.
-    pub fn delete(mut self) {
-        self.map.core_mut().delete_atom(self.id);
     }
 }
