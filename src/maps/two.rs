@@ -9,17 +9,12 @@
 use nalgebra::{Point, Point2};
 use slotmap::SecondaryMap;
 
-use crate::{
-    Element, MolMap,
-    graph::MolGraph,
-    ids::*,
-    traits::{MolMapCore, SpatialMolMap},
-};
+use crate::{graph::MolGraph, traits::MolMapCore, *};
 
 #[derive(Clone, Debug, Default)]
 pub struct MolMap2 {
     pub(crate) core: MolGraph,
-    pub(crate) atom_positions: SecondaryMap<AtomId, Point2<f64>>,
+    pub(crate) atom_positions: SecondaryMap<Id<Atom>, Point2<f64>>,
 }
 
 impl MolMapCore for MolMap2 {
@@ -57,13 +52,13 @@ impl MolMap for MolMap2 {
 }
 
 impl SpatialMolMap<2> for MolMap2 {
-    fn atom_position(&self, id: AtomId) -> Point<f64, 2> {
+    fn atom_position(&self, id: Id<Atom>) -> Point<f64, 2> {
         *self.atom_positions.get(id).unwrap()
     }
 }
 
 impl MolMap2 {
-    pub fn add_atom(&mut self, element: Element, position: Point2<f64>) -> AtomId {
+    pub fn add_atom(&mut self, element: Element, position: Point2<f64>) -> Id<Atom> {
         let new_id = self.core.add_atom(element);
         self.atom_positions.insert(new_id, position);
         new_id

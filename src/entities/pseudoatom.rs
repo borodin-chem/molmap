@@ -6,14 +6,22 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use slotmap::{basic::Keys, new_key_type};
+use crate::*;
 
-use crate::{
-    Pseudoelement,
-    entities::macros::define_entity_views,
-    ids::{BondId, KeyId, PseudoatomId, PseudoatomIds},
-    traits::MolMap,
-};
+/// A pseudoatom: something that forms bonds and can be represented by an
+/// "element symbol" like a normal atom but represents something else.
+///
+/// It may have an unknown composition like R, or a known structure like Ph.
+#[derive(Copy, Clone, Debug)]
+pub struct Pseudoatom;
+
+impl Entity for Pseudoatom {}
+
+impl KeyEntity for Pseudoatom {
+    fn kind() -> EntityKind {
+        EntityKind::Pseudoatom
+    }
+}
 
 /// The core data of a pseudoatom entity.
 ///
@@ -21,12 +29,12 @@ use crate::{
 /// represents something else.
 /// It may have an unknown composition like R, or a known structure like Ph.
 #[derive(Clone, Debug)]
-pub(crate) struct Pseudoatom {
+pub(crate) struct PseudoatomData {
     pub(crate) pseudoelement: Pseudoelement,
-    pub(crate) bonds: Vec<BondId>,
+    pub(crate) bonds: Vec<Id<Bond>>,
 }
 
-impl Pseudoatom {
+impl PseudoatomData {
     pub fn new(pseudoelement: Pseudoelement) -> Self {
         Self {
             pseudoelement,
@@ -35,10 +43,12 @@ impl Pseudoatom {
     }
 }
 
-define_entity_views!(Pseudoatom);
+impl<'a, M: MolMap> View<'a, M, Pseudoatom> {
+    fn core(&self) -> &PseudoatomData {
+        self.map.core().pseudoatoms.get(self.id).unwrap()
+    }
 
-impl<'a, M: MolMap> PseudoatomView<'a, M> {
-    pub fn bonds(&self) -> &[BondId] {
+    pub fn bonds(&self) -> &[Id<Bond>] {
         &self.core().bonds
     }
 }

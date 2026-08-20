@@ -6,13 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{
-    Element, MolMapError, MolMapResult, Pseudoelement,
-    graph::MolGraph,
-    ids::{AtomId, AtomlikeId, BondId, BondableId, MoleculeId, PseudoatomId, SubstituentId},
-    pseudoelement,
-    traits::{MolMap, MolMapCore},
-};
+use crate::{graph::MolGraph, traits::MolMapCore, *};
 
 /// A pure molecular graph, without spatial positions.
 #[derive(Clone, Debug, Default)]
@@ -56,7 +50,7 @@ impl MolMap0 {
     // Methods to add entities
 
     /// Adds an atom to the map.
-    pub fn add_atom(&mut self, element: Element) -> AtomId {
+    pub fn add_atom(&mut self, element: Element) -> Id<Atom> {
         self.core.add_atom(element)
     }
 
@@ -69,7 +63,7 @@ impl MolMap0 {
         &mut self,
         element: Element,
         n_hydrogen: u8,
-    ) -> (AtomId, &[BondId]) {
+    ) -> (Id<Atom>, &[Id<Bond>]) {
         let centre = self.add_atom(element);
         for i in 0..n_hydrogen {
             let new_h = self.add_atom(Element::H);
@@ -94,13 +88,13 @@ impl MolMap0 {
     ///
     /// Returns the ID of the added central atom as well as a slice over the IDs
     /// of the new bonds.
-    pub fn add_atom_and_saturate(&mut self, element: Element) -> (AtomId, &[BondId]) {
+    pub fn add_atom_and_saturate(&mut self, element: Element) -> (Id<Atom>, &[Id<Bond>]) {
         let n_hydrogen = element.default_valency();
         self.add_atom_with_hydrogen(element, n_hydrogen)
     }
 
     /// Adds a pseudoatom to the map.
-    pub fn add_pseudoatom(&mut self, pseudoelement: Pseudoelement) -> PseudoatomId {
+    pub fn add_pseudoatom(&mut self, pseudoelement: Pseudoelement) -> Id<Pseudoatom> {
         self.core.add_pseudoatom(pseudoelement)
     }
 
@@ -109,7 +103,7 @@ impl MolMap0 {
     /// # Errors
     ///
     /// Fails if either of `start` and `end` are invalid.
-    pub fn add_bond(&mut self, start: BondableId, end: BondableId) -> MolMapResult<BondId> {
+    pub fn add_bond(&mut self, start: Id<Bondable>, end: Id<Bondable>) -> MolMapResult<Id<Bond>> {
         if !self.core.contains_bondable(start) {
             return Err(MolMapError::Id(start.into()));
         } else if !self.core.contains_bondable(end) {
@@ -119,14 +113,14 @@ impl MolMap0 {
     }
 
     /// Adds an empty substituent to the map.
-    pub fn add_substituent(&mut self) -> SubstituentId {
+    pub fn add_substituent(&mut self) -> Id<Substituent> {
         self.core.add_substituent()
     }
 
     /// Adds a substituent to the map with a single, newly-created central atom.
     ///
     /// Returns the IDs of the added substituent and central atom.
-    pub fn add_substituent_with_atom(&mut self, element: Element) -> (SubstituentId, AtomId) {
+    pub fn add_substituent_with_atom(&mut self, element: Element) -> (Id<Substituent>, Id<Atom>) {
         let centre = self.add_atom(element);
         let sub = self.core.add_substituent_with_centre(centre.into());
         (sub, centre)
@@ -142,7 +136,7 @@ impl MolMap0 {
         &mut self,
         element: Element,
         n_hydrogen: u8,
-    ) -> (SubstituentId, AtomId, &[BondId]) {
+    ) -> (Id<Substituent>, Id<Atom>, &[Id<Bond>]) {
         let (sub, centre) = self.add_substituent_with_atom(element);
         for i in 0..n_hydrogen {
             let new_h = self.add_atom(Element::H);
@@ -172,13 +166,13 @@ impl MolMap0 {
     pub fn add_substituent_and_saturate(
         &mut self,
         element: Element,
-    ) -> (SubstituentId, AtomId, &[BondId]) {
+    ) -> (Id<Substituent>, Id<Atom>, &[Id<Bond>]) {
         let n_hydrogen = element.default_valency();
         self.add_substituent_with_hydrogen(element, n_hydrogen)
     }
 
     /// Adds an empty molecule to the map.
-    pub fn add_molecule(&mut self) -> MoleculeId {
+    pub fn add_molecule(&mut self) -> Id<Molecule> {
         self.core.add_molecule()
     }
 }

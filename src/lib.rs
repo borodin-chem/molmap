@@ -11,20 +11,29 @@
 // Re-export nalgebra to make it easier for others to use
 pub use nalgebra;
 
+mod categories;
+mod definition;
 mod element;
-mod entities;
+pub mod entities;
+mod entity;
 mod error;
 mod graph;
+mod id;
 mod maps;
 mod pseudoelement;
+mod traits;
+mod view;
 
-pub mod ids;
-pub mod traits;
-pub mod views;
-
+pub use categories::*;
 pub use element::Element;
 pub use entities::bond::BondType;
+pub use entities::{
+    atom::Atom, bond::Bond, molecule::Molecule, pseudoatom::Pseudoatom, substituent::Substituent,
+};
+pub use entity::{Entity, EntityKind, KeyEntity};
 pub use error::{MolMapError, MolMapResult};
+pub use id::Id;
 pub use maps::{MolMap0, MolMap2, MolMap3};
 pub use pseudoelement::Pseudoelement;
 pub use traits::{MolMap, SpatialMolMap};
+pub use view::{View, ViewMut};

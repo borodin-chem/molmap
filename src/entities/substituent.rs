@@ -6,25 +6,41 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use crate::*;
 use std::ops::Sub;
 
-use slotmap::{basic::Keys, new_key_type};
+/// A substituent: a group of atoms, bonded internally, identified as a unit and
+/// usually part of a larger molecule. Often synonymous with "functional group" or
+/// "moiety".
+///
+/// Substituents are the smallest collections in a `MolMap` and represent the units
+/// that chemists tend to actually think in terms of, rather than individual atoms.
+/// For example, a substituent may be conceptually equivalent to:
+/// - a non-hydrogen atom and "its" implicit hydrogen atoms in SMILES or in packages
+/// that work that way (all hydrogen atoms are explicit in a MolMap)
+/// - the carbon atom and hydrogen atoms at a vertex in a skeletal formula
+/// - atoms drawn together as a group without explicit bonds in a skeletal formula
+///   e.g. –OH, –COOH, –CH₃
+///
+/// Substituents generally indicate one or more centres, so that bonds can be made
+/// "to" the centre. This allows molecules to be built up conveniently by adding and
+/// connecting substituents rather than individual atoms.
+#[derive(Copy, Clone, Debug)]
+pub struct Substituent;
 
-use crate::{
-    MolMapError, MolMapResult,
-    entities::macros::define_entity_views,
-    ids::{
-        AtomlikeId, BondId, FundamentalId, Id, SubstituentId, SubstituentIds, TaggedAtomlike,
-        TaggedEntity,
-    },
-    traits::MolMap,
-};
+impl Entity for Substituent {}
+
+impl KeyEntity for Substituent {
+    fn kind() -> EntityKind {
+        EntityKind::Substituent
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum SubstituentCentre {
     None,
-    Single(AtomlikeId),
-    Multiple(Box<Vec<AtomlikeId>>),
+    Single(Id<Atomlike>),
+    Multiple(Box<Vec<Id<Atomlike>>>),
 }
 
 /// The core data of a substituent entity.
@@ -42,13 +58,13 @@ pub enum SubstituentCentre {
 /// "to" the centre. This allows molecules to be built up conveniently by adding and
 /// connecting substituents rather than individual atoms.
 #[derive(Clone, Debug)]
-pub(crate) struct Substituent {
+pub(crate) struct SubstituentData {
     pub(crate) centre: SubstituentCentre,
-    pub(crate) members: Vec<FundamentalId>,
+    pub(crate) members: Vec<Id<Fundamental>>,
 }
 
-impl Substituent {
-    pub(crate) fn new(centre: AtomlikeId, members: &[FundamentalId]) -> Self {
+impl SubstituentData {
+    pub(crate) fn new(centre: Id<Atomlike>, members: &[Id<Fundamental>]) -> Self {
         Self {
             centre: SubstituentCentre::Single(centre),
             members: members.to_vec(),
@@ -56,33 +72,35 @@ impl Substituent {
     }
 }
 
-define_entity_views!(Substituent);
+impl<'a, M: MolMap> View<'a, M, Substituent> {
+    fn core(&self) -> &SubstituentData {
+        self.map.core().substituents.get(self.id).unwrap()
+    }
 
-impl<'a, M: MolMap> SubstituentView<'a, M> {
     /// Returns details of the centre(s) of the substituent.
     pub fn centre(&self) -> &SubstituentCentre {
         &self.core().centre
     }
 
     /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.
-    pub fn members(&self) -> impl Iterator<Item = FundamentalId> {
+    pub fn members(&self) -> impl Iterator<Item = Id<Fundamental>> {
         self.core().members.iter().copied()
     }
 
     /// Checks if the substituent contains the given atom, pseudoatom, or bond.
-    pub fn contains(&self, fundamental: FundamentalId) -> bool {
+    pub fn contains(&self, fundamental: Id<Fundamental>) -> bool {
         self.core().members.contains(&fundamental)
     }
 }
 
-impl<'a, M: MolMap> SubstituentViewMut<'a, M> {
+impl<'a, M: MolMap> ViewMut<'a, M, Substituent> {
     ///// Attempts to change the centre of the substituent to the one requested.
     /////
     ///// # Errors
     /////
     ///// Fails if the requested centre is not already a member of the substituent,
     ///// or if there are already bonds to the current centre(s).
-    //pub fn change_centre(mut self, new: AtomlikeId) -> MolMapResult<()> {
+    //pub fn change_centre(mut self, new: Id<Atomlike>) -> MolMapResult<()> {
     //    // First confirm that `new` is actually a member of `self`
     //    self.core()
     //        .members
@@ -90,7 +108,7 @@ impl<'a, M: MolMap> SubstituentViewMut<'a, M> {
     //        .then_some(())
     //        .ok_or(MolMapError::Membership(new.into()))?;
     //    // A closure that determines if an atom or pseudoatom has bonds already
-    //    let atomlike_has_bonds = |id: AtomlikeId| -> bool {
+    //    let atomlike_has_bonds = |id: Id<Atomlike>| -> bool {
     //        let bonds = match id.to_tagged() {
     //            TaggedAtomlike::Atom(id) => {
     //                &self

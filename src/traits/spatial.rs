@@ -9,10 +9,10 @@
 use nalgebra::{Point, Point2};
 use slotmap::SecondaryMap;
 
-use crate::{Element, graph::MolGraph, ids::AtomId, traits::MolMap};
+use crate::*;
 
 /// A [`MolMap`] that also holds the spatial positions (with dimensionality `D`)
 /// of its entities.
 pub trait SpatialMolMap<const D: usize>: MolMap {
-    fn atom_position(&self, id: AtomId) -> Point<f64, D>;
+    fn atom_position(&self, id: Id<Atom>) -> Point<f64, D>;
 }

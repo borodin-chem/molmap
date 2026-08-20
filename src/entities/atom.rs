@@ -8,21 +8,28 @@
 
 use slotmap::basic::Keys;
 
-use crate::{
-    Element, MolMapError, MolMapResult,
-    entities::macros::define_entity_views,
-    ids::{AtomId, AtomIds, BondId},
-    traits::MolMap,
-};
+use crate::*;
+
+/// Smallest particle still characterizing a chemical element.
+#[derive(Copy, Clone, Debug)]
+pub struct Atom;
+
+impl Entity for Atom {}
+
+impl KeyEntity for Atom {
+    fn kind() -> EntityKind {
+        EntityKind::Atom
+    }
+}
 
 /// The core data of an atom entity.
 #[derive(Clone, Debug)]
-pub(crate) struct Atom {
+pub(crate) struct AtomData {
     pub(crate) element: Element,
-    pub(crate) bonds: Vec<BondId>,
+    pub(crate) bonds: Vec<Id<Bond>>,
 }
 
-impl Atom {
+impl AtomData {
     pub(crate) fn new(element: Element) -> Self {
         Self {
             element,
@@ -31,9 +38,11 @@ impl Atom {
     }
 }
 
-define_entity_views!(Atom);
+impl<'a, M: MolMap> View<'a, M, Atom> {
+    fn core(&self) -> &AtomData {
+        self.map.core().atoms.get(self.id).unwrap()
+    }
 
-impl<'a, M: MolMap> AtomView<'a, M> {
     pub fn element(&self) -> Element {
         self.core().element
     }
@@ -42,7 +51,7 @@ impl<'a, M: MolMap> AtomView<'a, M> {
         self.core().element.symbol()
     }
 
-    pub fn bonds(&self) -> &[BondId] {
+    pub fn bonds(&self) -> &[Id<Bond>] {
         &self.core().bonds
     }
 }

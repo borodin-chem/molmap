@@ -9,9 +9,15 @@
 use slotmap::{SlotMap, basic::Keys};
 
 use crate::{
-    BondType, Element, Pseudoelement,
-    entities::{substituent::SubstituentCentre, *},
-    ids::*,
+    entities::{
+        atom::AtomData,
+        bond::BondData,
+        molecule::MoleculeData,
+        pseudoatom::PseudoatomData,
+        substituent::{SubstituentCentre, SubstituentData},
+    },
+    id::{EntityId, TaggedId},
+    *,
 };
 
 /// An arena-like data structure to represent a set of chemical entities,
@@ -28,11 +34,11 @@ use crate::{
 /// panicking preferred - the higher maps are then responsible for careful usage.
 #[derive(Clone, Debug, Default)]
 pub struct MolGraph {
-    pub(crate) atoms: SlotMap<AtomId, Atom>,
-    pub(crate) pseudoatoms: SlotMap<PseudoatomId, Pseudoatom>,
-    pub(crate) bonds: SlotMap<BondId, Bond>,
-    pub(crate) substituents: SlotMap<SubstituentId, Substituent>,
-    pub(crate) molecules: SlotMap<MoleculeId, Molecule>,
+    pub(crate) atoms: SlotMap<Id<Atom>, AtomData>,
+    pub(crate) pseudoatoms: SlotMap<Id<Pseudoatom>, PseudoatomData>,
+    pub(crate) bonds: SlotMap<Id<Bond>, BondData>,
+    pub(crate) substituents: SlotMap<Id<Substituent>, SubstituentData>,
+    pub(crate) molecules: SlotMap<Id<Molecule>, MoleculeData>,
 }
 
 /// Constructor methods.
@@ -69,57 +75,57 @@ impl MolGraph {
 /// Methods for querying entity IDs.
 impl MolGraph {
     /// Returns an iterator over all the IDs of all atoms in the map.
-    pub(crate) fn atom_ids(&'_ self) -> Keys<'_, AtomId, Atom> {
+    pub(crate) fn atom_ids(&'_ self) -> Keys<'_, Id<Atom>, AtomData> {
         self.atoms.keys()
     }
 
     /// Returns an iterator over all the IDs of all pseudoatoms in the map.
-    pub(crate) fn pseudoatom_ids(&'_ self) -> Keys<'_, PseudoatomId, Pseudoatom> {
+    pub(crate) fn pseudoatom_ids(&'_ self) -> Keys<'_, Id<Pseudoatom>, PseudoatomData> {
         self.pseudoatoms.keys()
     }
 
     /// Returns an iterator over all the IDs of all bonds in the map.
-    pub(crate) fn bond_ids(&'_ self) -> Keys<'_, BondId, Bond> {
+    pub(crate) fn bond_ids(&'_ self) -> Keys<'_, Id<Bond>, BondData> {
         self.bonds.keys()
     }
 
     /// Returns an iterator over all the IDs of all substituents in the map.
-    pub(crate) fn substituent_ids(&'_ self) -> Keys<'_, SubstituentId, Substituent> {
+    pub(crate) fn substituent_ids(&'_ self) -> Keys<'_, Id<Substituent>, SubstituentData> {
         self.substituents.keys()
     }
 
     /// Returns an iterator over all the IDs of all molecules in the map.
-    pub(crate) fn molecule_ids(&'_ self) -> Keys<'_, MoleculeId, Molecule> {
+    pub(crate) fn molecule_ids(&'_ self) -> Keys<'_, Id<Molecule>, MoleculeData> {
         self.molecules.keys()
     }
 
     /// Checks if the map currently contains the atom with the given ID.
-    pub(crate) fn contains_atom(&self, id: AtomId) -> bool {
+    pub(crate) fn contains_atom(&self, id: Id<Atom>) -> bool {
         self.atoms.contains_key(id)
     }
 
     /// Checks if the map currently contains the pseudoatom with the given ID.
-    pub(crate) fn contains_pseudoatom(&self, id: PseudoatomId) -> bool {
+    pub(crate) fn contains_pseudoatom(&self, id: Id<Pseudoatom>) -> bool {
         self.pseudoatoms.contains_key(id)
     }
 
     /// Checks if the map currently contains the bond with the given ID.
-    pub(crate) fn contains_bond(&self, id: BondId) -> bool {
+    pub(crate) fn contains_bond(&self, id: Id<Bond>) -> bool {
         self.bonds.contains_key(id)
     }
 
     /// Checks if the map currently contains the substituent with the given ID.
-    pub(crate) fn contains_substituent(&self, id: SubstituentId) -> bool {
+    pub(crate) fn contains_substituent(&self, id: Id<Substituent>) -> bool {
         self.substituents.contains_key(id)
     }
 
     /// Checks if the map currently contains the molecule with the given ID.
-    pub(crate) fn contains_molecule(&self, id: MoleculeId) -> bool {
+    pub(crate) fn contains_molecule(&self, id: Id<Molecule>) -> bool {
         self.molecules.contains_key(id)
     }
 
     /// Checks if the map currently contains the atomlike with the given ID.
-    pub(crate) fn contains_atomlike(&self, id: AtomlikeId) -> bool {
+    pub(crate) fn contains_atomlike(&self, id: Id<Atomlike>) -> bool {
         match id.to_tagged() {
             TaggedAtomlike::Atom(atom_id) => self.contains_atom(atom_id),
             TaggedAtomlike::Pseudoatom(pseudoatom_id) => self.contains_pseudoatom(pseudoatom_id),
@@ -127,7 +133,7 @@ impl MolGraph {
     }
 
     /// Checks if the map currently contains the fundamental with the given ID.
-    pub(crate) fn contains_fundamental(&self, id: FundamentalId) -> bool {
+    pub(crate) fn contains_fundamental(&self, id: Id<Fundamental>) -> bool {
         match id.to_tagged() {
             TaggedFundamental::Atom(atom_id) => self.contains_atom(atom_id),
             TaggedFundamental::Pseudoatom(pseudoatom_id) => self.contains_pseudoatom(pseudoatom_id),
@@ -136,7 +142,7 @@ impl MolGraph {
     }
 
     /// Checks if the map currently contains the bondable with the given ID.
-    pub(crate) fn contains_bondable(&self, id: BondableId) -> bool {
+    pub(crate) fn contains_bondable(&self, id: Id<Bondable>) -> bool {
         match id.to_tagged() {
             TaggedBondable::Atom(atom_id) => self.contains_atom(atom_id),
             TaggedBondable::Pseudoatom(pseudoatom_id) => self.contains_pseudoatom(pseudoatom_id),
@@ -144,7 +150,7 @@ impl MolGraph {
     }
 
     /// Checks if the map currently contains the collection with the given ID.
-    pub(crate) fn contains_collection(&self, id: CollectionId) -> bool {
+    pub(crate) fn contains_collection(&self, id: Id<Collection>) -> bool {
         match id.to_tagged() {
             TaggedCollection::Substituent(substituent_id) => {
                 self.contains_substituent(substituent_id)
@@ -152,29 +158,18 @@ impl MolGraph {
             TaggedCollection::Molecule(molecule_id) => self.contains_molecule(molecule_id),
         }
     }
-
-    /// Checks if the map currently contains the entity with the given ID.
-    pub(crate) fn contains(&self, entity: EntityId) -> bool {
-        match entity.to_tagged() {
-            TaggedEntity::Atom(atom_id) => self.contains_atom(atom_id),
-            TaggedEntity::Pseudoatom(pseudoatom_id) => self.contains_pseudoatom(pseudoatom_id),
-            TaggedEntity::Bond(bond_id) => self.contains_bond(bond_id),
-            TaggedEntity::Substituent(substituent_id) => self.contains_substituent(substituent_id),
-            TaggedEntity::Molecule(molecule_id) => self.contains_molecule(molecule_id),
-        }
-    }
 }
 
 /// Methods for entity addition and deletion.
 impl MolGraph {
     /// Adds an atom to the map.
-    pub(crate) fn add_atom(&mut self, element: Element) -> AtomId {
-        self.atoms.insert(Atom::new(element))
+    pub(crate) fn add_atom(&mut self, element: Element) -> Id<Atom> {
+        self.atoms.insert(AtomData::new(element))
     }
 
     /// Adds a pseudoatom to the map.
-    pub(crate) fn add_pseudoatom(&mut self, pseudoelement: Pseudoelement) -> PseudoatomId {
-        self.pseudoatoms.insert(Pseudoatom::new(pseudoelement))
+    pub(crate) fn add_pseudoatom(&mut self, pseudoelement: Pseudoelement) -> Id<Pseudoatom> {
+        self.pseudoatoms.insert(PseudoatomData::new(pseudoelement))
     }
 
     /// Creates a new (single covalent) bond between two bondable entities.
@@ -182,10 +177,10 @@ impl MolGraph {
     /// # Panics
     ///
     /// Panics if either of `start` and `end` are invalid.
-    pub(crate) fn add_bond(&mut self, start: BondableId, end: BondableId) -> BondId {
+    pub(crate) fn add_bond(&mut self, start: Id<Bondable>, end: Id<Bondable>) -> Id<Bond> {
         let bond_id = self
             .bonds
-            .insert(Bond::new(BondType::Covalent, 1.0, start, end));
+            .insert(BondData::new(BondType::Covalent, 1.0, start, end));
         for partner in [start, end] {
             match partner.to_tagged() {
                 TaggedBondable::Atom(id) => self.atoms.get_mut(id).unwrap().bonds.push(bond_id),
@@ -201,8 +196,8 @@ impl MolGraph {
     ///
     /// If the atomlike that is going to be the substituent's centre already
     /// exists, prefer `add_substituent_with_centre`.
-    pub(crate) fn add_substituent(&mut self) -> SubstituentId {
-        self.substituents.insert(Substituent {
+    pub(crate) fn add_substituent(&mut self) -> Id<Substituent> {
+        self.substituents.insert(SubstituentData {
             centre: SubstituentCentre::None,
             members: Vec::new(),
         })
@@ -211,14 +206,14 @@ impl MolGraph {
     /// Adds a substituent to the map with the given atomlike as its centre.
     ///
     /// Note that this method will not fail, even if `centre` is an invalid ID.
-    pub(crate) fn add_substituent_with_centre(&mut self, centre: AtomlikeId) -> SubstituentId {
+    pub(crate) fn add_substituent_with_centre(&mut self, centre: Id<Atomlike>) -> Id<Substituent> {
         self.substituents
-            .insert(Substituent::new(centre, &[centre.into()]))
+            .insert(SubstituentData::new(centre, &[centre.into()]))
     }
 
     /// Adds an empty molecule to the map.
-    pub(crate) fn add_molecule(&mut self) -> MoleculeId {
-        self.molecules.insert(Molecule::new())
+    pub(crate) fn add_molecule(&mut self) -> Id<Molecule> {
+        self.molecules.insert(MoleculeData::new())
     }
 
     /// Removes an atom from the map, as well as any bonds to it.
@@ -226,7 +221,7 @@ impl MolGraph {
     /// Returns whether the atom was present in the map.
     ///
     /// This is infallible – if the atom is not in the map, nothing changes.
-    pub(crate) fn delete_atom(&mut self, id: AtomId) -> bool {
+    pub(crate) fn delete_atom(&mut self, id: Id<Atom>) -> bool {
         if !self.contains_atom(id) {
             return false;
         }
@@ -251,7 +246,7 @@ impl MolGraph {
     /// Returns whether the pseudoatom was present in the map.
     ///
     /// This is infallible – if the pseudoatom is not in the map, nothing changes.
-    pub(crate) fn delete_pseudoatom(&mut self, id: PseudoatomId) -> bool {
+    pub(crate) fn delete_pseudoatom(&mut self, id: Id<Pseudoatom>) -> bool {
         if !self.contains_pseudoatom(id) {
             return false;
         }
@@ -281,7 +276,7 @@ impl MolGraph {
     ///
     /// Panics if either of the bond's bonding partners does not exist (which
     /// should never be the case – bonds are last in, first out).
-    pub(crate) fn delete_bond(&mut self, id: BondId) -> bool {
+    pub(crate) fn delete_bond(&mut self, id: Id<Bond>) -> bool {
         if let Some(bond) = self.bonds.remove(id) {
             for bonding_partner in [bond.start, bond.end] {
                 match bonding_partner.to_tagged() {
@@ -325,7 +320,7 @@ impl MolGraph {
     /// Returns whether the substituent was present in the map.
     ///
     /// This is infallible – if the substituent is not in the map, nothing changes.
-    pub(crate) fn delete_substituent(&mut self, id: SubstituentId) -> bool {
+    pub(crate) fn delete_substituent(&mut self, id: Id<Substituent>) -> bool {
         if !self.contains_substituent(id) {
             return false;
         };
@@ -351,7 +346,7 @@ impl MolGraph {
     /// Returns whether the molecule was present in the map.
     ///
     /// This is infallible – if the molecule is not in the map, nothing changes.
-    pub(crate) fn delete_molecule(&mut self, id: MoleculeId) -> bool {
+    pub(crate) fn delete_molecule(&mut self, id: Id<Molecule>) -> bool {
         if !self.contains_molecule(id) {
             return false;
         };
@@ -379,7 +374,7 @@ impl MolGraph {
     /// Bonds to the atom or pseudoatom are also deleted.
     ///
     /// If the atomlike is not in the map, nothing changes.
-    pub(crate) fn delete_atomlike(&mut self, atomlike: AtomlikeId) -> bool {
+    pub(crate) fn delete_atomlike(&mut self, atomlike: Id<Atomlike>) -> bool {
         match atomlike.to_tagged() {
             TaggedAtomlike::Atom(id) => self.delete_atom(id),
             TaggedAtomlike::Pseudoatom(id) => self.delete_pseudoatom(id),
@@ -394,7 +389,7 @@ impl MolGraph {
     /// The bonding partners of a bond are not deleted.
     ///
     /// If the fundamental is not in the map, nothing changes.
-    pub(crate) fn delete_fundamental(&mut self, fundamental: FundamentalId) -> bool {
+    pub(crate) fn delete_fundamental(&mut self, fundamental: Id<Fundamental>) -> bool {
         match fundamental.to_tagged() {
             TaggedFundamental::Atom(id) => self.delete_atom(id),
             TaggedFundamental::Pseudoatom(id) => self.delete_pseudoatom(id),
@@ -407,7 +402,7 @@ impl MolGraph {
     /// Returns whether the collection was present in the map.
     ///
     /// If the collection is not in the map, nothing changes.
-    pub(crate) fn delete_collection(&mut self, collection: CollectionId) -> bool {
+    pub(crate) fn delete_collection(&mut self, collection: Id<Collection>) -> bool {
         match collection.to_tagged() {
             TaggedCollection::Substituent(id) => self.delete_substituent(id),
             TaggedCollection::Molecule(id) => self.delete_molecule(id),
@@ -434,8 +429,8 @@ impl MolGraph {
     /// invalid.
     pub(crate) fn insert_into_substituent(
         &mut self,
-        substituent: SubstituentId,
-        fundamental: FundamentalId,
+        substituent: Id<Substituent>,
+        fundamental: Id<Fundamental>,
     ) -> bool {
         let sub = self.substituents.get_mut(substituent).unwrap();
         // members is just a Vec, so have to manually make sure we don't end up with
@@ -461,8 +456,8 @@ impl MolGraph {
     /// invalid.
     pub(crate) fn insert_into_molecule(
         &mut self,
-        molecule: MoleculeId,
-        fundamental: FundamentalId,
+        molecule: Id<Molecule>,
+        fundamental: Id<Fundamental>,
     ) -> bool {
         let mol = self.molecules.get_mut(molecule).unwrap();
         mol.members.insert(fundamental)
@@ -474,9 +469,9 @@ impl MolGraph {
     ///
     /// Panics if `substituent` is invalid, but is unaffected if any of the fundamental
     /// IDs are invalid.
-    pub(crate) fn extend_substituent<T>(&mut self, substituent: SubstituentId, fundamentals: T)
+    pub(crate) fn extend_substituent<T>(&mut self, substituent: Id<Substituent>, fundamentals: T)
     where
-        T: IntoIterator<Item = FundamentalId>,
+        T: IntoIterator<Item = Id<Fundamental>>,
     {
         let sub = self.substituents.get_mut(substituent).unwrap();
         // Can't just call extend, because we don't allow the IDs to be added twice
@@ -493,9 +488,9 @@ impl MolGraph {
     ///
     /// Panics if `molecule` is invalid, but is unaffected if any of the fundamental
     /// IDs are invalid.
-    pub(crate) fn extend_molecule<T>(&mut self, molecule: MoleculeId, fundamentals: T)
+    pub(crate) fn extend_molecule<T>(&mut self, molecule: Id<Molecule>, fundamentals: T)
     where
-        T: IntoIterator<Item = FundamentalId>,
+        T: IntoIterator<Item = Id<Fundamental>>,
     {
         let mol = self.molecules.get_mut(molecule).unwrap();
         mol.members.extend(fundamentals)
@@ -519,8 +514,8 @@ impl MolGraph {
     /// Panics if `substituent` is invalid.
     pub(crate) fn remove_from_substituent(
         &mut self,
-        substituent: SubstituentId,
-        fundamental: FundamentalId,
+        substituent: Id<Substituent>,
+        fundamental: Id<Fundamental>,
     ) -> bool {
         let sub = self.substituents.get_mut(substituent).unwrap();
         if let Some(index) = sub.members.iter().position(|x| *x == fundamental) {
@@ -534,7 +529,7 @@ impl MolGraph {
         match &mut sub.centre {
             SubstituentCentre::None => (),
             SubstituentCentre::Single(atomlike) => {
-                if FundamentalId::from(*atomlike) == fundamental {
+                if Id::<Fundamental>::from(*atomlike) == fundamental {
                     // No longer has a centre
                     sub.centre = SubstituentCentre::None
                 }
@@ -566,8 +561,8 @@ impl MolGraph {
     /// Panics if `molecule` is invalid.
     pub(crate) fn remove_from_molecule(
         &mut self,
-        molecule: MoleculeId,
-        fundamental: FundamentalId,
+        molecule: Id<Molecule>,
+        fundamental: Id<Fundamental>,
     ) -> bool {
         let mol = self.molecules.get_mut(molecule).unwrap();
         mol.members.remove(&fundamental)
@@ -585,12 +580,12 @@ impl MolGraph {
     /// Panics if the substituent is not in the map.
     pub(crate) fn drain_substituent(
         &mut self,
-        id: SubstituentId,
-    ) -> impl Iterator<Item = FundamentalId> {
+        id: Id<Substituent>,
+    ) -> impl Iterator<Item = Id<Fundamental>> {
         let sub = self
             .substituents
             .get_mut(id)
-            .expect("Caller is required to ensure that the SubstituentId is valid");
+            .expect("Caller is required to ensure that the Id<Substituent> is valid");
         sub.centre = SubstituentCentre::None;
         sub.members.drain(..)
     }
@@ -603,11 +598,14 @@ impl MolGraph {
     /// # Panics
     ///
     /// Panics if the molecule is not in the map.
-    pub(crate) fn drain_molecule(&mut self, id: MoleculeId) -> impl Iterator<Item = FundamentalId> {
+    pub(crate) fn drain_molecule(
+        &mut self,
+        id: Id<Molecule>,
+    ) -> impl Iterator<Item = Id<Fundamental>> {
         let mut mol = self
             .molecules
             .get_mut(id)
-            .expect("Caller is required to ensure that the MoleculeId is valid");
+            .expect("Caller is required to ensure that the Id<Molecule> is valid");
         mol.members.drain()
     }
 
@@ -618,13 +616,13 @@ impl MolGraph {
     /// # Panics
     ///
     /// Panics if the substituent is not in the map.
-    pub(crate) fn clear_substituent(&mut self, id: SubstituentId) {
+    pub(crate) fn clear_substituent(&mut self, id: Id<Substituent>) {
         let sub = self
             .substituents
             .get_mut(id)
-            .expect("Caller is required to ensure that the SubstituentId is valid");
+            .expect("Caller is required to ensure that the Id<Substituent> is valid");
         sub.centre = SubstituentCentre::None;
-        let former_members: Vec<FundamentalId> = sub.members.drain(..).collect();
+        let former_members: Vec<Id<Fundamental>> = sub.members.drain(..).collect();
         // It's fine to delete in any order as if something isn't in the map any more
         // (e.g. because it's a bond and one of its bonding partners was already deleted
         // and thus it too was already deleted) then nothing changes when the deletion
@@ -645,12 +643,12 @@ impl MolGraph {
     /// # Panics
     ///
     /// Panics if the molecule is not in the map.
-    pub(crate) fn clear_molecule(&mut self, id: MoleculeId) {
+    pub(crate) fn clear_molecule(&mut self, id: Id<Molecule>) {
         let mut mol = self
             .molecules
             .get_mut(id)
-            .expect("Caller is required to ensure that the MoleculeId is valid");
-        let former_members: Vec<FundamentalId> = mol.members.drain().collect();
+            .expect("Caller is required to ensure that the Id<Molecule> is valid");
+        let former_members: Vec<Id<Fundamental>> = mol.members.drain().collect();
         // It's fine to delete in any order as if something isn't in the map any more
         // (e.g. because it's a bond and one of its bonding partners was already deleted
         // and thus it too was already deleted) then nothing changes when the deletion
@@ -674,12 +672,12 @@ impl MolGraph {
     /// Panics if the substituent is not in the map.
     pub(crate) fn dissolve_substituent(
         &mut self,
-        id: SubstituentId,
-    ) -> impl Iterator<Item = FundamentalId> {
+        id: Id<Substituent>,
+    ) -> impl Iterator<Item = Id<Fundamental>> {
         let sub = self
             .substituents
             .remove(id)
-            .expect("Caller is required to ensure that the MoleculeId is valid");
+            .expect("Caller is required to ensure that the Id<Molecule> is valid");
         sub.members.into_iter()
     }
 
@@ -693,12 +691,12 @@ impl MolGraph {
     /// Panics if the molecule is not in the map.
     pub(crate) fn dissolve_molecule(
         &mut self,
-        id: MoleculeId,
-    ) -> impl Iterator<Item = FundamentalId> {
+        id: Id<Molecule>,
+    ) -> impl Iterator<Item = Id<Fundamental>> {
         let mol = self
             .molecules
             .remove(id)
-            .expect("Caller is required to ensure that the MoleculeId is valid");
+            .expect("Caller is required to ensure that the Id<Molecule> is valid");
         mol.members.into_iter()
     }
 }
@@ -706,7 +704,10 @@ impl MolGraph {
 /// Methods to ascertain membership.
 impl MolGraph {
     /// Determines the substituent that contains the atom, pseudoatom, or bond, if any.
-    pub(crate) fn parent_substituent(&self, fundamental: FundamentalId) -> Option<SubstituentId> {
+    pub(crate) fn parent_substituent(
+        &self,
+        fundamental: Id<Fundamental>,
+    ) -> Option<Id<Substituent>> {
         for (substituent_id, substituent) in self.substituents.iter() {
             if substituent.members.contains(&fundamental) {
                 return Some(substituent_id);
@@ -716,7 +717,7 @@ impl MolGraph {
     }
 
     /// Determines the molecule that contains the atom, pseudoatom, or bond, if any.
-    pub(crate) fn parent_molecule(&self, fundamental: FundamentalId) -> Option<MoleculeId> {
+    pub(crate) fn parent_molecule(&self, fundamental: Id<Fundamental>) -> Option<Id<Molecule>> {
         for (mol_id, mol) in self.molecules.iter() {
             if mol.members.contains(&fundamental) {
                 return Some(mol_id);
