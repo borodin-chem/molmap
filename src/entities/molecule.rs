@@ -52,6 +52,8 @@ impl MoleculeData {
     }
 }
 
+pub type MoleculeView<'a, M> = View<'a, M, Molecule>;
+
 impl<'a, M: MolMap> View<'a, M, Molecule> {
     fn core(&self) -> &MoleculeData {
         self.map.core().molecules.get(self.id).unwrap()

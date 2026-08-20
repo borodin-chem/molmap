@@ -38,6 +38,8 @@ impl AtomData {
     }
 }
 
+pub type AtomView<'a, M> = View<'a, M, Atom>;
+
 impl<'a, M: MolMap> View<'a, M, Atom> {
     fn core(&self) -> &AtomData {
         self.map.core().atoms.get(self.id).unwrap()

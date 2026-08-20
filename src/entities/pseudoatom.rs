@@ -43,6 +43,8 @@ impl PseudoatomData {
     }
 }
 
+pub type PseudoatomView<'a, M> = View<'a, M, Pseudoatom>;
+
 impl<'a, M: MolMap> View<'a, M, Pseudoatom> {
     fn core(&self) -> &PseudoatomData {
         self.map.core().pseudoatoms.get(self.id).unwrap()

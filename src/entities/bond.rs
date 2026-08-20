@@ -56,6 +56,8 @@ impl BondData {
     }
 }
 
+pub type BondView<'a, M> = View<'a, M, Bond>;
+
 impl<'a, M: MolMap> View<'a, M, Bond> {
     fn core(&self) -> &BondData {
         self.map.core().bonds.get(self.id).unwrap()

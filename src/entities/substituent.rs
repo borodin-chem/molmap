@@ -72,6 +72,8 @@ impl SubstituentData {
     }
 }
 
+pub type SubstituentView<'a, M> = View<'a, M, Substituent>;
+
 impl<'a, M: MolMap> View<'a, M, Substituent> {
     fn core(&self) -> &SubstituentData {
         self.map.core().substituents.get(self.id).unwrap()
