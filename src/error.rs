@@ -7,7 +7,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::EntityKind;
-use crate::categories::Fundamental;
+use crate::categories::FundamentalEntity;
 use crate::id::{EntityId, Id};
 
 /// Errors specific to the crate.
@@ -18,7 +18,7 @@ pub enum MolMapError {
     Id(EntityId),
     /// Returned when a fundamental is not in fact a member of a specific collection.
     #[error("The fundamental is not a member of this collection")]
-    Membership(Id<Fundamental>),
+    Membership(Id<FundamentalEntity>),
     /// General error returned when a disallowed operation is attempted.
     #[error("The operation was not allowed")]
     Disallowed(String),

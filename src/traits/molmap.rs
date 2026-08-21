@@ -137,22 +137,22 @@ pub trait MolMap: Sized + MolMapCore {
     }
 
     /// Checks if the map currently contains the atomlike with the given ID.
-    fn contains_atomlike(&self, id: Id<Atomlike>) -> bool {
+    fn contains_atomlike(&self, id: Id<impl Atomlike>) -> bool {
         self.core().contains_atomlike(id)
     }
 
     /// Checks if the map currently contains the fundamental with the given ID.
-    fn contains_fundamental(&self, id: Id<Fundamental>) -> bool {
+    fn contains_fundamental(&self, id: Id<impl Fundamental>) -> bool {
         self.core().contains_fundamental(id)
     }
 
     /// Checks if the map currently contains the bondable with the given ID.
-    fn contains_bondable(&self, id: Id<Bondable>) -> bool {
+    fn contains_bondable(&self, id: Id<impl Bondable>) -> bool {
         self.core().contains_bondable(id)
     }
 
     /// Checks if the map currently contains the collection with the given ID.
-    fn contains_collection(&self, id: Id<Collection>) -> bool {
+    fn contains_collection(&self, id: Id<impl Collection>) -> bool {
         self.core().contains_collection(id)
     }
 

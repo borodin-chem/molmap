@@ -67,7 +67,7 @@ impl MolMap0 {
         let centre = self.add_atom(element);
         for i in 0..n_hydrogen {
             let new_h = self.add_atom(Element::H);
-            self.core.add_bond(centre.into(), new_h.into());
+            self.core.add_bond(centre, new_h);
         }
         // Don't waste memory allocating a new Vec to hold the bond IDs, since
         // they are already stored on the new central atom – return a slice instead
@@ -103,7 +103,11 @@ impl MolMap0 {
     /// # Errors
     ///
     /// Fails if either of `start` and `end` are invalid.
-    pub fn add_bond(&mut self, start: Id<Bondable>, end: Id<Bondable>) -> MolMapResult<Id<Bond>> {
+    pub fn add_bond(
+        &mut self,
+        start: Id<impl Bondable>,
+        end: Id<impl Bondable>,
+    ) -> MolMapResult<Id<Bond>> {
         if !self.core.contains_bondable(start) {
             return Err(MolMapError::Id(start.into()));
         } else if !self.core.contains_bondable(end) {
@@ -122,7 +126,7 @@ impl MolMap0 {
     /// Returns the IDs of the added substituent and central atom.
     pub fn add_substituent_with_atom(&mut self, element: Element) -> (Id<Substituent>, Id<Atom>) {
         let centre = self.add_atom(element);
-        let sub = self.core.add_substituent_with_centre(centre.into());
+        let sub = self.core.add_substituent_with_centre(centre);
         (sub, centre)
     }
 
@@ -140,9 +144,9 @@ impl MolMap0 {
         let (sub, centre) = self.add_substituent_with_atom(element);
         for i in 0..n_hydrogen {
             let new_h = self.add_atom(Element::H);
-            let new_bond = self.core.add_bond(centre.into(), new_h.into());
-            self.core.insert_into_substituent(sub, new_h.into());
-            self.core.insert_into_substituent(sub, new_bond.into());
+            let new_bond = self.core.add_bond(centre, new_h);
+            self.core.insert_into_substituent(sub, new_h);
+            self.core.insert_into_substituent(sub, new_bond);
         }
         (
             sub,
@@ -196,13 +200,13 @@ mod tests {
         let h2 = mm.add_atom(Element::H);
         let h3 = mm.add_atom(Element::H);
         let c1 = mm.add_atom(Element::C);
-        let c1h1 = mm.add_bond(c1.into(), h1.into()).unwrap();
-        let c1h2 = mm.add_bond(c1.into(), h2.into()).unwrap();
-        let c1h3 = mm.add_bond(c1.into(), h3.into()).unwrap();
+        let c1h1 = mm.add_bond(c1, h1).unwrap();
+        let c1h2 = mm.add_bond(c1, h2).unwrap();
+        let c1h3 = mm.add_bond(c1, h3).unwrap();
         let o1 = mm.add_atom(Element::O);
         let h4 = mm.add_atom(Element::H);
-        let o1h4 = mm.add_bond(o1.into(), h4.into()).unwrap();
-        let c1o1 = mm.add_bond(c1.into(), o1.into()).unwrap();
+        let o1h4 = mm.add_bond(o1, h4).unwrap();
+        let c1o1 = mm.add_bond(c1, o1).unwrap();
         // TODO substituents
         mm
     }
@@ -259,7 +263,7 @@ mod tests {
         assert!(mm.core.bonds.is_empty());
         let h1 = mm.add_atom(Element::H);
         let h2 = mm.add_atom(Element::H);
-        let b1 = mm.add_bond(h1.into(), h2.into()).unwrap();
+        let b1 = mm.add_bond(h1, h2).unwrap();
         assert!(mm.core.bonds.contains_key(b1));
         assert!(mm.core.atoms.get(h1).unwrap().bonds.contains(&b1));
         assert!(mm.core.atoms.get(h2).unwrap().bonds.contains(&b1));

@@ -39,8 +39,8 @@ impl KeyEntity for Substituent {
 #[derive(Clone, Debug)]
 pub enum SubstituentCentre {
     None,
-    Single(Id<Atomlike>),
-    Multiple(Box<Vec<Id<Atomlike>>>),
+    Single(Id<AtomlikeEntity>),
+    Multiple(Box<Vec<Id<AtomlikeEntity>>>),
 }
 
 /// The core data of a substituent entity.
@@ -60,11 +60,11 @@ pub enum SubstituentCentre {
 #[derive(Clone, Debug)]
 pub(crate) struct SubstituentData {
     pub(crate) centre: SubstituentCentre,
-    pub(crate) members: Vec<Id<Fundamental>>,
+    pub(crate) members: Vec<Id<FundamentalEntity>>,
 }
 
 impl SubstituentData {
-    pub(crate) fn new(centre: Id<Atomlike>, members: &[Id<Fundamental>]) -> Self {
+    pub(crate) fn new(centre: Id<AtomlikeEntity>, members: &[Id<FundamentalEntity>]) -> Self {
         Self {
             centre: SubstituentCentre::Single(centre),
             members: members.to_vec(),
@@ -85,13 +85,13 @@ impl<'a, M: MolMap> View<'a, M, Substituent> {
     }
 
     /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.
-    pub fn members(&self) -> impl Iterator<Item = Id<Fundamental>> {
+    pub fn members(&self) -> impl Iterator<Item = Id<impl Fundamental>> {
         self.core().members.iter().copied()
     }
 
     /// Checks if the substituent contains the given atom, pseudoatom, or bond.
-    pub fn contains(&self, fundamental: Id<Fundamental>) -> bool {
-        self.core().members.contains(&fundamental)
+    pub fn contains(&self, fundamental: Id<impl Fundamental>) -> bool {
+        self.core().members.contains(&fundamental.to_erased())
     }
 }
 

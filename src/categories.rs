@@ -8,13 +8,30 @@
 
 use crate::{Entity, EntityKind, Id, entities::*};
 
-/// A category encompassing multiple kinds of entity with shared behaviour.
-pub trait Category: Entity {
-    const KINDS: &[EntityKind];
+///// A category encompassing multiple kinds of entity with shared behaviour.
+//pub trait Category: Entity {
+//    const KINDS: &[EntityKind];
+//
+//    /// Returns `true` if the given kind of entity falls in this category.
+//    fn valid_kind(kind: EntityKind) -> bool {
+//        Self::KINDS.contains(&kind)
+//    }
+//}
 
-    /// Returns `true` if the given kind of entity falls in this category.
-    fn valid_kind(kind: EntityKind) -> bool {
-        Self::KINDS.contains(&kind)
+// Trait for infallible conversion from an ID of any entity that implements
+// the $category trait to the type-erased ID (`Id<$categoryEntity>`) via a
+// blanket implementation
+//
+// Can't blanket implement From as $categoryEntity itself also implements $category,
+// so would cause a conflict with std's blanket `impl<T> From<T> for T`
+
+pub(crate) trait IntoCategory<C: Entity>: Sized {
+    type Tagged: From<Id<C>>;
+
+    fn to_erased(self) -> Id<C>;
+
+    fn to_tagged(self) -> Self::Tagged {
+        self.to_erased().into()
     }
 }
 
@@ -26,32 +43,77 @@ macro_rules! define_category {
         }
     ) => {
         paste::paste! {
-            #[allow(non_snake_case)]
+
+            // A trait to be implemented by entity types
 
             $(#[$doc])*
-            #[derive(Copy, Clone, Debug)]
-            pub struct $category;
+            pub trait $category: Entity {}
 
-            impl Entity for $category {}
+            // Implement it for each kind of entity specified
 
-            impl Category for $category {
-                const KINDS: &[EntityKind] = &[
-                    $(EntityKind::$kind,)+
-                ];
-            }
-
-            // Infallible conversion from each category member to the category
             $(
-                impl From<$kind> for $category {
-                    fn from(kind: $kind) -> Self {
-                        Self
-                    }
-                }
+                impl $category for $kind {}
             )+
 
-            // Likewise, infallible conversion from each category member's ID
+            // A union marker type for representing a type-erased entity
+
+            #[doc = concat!("A concrete type representing any entity that implements the [`", stringify!([<$category>]), "`] trait.")]
+            #[derive(Copy, Clone, Debug)]
+            pub struct [<$category Entity>];
+
+            impl Entity for [<$category Entity>] {}
+
+            // Implement the Category trait to mark that it is one of these special
+            // union marker types
+            // (Is this necessary though, since it doesn't implement KeyEntity anyway?)
+
+            //impl Category for [<$category Entity>] {
+            //    const KINDS: &[EntityKind] = &[
+            //        $(EntityKind::$kind,)+
+            //    ];
+            //}
+
+            // The trait is also implemented for the union marker type
+
+            impl $category for [<$category Entity>] {}
+
+            // Infallible conversion from each category member to the category type
+            // NO LONGER NEEDED because Into<$category> is no longer the way of showing
+            // that $kind "is" $category, instead $kind implements $category
+            //$(
+            //    impl From<$kind> for [<$category Entity>] {
+            //        fn from(kind: $kind) -> Self {
+            //            Self
+            //        }
+            //    }
+            //)+
+
+            // Trait for infallible conversion from an ID of any entity that implements
+            // the $category trait to the type-erased ID (`Id<$categoryEntity>`) via a
+            // blanket implementation
+            //
+            // Can't blanket implement From as $categoryEntity itself also implements $category,
+            // so would cause a conflict with std's blanket `impl<T> From<T> for T`
+            //
+            // As EraseIdKind is a local trait, we have no such problem with a blanket impl for it
+
+            impl<E: $category> IntoCategory<[<$category Entity>]> for Id<E> {
+                type Tagged = [<Tagged $category>];
+
+                fn to_erased(self) -> Id<[<$category Entity>]> {
+                    Id::new_unchecked(self.into_inner())
+                }
+            }
+
+            // Infallible conversion with From still implemented for use by users,
+            // just not in a blanket fashion but on a kind-by-kind basis.
+            // This means the user can feel assured that they can call `into()` on
+            // an ID of any entity that implements the trait - it's just that the
+            // _compiler_ doesn't know that, and that's what the EraseIdKind trait
+            // is then for.
+
             $(
-                impl From<Id<$kind>> for Id<$category> {
+                impl From<Id<$kind>> for Id<[<$category Entity>]> {
                     fn from(id: Id<$kind>) -> Self {
                         Self::new_unchecked(id.into_inner())
                     }
@@ -59,6 +121,7 @@ macro_rules! define_category {
             )+
 
             // A corresponding tagged ID type for each category for exhaustive matching
+
             $(#[$doc])*
             #[derive(Copy, Clone, Debug)]
             pub enum [<Tagged $category>] {
@@ -66,18 +129,19 @@ macro_rules! define_category {
             }
 
             // Conversion of the type-erased ID to the tagged ID
-            impl From<Id<$category>> for [<Tagged $category>] {
-                fn from(id: Id<$category>) -> Self {
-                    match id.kind() {
-                        $(EntityKind::$kind => Self::$kind(Id::<$kind>::new_unchecked(id.into_inner())),)+
+
+            impl Id<[<$category Entity>]> {
+                pub fn to_tagged(self) -> [<Tagged $category>] {
+                    match self.kind() {
+                        $(EntityKind::$kind => [<Tagged $category>]::$kind(Id::<$kind>::new_unchecked(self.into_inner())),)+
                         _ => unreachable!(),
                     }
                 }
             }
 
-            impl Id<$category> {
-                pub fn to_tagged(self) -> [<Tagged $category>] {
-                    self.into()
+            impl From<Id<[<$category Entity>]>> for [<Tagged $category>] {
+                fn from(id: Id<[<$category Entity>]>) -> Self {
+                    id.to_tagged()
                 }
             }
         }
@@ -87,7 +151,7 @@ macro_rules! define_category {
 define_category! {
     /// An atom or something that behaves like one (a pseudoatom).
     ///
-    /// Atomlikes are the true nodes of the molecular graph.
+    /// Atomlike entities are the true nodes of the molecular graph.
     Atomlike {
         Atom,
         Pseudoatom,
@@ -97,9 +161,9 @@ define_category! {
 define_category! {
     /// An entity that does not group other entities.
     ///
-    /// Fundamentals are the basic building blocks of a [`MolMap`].
+    /// Fundamental entities are the basic building blocks of a [`MolMap`].
     ///
-    /// Atoms, pseudoatoms, and bonds are fundamentals.
+    /// Atoms, pseudoatoms, and bonds are fundamental entities.
     Fundamental {
         Atom,
         Pseudoatom,
@@ -137,51 +201,70 @@ define_category! {
 
 // Some additional overlaps
 
-impl From<Atomlike> for Fundamental {
-    fn from(atomlike: Atomlike) -> Fundamental {
-        Fundamental
-    }
-}
+//impl<E: Atomlike> IntoCategory<FundamentalEntity> for Id<E> {
+//    type Tagged = TaggedFundamental;
+//
+//    fn erase(self) -> Id<FundamentalEntity> {
+//        Id::new_unchecked(self.into_inner())
+//    }
+//}
 
-impl From<Id<Atomlike>> for Id<Fundamental> {
-    fn from(id: Id<Atomlike>) -> Id<Fundamental> {
+impl From<Id<AtomlikeEntity>> for Id<FundamentalEntity> {
+    fn from(id: Id<AtomlikeEntity>) -> Self {
         Id::new_unchecked(id.into_inner())
     }
 }
 
-impl From<Atomlike> for Bondable {
-    fn from(atomlike: Atomlike) -> Bondable {
-        Bondable
-    }
-}
+//impl<E: Atomlike> IntoCategory<BondableEntity> for Id<E> {
+//    type Tagged = TaggedBondable;
+//
+//    fn erase(self) -> Id<BondableEntity> {
+//        Id::new_unchecked(self.into_inner())
+//    }
+//}
 
-impl From<Id<Atomlike>> for Id<Bondable> {
-    fn from(id: Id<Atomlike>) -> Id<Bondable> {
+impl From<Id<AtomlikeEntity>> for Id<BondableEntity> {
+    fn from(id: Id<AtomlikeEntity>) -> Self {
         Id::new_unchecked(id.into_inner())
     }
 }
 
-//#[cfg(test)]
-//mod tests {
-//    use std::num::NonZeroU64;
-//
-//    use crate::id::EntityId;
-//
-//    use super::*;
-//
-//    // Some raw keys for use when testing
-//    const ATOM_NULL_RAW: u64 = 0x0000001_00_FFFFFF; // The null atom key
-//    const KD_NULL_RAW: u64 = 0x0000001_FF_FFFFFF; // What KeyData considers to be null
-//
-//    const BOND_RAW: NonZeroU64 = NonZeroU64::new(0x1_01_000008).unwrap(); // version: 1, kind: Bond, idx: 8
-//    const ATOM_RAW: NonZeroU64 = NonZeroU64::new(0x3_00_000010).unwrap(); // version: 3, kind: Atom, idx: 16, (version always odd for occupied slots)
-//    const PSEUDOATOM_RAW: NonZeroU64 = NonZeroU64::new(0x1_03_00000A).unwrap(); // version: 1, kind: Pseudoatom, idx: 10
-//    const MOL_RAW: NonZeroU64 = NonZeroU64::new(0x1_1F_000001).unwrap(); // version: 1, kind: Molecule, idx: 1
-//
-//    const BOND: Id<Bond> = Id::new_unchecked(EntityId(BOND_RAW));
-//    const ATOM: Id<Atom> = Id::new_unchecked(EntityId(ATOM_RAW));
-//    const PSEUDOATOM: Id<Pseudoatom> = Id::new_unchecked(EntityId(PSEUDOATOM_RAW));
-//    const MOL: Id<Molecule> = Id::new_unchecked(EntityId(MOL_RAW));
+#[cfg(test)]
+mod tests {
+    use std::num::NonZeroU64;
+
+    use crate::id::EntityId;
+
+    use super::*;
+
+    // Some raw keys for use when testing
+    const ATOM_NULL_RAW: u64 = 0x0000001_00_FFFFFF; // The null atom key
+    const KD_NULL_RAW: u64 = 0x0000001_FF_FFFFFF; // What KeyData considers to be null
+
+    const BOND_RAW: NonZeroU64 = NonZeroU64::new(0x1_01_000008).unwrap(); // version: 1, kind: Bond, idx: 8
+    const ATOM_RAW: NonZeroU64 = NonZeroU64::new(0x3_00_000010).unwrap(); // version: 3, kind: Atom, idx: 16, (version always odd for occupied slots)
+    const PSEUDOATOM_RAW: NonZeroU64 = NonZeroU64::new(0x1_03_00000A).unwrap(); // version: 1, kind: Pseudoatom, idx: 10
+    const MOL_RAW: NonZeroU64 = NonZeroU64::new(0x1_1F_000001).unwrap(); // version: 1, kind: Molecule, idx: 1
+
+    const BOND: Id<Bond> = Id::new_unchecked(EntityId(BOND_RAW));
+    const ATOM: Id<Atom> = Id::new_unchecked(EntityId(ATOM_RAW));
+    const PSEUDOATOM: Id<Pseudoatom> = Id::new_unchecked(EntityId(PSEUDOATOM_RAW));
+    const MOL: Id<Molecule> = Id::new_unchecked(EntityId(MOL_RAW));
+
+    //#[test]
+    //fn tagged() {
+    //    // Mostly want to test the ergonomics of getting a tagged representation
+    //    let tagged: TaggedAtomlike = IntoCategory::to_tagged(ATOM);
+    //    match tagged {
+    //        TaggedAtomlike::Atom(_) => (),
+    //        TaggedAtomlike::Pseudoatom(_) => panic!(),
+    //    }
+    //    match ATOM.to_tagged() {
+    //        TaggedAtomlike::Atom(_) => (),
+    //        TaggedAtomlike::Pseudoatom(_) => panic!(),
+    //    }
+    //}
+}
 //
 //    #[test]
 //    fn category_kind() {

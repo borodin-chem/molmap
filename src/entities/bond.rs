@@ -41,12 +41,17 @@ pub enum BondType {
 pub(crate) struct BondData {
     pub(crate) bond_type: BondType,
     pub(crate) order: f32,
-    pub(crate) start: Id<Bondable>,
-    pub(crate) end: Id<Bondable>,
+    pub(crate) start: Id<BondableEntity>,
+    pub(crate) end: Id<BondableEntity>,
 }
 
 impl BondData {
-    pub fn new(bond_type: BondType, order: f32, start: Id<Bondable>, end: Id<Bondable>) -> Self {
+    pub fn new(
+        bond_type: BondType,
+        order: f32,
+        start: Id<BondableEntity>,
+        end: Id<BondableEntity>,
+    ) -> Self {
         Self {
             bond_type,
             order,
@@ -71,7 +76,7 @@ impl<'a, M: MolMap> View<'a, M, Bond> {
         self.core().order
     }
 
-    pub fn partners(&self) -> [Id<Bondable>; 2] {
+    pub fn partners(&self) -> [Id<impl Bondable>; 2] {
         let inner = self.core();
         [inner.start, inner.end]
     }

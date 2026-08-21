@@ -41,7 +41,7 @@ impl KeyEntity for Molecule {
 /// The core data of a molecule entity.
 #[derive(Clone, Debug)]
 pub(crate) struct MoleculeData {
-    pub(crate) members: HashSet<Id<Fundamental>>,
+    pub(crate) members: HashSet<Id<FundamentalEntity>>,
 }
 
 impl MoleculeData {
@@ -60,12 +60,12 @@ impl<'a, M: MolMap> View<'a, M, Molecule> {
     }
 
     /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.
-    pub fn members(&self) -> impl Iterator<Item = Id<Fundamental>> {
+    pub fn members(&self) -> impl Iterator<Item = Id<impl Fundamental>> {
         self.core().members.iter().copied()
     }
 
     /// Checks if the molecule contains the given atom, pseudoatom, or bond.
-    pub fn contains(&self, fundamental: Id<Fundamental>) -> bool {
-        self.core().members.contains(&fundamental)
+    pub fn contains(&self, fundamental: Id<impl Fundamental>) -> bool {
+        self.core().members.contains(&fundamental.to_erased())
     }
 }
