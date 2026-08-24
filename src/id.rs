@@ -57,11 +57,14 @@ use crate::*;
 // As the discriminant is encoded by 8 bits, the number of different entity
 // types is limited to 256. Only those in the range of 0 to 127 are reserved for
 // use in the core `MolGraph`; the rest are left for use by extensions that wish
-// to add additional entity types but still use unified IDs.
+// to add additional entity types but still use IDs that are compatible (i.e.
+// non-conflicting) with these IDs.
 
 /// The ID of one of any kind of entity, where the kind of entity is encoded by
 /// an 8-bit discriminant.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+// It is crucial that this visibility remains pub(crate) and not pub, as it is
+// what ensures that Entity is a sealed trait!
 pub(crate) struct EntityId(pub(crate) NonZeroU64);
 
 // Layout:
@@ -93,15 +96,31 @@ impl EntityId {
         (u64::from(self.0) & !Self::DISC_MASK) as u32
     }
 
-    /// Wraps the key data of a key to create an ID.
+    /// Wraps a (non-zero) integer to create an ID.
+    ///
+    /// Returns `None` if `n` is zero.
+    #[inline]
+    pub(crate) const fn from_raw(n: u64) -> Option<Self> {
+        match NonZeroU64::new(n) {
+            Some(non_zero) => Some(Self(non_zero)),
+            None => None,
+        }
+    }
+
+    /// Returns the inner value with the discriminant as a normal `u64`.
+    #[inline]
+    pub(crate) fn to_raw(self) -> u64 {
+        u64::from(self.0)
+    }
+
+    /// Wraps the FFI representation of a `slotmap::Key` to create an ID.
     ///
     /// # Panics
     ///
     /// Panics if the key's index equals or exceeds [`EntityId::MAX_IDX`] = 2<sup>28</sup> − 1,
     /// in which case the `MolMap` is full.
     #[inline]
-    fn from_key_data(kind: EntityKind, key_data: KeyData) -> Self {
-        let ffi = key_data.as_ffi();
+    const fn from_raw_key(kind: EntityKind, ffi: u64) -> Self {
         // Max index indicates the null key, which is fine
         if (ffi as u32 >= Self::MAX_IDX) && (ffi as u32 != u32::MAX) {
             panic!("MolMap is full!");
@@ -115,29 +134,29 @@ impl EntityId {
         })
     }
 
-    /// Returns the equivalent key data.
+    /// Returns the inner value without the discriminant (equivalent to the FFI representation of the `slotmap::Key`).
     #[inline]
-    fn to_key_data(self) -> KeyData {
-        let ffi = self.to_raw_key();
-        KeyData::from_ffi(ffi)
-    }
-
-    /// Returns the inner value without the discriminant.
-    #[inline]
-    pub(crate) fn to_raw_key(self) -> u64 {
+    fn to_raw_key(self) -> u64 {
         u64::from(self.0) & !Self::DISC_MASK
     }
 
-    /// Wraps a non-zero integer to create an ID.
+    /// Wraps the key data of a `slotmap::Key` to create an ID.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the key's index equals or exceeds [`EntityId::MAX_IDX`] = 2<sup>28</sup> − 1,
+    /// in which case the `MolMap` is full.
     #[inline]
-    pub(crate) fn from_raw(n: u64) -> Option<Self> {
-        Some(Self(NonZeroU64::new(n)?))
+    pub(crate) fn from_key_data(kind: EntityKind, key_data: KeyData) -> Self {
+        let ffi = key_data.as_ffi();
+        Self::from_raw_key(kind, ffi)
     }
 
-    /// Returns the inner value with the discriminant as a normal `u64`.
+    /// Returns the equivalent key data.
     #[inline]
-    pub(crate) fn to_raw(self) -> u64 {
-        u64::from(self.0)
+    pub(crate) fn to_key_data(self) -> KeyData {
+        let ffi = self.to_raw_key();
+        KeyData::from_ffi(ffi)
     }
 
     /// Checks if an ID represents the null key.
@@ -150,7 +169,7 @@ impl EntityId {
 
     /// Returns the kind of entity that the ID represents, amongst all possible
     /// kinds of entity.
-    fn kind(&self) -> EntityKind {
+    pub(crate) fn kind(&self) -> EntityKind {
         EntityKind::try_from(self.discriminant()).expect("The discriminant should never be invalid")
     }
 }
@@ -167,185 +186,11 @@ impl Debug for EntityId {
     }
 }
 
-/// A key ID as a tagged enum.
-#[derive(Copy, Clone, Debug)]
-#[repr(u8)]
-//#[non_exhaustive]
-pub enum TaggedId {
-    Atom(Id<Atom>) = EntityKind::Atom as u8,
-    Bond(Id<Bond>) = EntityKind::Bond as u8,
-    Pseudoatom(Id<Pseudoatom>) = EntityKind::Pseudoatom as u8,
-    Substituent(Id<Substituent>) = EntityKind::Substituent as u8,
-    Molecule(Id<Molecule>) = EntityKind::Molecule as u8,
-}
-
-/// The ID of an entity.
-#[derive(Copy, Clone)]
-pub struct Id<E: Entity>(EntityId, PhantomData<E>);
-
-impl<E: Entity> Id<E> {
-    /// Creates a new ID for the requested kind of entity without checking that
-    /// the discriminant of the ID is correct for that kind.
-    pub(crate) const fn new_unchecked(id: EntityId) -> Self {
-        Self(id, PhantomData)
-    }
-
-    pub(crate) fn into_inner(self) -> EntityId {
-        self.0
-    }
-
-    pub(crate) fn from_raw_unchecked(n: u64) -> Self {
-        Self::new_unchecked(EntityId::from_raw(n).unwrap())
-    }
-
-    /// Returns the kind of entity that the ID represents, amongst all possible
-    /// kinds of entity.
-    pub fn kind(&self) -> EntityKind {
-        self.0.kind()
-    }
-
-    ///// Returns a tagged form of the ID that wraps the actual key in an enum.
-    /////
-    ///// The tagged key form is inherently larger than the ID form but allows convenient
-    ///// matching on the kind while holding the underlying key.
-    //pub fn to_tagged(self) -> TaggedId {
-    //    match self.kind() {
-    //        EntityKind::Atom => TaggedId::Atom(Id::<Atom>::new_unchecked(self.0)),
-    //        EntityKind::Bond => TaggedId::Bond(Id::<Bond>::new_unchecked(self.0)),
-    //        EntityKind::Pseudoatom => TaggedId::Pseudoatom(Id::<Pseudoatom>::new_unchecked(self.0)),
-    //        EntityKind::Substituent => {
-    //            TaggedId::Substituent(Id::<Substituent>::new_unchecked(self.0))
-    //        }
-    //        EntityKind::Molecule => TaggedId::Molecule(Id::<Molecule>::new_unchecked(self.0)),
-    //    }
-    //}
-}
-
-impl<E: Entity> Debug for Id<E> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("Id")
-            .field(&self.0)
-            .field(&self.kind())
-            .finish()
-    }
-}
-
-impl<E: Entity> PartialEq for Id<E> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl<E: Entity> Eq for Id<E> {}
-
-impl<E: Entity> PartialOrd for Id<E> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<E: Entity> Ord for Id<E> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0.cmp(&other.0)
-    }
-}
-
-impl<E: Entity> std::hash::Hash for Id<E> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
-
-impl<E: Entity> From<Id<E>> for EntityId {
-    #[inline]
-    fn from(id: Id<E>) -> EntityId {
-        id.0
-    }
-}
-
-// IDs are keys for the slotmaps
-
-impl<E: Entity + KeyEntity> Default for Id<E> {
-    #[inline]
-    fn default() -> Self {
-        KeyData::default().into()
-    }
-}
-
-impl<E: Entity + KeyEntity> From<KeyData> for Id<E> {
-    #[inline]
-    fn from(key_data: KeyData) -> Self {
-        Self::new_unchecked(EntityId::from_key_data(E::kind(), key_data))
-    }
-}
-
-unsafe impl<E: Entity + KeyEntity> Key for Id<E> {
-    #[inline]
-    fn data(&self) -> KeyData {
-        self.0.to_key_data()
-    }
-
-    // Have to override default is_null method because it goes via
-    // the KeyData, and unfortunately the null key is not round-trippable
-    #[inline]
-    fn is_null(&self) -> bool {
-        self.0.is_null()
-    }
-}
-
-// Don't think this needs to be a trait
-// Just implement separately for kind/key IDs and category IDs
-
-///// An ID type that may be for one specific kind of entity or for one in a
-///// category of entity.
-/////
-///// Implementors are required to ensure that they convert to the correct variant of
-///// [`EntityId`], and that only the correct variants convert to the `Id` type.
-//pub trait TypedId: Into<EntityId> + TryFrom<EntityId> {
-//    fn to_tagged(self) -> TaggedId;
-//
-//    fn kind(&self) -> EntityKind;
-//}
-
-/// An iterator over a set of IDs.
-#[derive(Copy, Clone, Debug)]
-pub struct IdIter<E, I>(pub(crate) I)
-where
-    E: Entity,
-    I: Iterator<Item = Id<E>>;
-
-impl<E, I> Iterator for IdIter<E, I>
-where
-    E: Entity,
-    I: Iterator<Item = Id<E>>,
-{
-    type Item = Id<E>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
-    }
-}
-
-impl<E, I> ExactSizeIterator for IdIter<E, I>
-where
-    E: Entity,
-    I: Iterator<Item = Id<E>> + ExactSizeIterator,
-{
-    fn len(&self) -> usize {
-        self.0.len()
-    }
-}
-
-impl<E, I> FusedIterator for IdIter<E, I>
-where
-    E: Entity,
-    I: Iterator<Item = Id<E>> + FusedIterator,
-{
-}
-
 #[cfg(test)]
 mod tests {
-    use slotmap::{DefaultKey, SlotMap, new_key_type};
+    use std::num::NonZeroU64;
+
+    use slotmap::{DefaultKey, KeyData, SlotMap, new_key_type};
 
     use super::*;
 
@@ -354,15 +199,10 @@ mod tests {
     const ATOM_NULL_RAW: u64 = 0x0000001_00_FFFFFF; // The null atom key
     const KD_NULL_RAW: u64 = 0x0000001_FF_FFFFFF; // What KeyData considers to be null
 
-    const BOND_RAW: NonZeroU64 = NonZeroU64::new(0x1_01_000008).unwrap(); // version: 1, kind: Bond, idx: 8
-    const ATOM_RAW: NonZeroU64 = NonZeroU64::new(0x3_00_000010).unwrap(); // version: 3, kind: Atom, idx: 16, (version always odd for occupied slots)
-    const PSEUDOATOM_RAW: NonZeroU64 = NonZeroU64::new(0x1_03_00000A).unwrap(); // version: 1, kind: Pseudoatom, idx: 10
-    const MOL_RAW: NonZeroU64 = NonZeroU64::new(0x1_1F_000001).unwrap(); // version: 1, kind: Molecule, idx: 1
-
-    const BOND: Id<Bond> = Id::new_unchecked(EntityId(BOND_RAW));
-    const ATOM: Id<Atom> = Id::new_unchecked(EntityId(ATOM_RAW));
-    const PSEUDOATOM: Id<Pseudoatom> = Id::new_unchecked(EntityId(PSEUDOATOM_RAW));
-    const MOL: Id<Molecule> = Id::new_unchecked(EntityId(MOL_RAW));
+    const BOND_RAW: u64 = 0x1_01_000008; // version: 1, kind: Bond, idx: 8
+    const ATOM_RAW: u64 = 0x3_00_000010; // version: 3, kind: Atom, idx: 16, (version always odd for occupied slots)
+    const PSEUDOATOM_RAW: u64 = 0x1_03_00000A; // version: 1, kind: Pseudoatom, idx: 10
+    const MOLECULE_RAW: u64 = 0x1_1F_000001; // version: 1, kind: Molecule, idx: 1
 
     #[test]
     fn slotmap_key_ffi_layout() {
@@ -385,10 +225,20 @@ mod tests {
 
     #[test]
     fn entity_getters() {
-        let e = EntityId(ATOM_RAW);
+        let e = EntityId::from_raw(ATOM_RAW).unwrap();
         assert_eq!(e.discriminant(), 0);
         assert_eq!(e.version(), 3);
         assert_eq!(e.index(), 16);
+    }
+
+    #[test]
+    fn from_raw() {
+        for n in [0x1_00000001, 0x1_00000002] {
+            assert_eq!(
+                EntityId::from_raw(n).unwrap(),
+                EntityId(NonZeroU64::new(n).unwrap()),
+            )
+        }
     }
 
     #[test]
@@ -397,71 +247,54 @@ mod tests {
         let id = EntityId::from_key_data(EntityKind::Atom, k);
         // Atom has discriminant of 0
         assert_eq!(id.to_raw(), 0x1_00000001);
-        let mut sm: SlotMap<Id<Atom>, usize> = SlotMap::with_key();
+        new_key_type! { struct AtomKey; }
+        let mut sm: SlotMap<AtomKey, usize> = SlotMap::with_key();
         let first = sm.insert(1); // idx: 1, version: 1
-        assert_eq!(first.0.to_raw(), 0x1_00000001);
+        assert_eq!(
+            EntityId::from_key_data(EntityKind::Atom, first.data()),
+            EntityId::from_raw(0x1_00000001).unwrap()
+        );
         let second = sm.insert(2); // idx: 2, version: 1
-        assert_eq!(second.0.to_raw(), 0x1_00000002);
+        assert_eq!(
+            EntityId::from_key_data(EntityKind::Atom, second.data()),
+            EntityId::from_raw(0x1_00000002).unwrap()
+        );
     }
 
     #[test]
     #[should_panic]
     fn panics_on_overflow() {
         let overflowed = KeyData::from_ffi(0x1_10000000);
-        let _ = Id::<Molecule>::from(overflowed);
+        let _ = EntityId::from_key_data(EntityKind::Molecule, overflowed);
     }
 
     #[test]
     fn key_data_round_trip() {
         // Round trip is survived by any valid key that hasn't overflowed
         let kd = KeyData::from_ffi(0x1_00123456); // idx: 123456, version: 1
-        let atom: Id<Atom> = kd.into();
-        let recovered = atom.data();
+        let atom = EntityId::from_key_data(EntityKind::Atom, kd);
+        let recovered = atom.to_key_data();
         assert_eq!(kd, recovered);
         // Unfortunately, a null key doesn't survive a round trip
         //let null = KeyData::default();
-        //let atom_null: Id<Atom> = null.into();
+        //let atom_null: Atom = null.into();
         //let recovered_null = atom_null.data();
         //assert_eq!(null, recovered_null);
     }
 
     #[test]
-    fn key_id_slotmap_access() {
-        let mut sm: SlotMap<Id<Bond>, usize> = SlotMap::with_key();
-        let first = sm.insert(21); // idx: 1, version: 1
-        assert_eq!(sm.get(first), Some(&21));
-        let second = sm.insert(22); // idx: 2, version: 1
-        assert_eq!(sm.get(second), Some(&22));
-        sm.remove(first); // idx 1 now free
-        let third = sm.insert(23); // idx: 1, version: 3 (version always odd for a filled slot)
-        assert_eq!(sm.get(third), Some(&23));
-        // Removed key should be invalid
-        assert!(sm.get(first).is_none());
-    }
-
-    #[test]
     fn different_discriminants_same_keys() {
         // First assigned key in two different slotmaps
-        let atom = Id::<Atom>::new_unchecked(EntityId::from_raw(0x1_02_000001).unwrap());
-        let bond = Id::<Bond>::new_unchecked(EntityId::from_raw(0x1_01_000001).unwrap());
-        assert_eq!(atom.0.to_raw_key(), bond.0.to_raw_key());
+        let atom = EntityId::from_raw(0x1_02_000001).unwrap();
+        let bond = EntityId::from_raw(0x1_01_000001).unwrap();
+        assert_eq!(atom.to_raw_key(), bond.to_raw_key());
     }
 
     #[test]
     fn entity_kind() {
-        let atom = EntityId(ATOM_RAW);
-        let bond = EntityId(BOND_RAW);
-        let mol = EntityId(MOL_RAW);
-        assert_eq!(atom.kind(), EntityKind::Atom);
-        assert_eq!(bond.kind(), EntityKind::Bond);
-        assert_eq!(mol.kind(), EntityKind::Molecule);
-    }
-
-    #[test]
-    fn key_kind() {
-        let atom = ATOM;
-        let bond = BOND;
-        let mol = MOL;
+        let atom = EntityId::from_raw(ATOM_RAW).unwrap();
+        let bond = EntityId::from_raw(BOND_RAW).unwrap();
+        let mol = EntityId::from_raw(MOLECULE_RAW).unwrap();
         assert_eq!(atom.kind(), EntityKind::Atom);
         assert_eq!(bond.kind(), EntityKind::Bond);
         assert_eq!(mol.kind(), EntityKind::Molecule);

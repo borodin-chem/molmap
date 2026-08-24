@@ -8,21 +8,6 @@
 
 use crate::*;
 
-/// A pseudoatom: something that forms bonds and can be represented by an
-/// "element symbol" like a normal atom but represents something else.
-///
-/// It may have an unknown composition like R, or a known structure like Ph.
-#[derive(Copy, Clone, Debug)]
-pub struct Pseudoatom;
-
-impl Entity for Pseudoatom {}
-
-impl KeyEntity for Pseudoatom {
-    fn kind() -> EntityKind {
-        EntityKind::Pseudoatom
-    }
-}
-
 /// The core data of a pseudoatom entity.
 ///
 /// A pseudoatom is something that has a "symbol" like a normal atom but
@@ -31,7 +16,7 @@ impl KeyEntity for Pseudoatom {
 #[derive(Clone, Debug)]
 pub(crate) struct PseudoatomData {
     pub(crate) pseudoelement: Pseudoelement,
-    pub(crate) bonds: Vec<Id<Bond>>,
+    pub(crate) bonds: Vec<Bond>,
 }
 
 impl PseudoatomData {
@@ -47,10 +32,10 @@ pub type PseudoatomView<'a, M> = View<'a, M, Pseudoatom>;
 
 impl<'a, M: MolMap> View<'a, M, Pseudoatom> {
     fn core(&self) -> &PseudoatomData {
-        self.map.core().pseudoatoms.get(self.id).unwrap()
+        self.map.core().pseudoatoms.get(self.id.into()).unwrap()
     }
 
-    pub fn bonds(&self) -> &[Id<Bond>] {
+    pub fn bonds(&self) -> &[Bond] {
         &self.core().bonds
     }
 }

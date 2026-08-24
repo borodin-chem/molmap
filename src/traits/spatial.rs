@@ -14,5 +14,5 @@ use crate::*;
 /// A [`MolMap`] that also holds the spatial positions (with dimensionality `D`)
 /// of its entities.
 pub trait SpatialMolMap<const D: usize>: MolMap {
-    fn atom_position(&self, id: Id<Atom>) -> Point<f64, D>;
+    fn atom_position(&self, id: Atom) -> Point<f64, D>;
 }

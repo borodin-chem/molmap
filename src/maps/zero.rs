@@ -50,7 +50,7 @@ impl MolMap0 {
     // Methods to add entities
 
     /// Adds an atom to the map.
-    pub fn add_atom(&mut self, element: Element) -> Id<Atom> {
+    pub fn add_atom(&mut self, element: Element) -> Atom {
         self.core.add_atom(element)
     }
 
@@ -59,11 +59,7 @@ impl MolMap0 {
     ///
     /// Returns the ID of the added central atom as well as a slice over the IDs
     /// of the new bonds.
-    pub fn add_atom_with_hydrogen(
-        &mut self,
-        element: Element,
-        n_hydrogen: u8,
-    ) -> (Id<Atom>, &[Id<Bond>]) {
+    pub fn add_atom_with_hydrogen(&mut self, element: Element, n_hydrogen: u8) -> (Atom, &[Bond]) {
         let centre = self.add_atom(element);
         for i in 0..n_hydrogen {
             let new_h = self.add_atom(Element::H);
@@ -75,7 +71,7 @@ impl MolMap0 {
             centre,
             self.core()
                 .atoms
-                .get(centre)
+                .get(centre.into())
                 .expect("We just created this atom, so ID must be valid")
                 .bonds
                 .as_slice(),
@@ -88,13 +84,13 @@ impl MolMap0 {
     ///
     /// Returns the ID of the added central atom as well as a slice over the IDs
     /// of the new bonds.
-    pub fn add_atom_and_saturate(&mut self, element: Element) -> (Id<Atom>, &[Id<Bond>]) {
+    pub fn add_atom_and_saturate(&mut self, element: Element) -> (Atom, &[Bond]) {
         let n_hydrogen = element.default_valency();
         self.add_atom_with_hydrogen(element, n_hydrogen)
     }
 
     /// Adds a pseudoatom to the map.
-    pub fn add_pseudoatom(&mut self, pseudoelement: Pseudoelement) -> Id<Pseudoatom> {
+    pub fn add_pseudoatom(&mut self, pseudoelement: Pseudoelement) -> Pseudoatom {
         self.core.add_pseudoatom(pseudoelement)
     }
 
@@ -103,28 +99,24 @@ impl MolMap0 {
     /// # Errors
     ///
     /// Fails if either of `start` and `end` are invalid.
-    pub fn add_bond(
-        &mut self,
-        start: Id<impl Bondable>,
-        end: Id<impl Bondable>,
-    ) -> MolMapResult<Id<Bond>> {
+    pub fn add_bond(&mut self, start: impl Bondable, end: impl Bondable) -> MolMapResult<Bond> {
         if !self.core.contains_bondable(start) {
-            return Err(MolMapError::Id(start.into()));
+            return Err(MolMapError::Id(start.into_inner()));
         } else if !self.core.contains_bondable(end) {
-            return Err(MolMapError::Id(end.into()));
+            return Err(MolMapError::Id(end.into_inner()));
         };
         Ok(self.core.add_bond(start, end))
     }
 
     /// Adds an empty substituent to the map.
-    pub fn add_substituent(&mut self) -> Id<Substituent> {
+    pub fn add_substituent(&mut self) -> Substituent {
         self.core.add_substituent()
     }
 
     /// Adds a substituent to the map with a single, newly-created central atom.
     ///
     /// Returns the IDs of the added substituent and central atom.
-    pub fn add_substituent_with_atom(&mut self, element: Element) -> (Id<Substituent>, Id<Atom>) {
+    pub fn add_substituent_with_atom(&mut self, element: Element) -> (Substituent, Atom) {
         let centre = self.add_atom(element);
         let sub = self.core.add_substituent_with_centre(centre);
         (sub, centre)
@@ -140,7 +132,7 @@ impl MolMap0 {
         &mut self,
         element: Element,
         n_hydrogen: u8,
-    ) -> (Id<Substituent>, Id<Atom>, &[Id<Bond>]) {
+    ) -> (Substituent, Atom, &[Bond]) {
         let (sub, centre) = self.add_substituent_with_atom(element);
         for i in 0..n_hydrogen {
             let new_h = self.add_atom(Element::H);
@@ -153,7 +145,7 @@ impl MolMap0 {
             centre,
             self.core()
                 .atoms
-                .get(centre)
+                .get(centre.into())
                 .expect("We just created this atom, so ID must be valid")
                 .bonds
                 .as_slice(),
@@ -170,13 +162,13 @@ impl MolMap0 {
     pub fn add_substituent_and_saturate(
         &mut self,
         element: Element,
-    ) -> (Id<Substituent>, Id<Atom>, &[Id<Bond>]) {
+    ) -> (Substituent, Atom, &[Bond]) {
         let n_hydrogen = element.default_valency();
         self.add_substituent_with_hydrogen(element, n_hydrogen)
     }
 
     /// Adds an empty molecule to the map.
-    pub fn add_molecule(&mut self) -> Id<Molecule> {
+    pub fn add_molecule(&mut self) -> Molecule {
         self.core.add_molecule()
     }
 }
@@ -220,10 +212,10 @@ mod tests {
         let c1 = mm.add_atom(Element::C);
         assert_eq!(mm.core.atoms.len(), 2);
         // Check the atoms can be accessed by their ID, and that the elements are correct
-        assert_eq!(mm.core.atoms.get(h1).unwrap().element, Element::H);
-        assert_eq!(mm.core.atoms.get(c1).unwrap().element, Element::C);
+        assert_eq!(mm.core.atoms.get(h1.into()).unwrap().element, Element::H);
+        assert_eq!(mm.core.atoms.get(c1.into()).unwrap().element, Element::C);
         // Check that the bond arrays are created empty
-        assert!(mm.core.atoms.get(h1).unwrap().bonds.is_empty());
+        assert!(mm.core.atoms.get(h1.into()).unwrap().bonds.is_empty());
     }
 
     //#[test]
@@ -264,11 +256,11 @@ mod tests {
         let h1 = mm.add_atom(Element::H);
         let h2 = mm.add_atom(Element::H);
         let b1 = mm.add_bond(h1, h2).unwrap();
-        assert!(mm.core.bonds.contains_key(b1));
-        assert!(mm.core.atoms.get(h1).unwrap().bonds.contains(&b1));
-        assert!(mm.core.atoms.get(h2).unwrap().bonds.contains(&b1));
-        assert_eq!(mm.core.bonds.get(b1).unwrap().start, h1.into());
-        assert_eq!(mm.core.bonds.get(b1).unwrap().end, h2.into());
+        assert!(mm.core.bonds.contains_key(b1.into()));
+        assert!(mm.core.atoms.get(h1.into()).unwrap().bonds.contains(&b1));
+        assert!(mm.core.atoms.get(h2.into()).unwrap().bonds.contains(&b1));
+        assert_eq!(mm.core.bonds.get(b1.into()).unwrap().start, h1.into());
+        assert_eq!(mm.core.bonds.get(b1.into()).unwrap().end, h2.into());
     }
 
     //#[test]

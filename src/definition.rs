@@ -12,5 +12,5 @@ use crate::*;
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub(crate) struct Definition {
     pub(crate) symbol: String,
-    pub(crate) members: Vec<Id<FundamentalEntity>>,
+    pub(crate) members: Vec<AnyFundamental>,
 }

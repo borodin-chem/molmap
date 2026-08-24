@@ -8,9 +8,12 @@
 
 use std::fmt::Debug;
 
+use slotmap::SlotMap;
+
 use crate::{
-    graph::MolGraph,
-    id::{EntityId, IdIter},
+    entities::{AtomKey, atom::AtomData},
+    graph::{MolGraph, Stored},
+    id::EntityId,
     view::ViewIter,
     *,
 };
@@ -30,6 +33,14 @@ pub trait MolMapCore {
 
     /// Returns the core molecular graph in mutable form.
     fn core_mut(&mut self) -> &mut MolGraph;
+}
+
+impl<'m, M: MolMap> Stored<'m, M> for Atom {
+    type DATA = AtomData;
+
+    fn get_store(map: &'m M) -> &'m SlotMap<Self::KEY, Self::DATA> {
+        &map.core().atoms
+    }
 }
 
 /// An arena-like data structure to represent a set of chemical entities, their
@@ -87,74 +98,74 @@ pub trait MolMap: Sized + MolMapCore {
     // These all just defer to the inner core struct
 
     /// Returns an iterator over all the IDs of all atoms in the map.
-    fn atom_ids(&'_ self) -> impl Iterator<Item = Id<Atom>> + '_ {
+    fn atom_ids(&'_ self) -> impl Iterator<Item = Atom> + '_ {
         self.core().atom_ids()
     }
 
     /// Returns an iterator over all the IDs of all pseudoatoms in the map.
-    fn pseudoatom_ids(&'_ self) -> impl Iterator<Item = Id<Pseudoatom>> + '_ {
+    fn pseudoatom_ids(&'_ self) -> impl Iterator<Item = Pseudoatom> + '_ {
         self.core().pseudoatom_ids()
     }
 
     /// Returns an iterator over all the IDs of all bonds in the map.
-    fn bond_ids(&'_ self) -> impl Iterator<Item = Id<Bond>> + '_ {
+    fn bond_ids(&'_ self) -> impl Iterator<Item = Bond> + '_ {
         self.core().bond_ids()
     }
 
     /// Returns an iterator over all the IDs of all substituents in the map.
-    fn substituent_ids(&'_ self) -> impl Iterator<Item = Id<Substituent>> + '_ {
+    fn substituent_ids(&'_ self) -> impl Iterator<Item = Substituent> + '_ {
         self.core().substituent_ids()
     }
 
     /// Returns an iterator over all the IDs of all molecules in the map.
-    fn molecule_ids(&'_ self) -> impl Iterator<Item = Id<Molecule>> + '_ {
+    fn molecule_ids(&'_ self) -> impl Iterator<Item = Molecule> + '_ {
         self.core().molecule_ids()
     }
 
-    /// Checks if the map currently contains the atom with the given ID.
-    fn contains_atom(&self, id: Id<Atom>) -> bool {
-        self.core().contains_atom(id)
-    }
+    ///// Checks if the map currently contains the atom with the given ID.
+    //fn contains_atom(&self, id: Id<Atom>) -> bool {
+    //    self.core().contains_atom(id)
+    //}
 
-    /// Checks if the map currently contains the pseudoatom with the given ID.
-    fn contains_pseudoatom(&self, id: Id<Pseudoatom>) -> bool {
-        self.core().contains_pseudoatom(id)
-    }
+    ///// Checks if the map currently contains the pseudoatom with the given ID.
+    //fn contains_pseudoatom(&self, id: Id<Pseudoatom>) -> bool {
+    //    self.core().contains_pseudoatom(id)
+    //}
 
-    /// Checks if the map currently contains the bond with the given ID.
-    fn contains_bond(&self, id: Id<Bond>) -> bool {
-        self.core().contains_bond(id)
-    }
+    ///// Checks if the map currently contains the bond with the given ID.
+    //fn contains_bond(&self, id: Id<Bond>) -> bool {
+    //    self.core().contains_bond(id)
+    //}
 
-    /// Checks if the map currently contains the substituent with the given ID.
-    fn contains_substituent(&self, id: Id<Substituent>) -> bool {
-        self.core().contains_substituent(id)
-    }
+    ///// Checks if the map currently contains the substituent with the given ID.
+    //fn contains_substituent(&self, id: Id<Substituent>) -> bool {
+    //    self.core().contains_substituent(id)
+    //}
 
-    /// Checks if the map currently contains the molecule with the given ID.
-    fn contains_molecule(&self, id: Id<Molecule>) -> bool {
-        self.core().contains_molecule(id)
-    }
+    ///// Checks if the map currently contains the molecule with the given ID.
+    //fn contains_molecule(&self, id: Id<Molecule>) -> bool {
+    //    self.core().contains_molecule(id)
+    //}
 
-    /// Checks if the map currently contains the atomlike with the given ID.
-    fn contains_atomlike(&self, id: Id<impl Atomlike>) -> bool {
-        self.core().contains_atomlike(id)
-    }
+    ///// Checks if the map currently contains the atomlike with the given ID.
+    //fn contains_atomlike(&self, id: Id<impl Atomlike>) -> bool {
+    //    self.core().contains_atomlike(id)
+    //}
 
-    /// Checks if the map currently contains the fundamental with the given ID.
-    fn contains_fundamental(&self, id: Id<impl Fundamental>) -> bool {
-        self.core().contains_fundamental(id)
-    }
+    ///// Checks if the map currently contains the fundamental with the given ID.
+    //fn contains_fundamental(&self, id: Id<impl Fundamental>) -> bool {
+    //    self.core().contains_fundamental(id)
+    //}
 
-    /// Checks if the map currently contains the bondable with the given ID.
-    fn contains_bondable(&self, id: Id<impl Bondable>) -> bool {
-        self.core().contains_bondable(id)
-    }
+    ///// Checks if the map currently contains the bondable with the given ID.
+    //fn contains_bondable(&self, id: Id<impl Bondable>) -> bool {
+    //    self.core().contains_bondable(id)
+    //}
 
-    /// Checks if the map currently contains the collection with the given ID.
-    fn contains_collection(&self, id: Id<impl Collection>) -> bool {
-        self.core().contains_collection(id)
-    }
+    ///// Checks if the map currently contains the collection with the given ID.
+    //fn contains_collection(&self, id: Id<impl Collection>) -> bool {
+    //    self.core().contains_collection(id)
+    //}
 
     // -------
     // Getters
@@ -168,7 +179,7 @@ pub trait MolMap: Sized + MolMapCore {
 
     /// Constructs an immutable view of the given atom,
     /// returning `None` if the ID is invalid.
-    fn atom(&'_ self, id: Id<Atom>) -> Option<View<'_, Self, Atom>> {
+    fn atom(&'_ self, id: Atom) -> Option<View<'_, Self, Atom>> {
         self.core()
             .contains_atom(id)
             .then_some(View { map: self, id })
@@ -176,136 +187,134 @@ pub trait MolMap: Sized + MolMapCore {
 
     /// Constructs a mutable view of the given atom, returning `None` if the ID is
     /// invalid.
-    fn atom_mut(&'_ mut self, id: Id<Atom>) -> Option<ViewMut<'_, Self, Atom>> {
+    fn atom_mut(&'_ mut self, id: Atom) -> Option<ViewMut<'_, Self, Atom>> {
         self.core()
             .contains_atom(id)
             .then_some(ViewMut { map: self, id })
     }
 
     /// Returns an iterator over views of all atoms in the map.
-    fn atoms(
-        &'_ self,
-    ) -> ViewIter<'_, Self, Atom, impl Iterator<Item = Id<Atom>> + ExactSizeIterator> {
+    fn atoms(&'_ self) -> ViewIter<'_, Self, Atom, impl Iterator<Item = Atom> + ExactSizeIterator> {
         ViewIter {
             map: self,
-            ids: IdIter(self.core().atoms.keys()),
+            ids: self.core().atom_ids(),
         }
     }
 
     /// Constructs an immutable view of the given pseudoatom, returning `None` if the
     /// ID is invalid.
-    fn pseudoatom(&'_ self, id: Id<Pseudoatom>) -> Option<View<'_, Self, Pseudoatom>> {
+    fn pseudoatom(&'_ self, id: Pseudoatom) -> Option<View<'_, Self, Pseudoatom>> {
         self.core()
             .pseudoatoms
-            .contains_key(id)
+            .contains_key(id.into())
             .then_some(View { map: self, id })
     }
 
     /// Constructs a mutable view of the given pseudoatom, returning `None` if the
     /// ID is invalid.
-    fn pseudoatom_mut(&'_ mut self, id: Id<Pseudoatom>) -> Option<ViewMut<'_, Self, Pseudoatom>> {
+    fn pseudoatom_mut(&'_ mut self, id: Pseudoatom) -> Option<ViewMut<'_, Self, Pseudoatom>> {
         self.core()
             .pseudoatoms
-            .contains_key(id)
+            .contains_key(id.into())
             .then_some(ViewMut { map: self, id })
     }
 
     /// Returns an iterator over views of all pseudoatoms in the map.
     fn pseudoatoms(
         &'_ self,
-    ) -> ViewIter<'_, Self, Pseudoatom, impl Iterator<Item = Id<Pseudoatom>> + ExactSizeIterator>
-    {
+    ) -> ViewIter<'_, Self, Pseudoatom, impl Iterator<Item = Pseudoatom> + ExactSizeIterator> {
         ViewIter {
             map: self,
-            ids: IdIter(self.core().pseudoatoms.keys()),
+            ids: self.core().pseudoatom_ids(),
         }
     }
 
     /// Constructs an immutable `View<Bond>` of the given bond, returning `None` if the ID is
     /// invalid.
-    fn bond(&'_ self, id: Id<Bond>) -> Option<View<'_, Self, Bond>> {
+    fn bond(&'_ self, id: Bond) -> Option<View<'_, Self, Bond>> {
         self.core()
             .bonds
-            .contains_key(id)
+            .contains_key(id.into())
             .then_some(View { map: self, id })
     }
 
     /// Constructs a mutable `View<Bond>Mut` of the given bond, returning `None` if the ID is
     /// invalid.
-    fn bond_mut(&'_ mut self, id: Id<Bond>) -> Option<ViewMut<'_, Self, Bond>> {
+    fn bond_mut(&'_ mut self, id: Bond) -> Option<ViewMut<'_, Self, Bond>> {
         self.core()
             .bonds
-            .contains_key(id)
+            .contains_key(id.into())
             .then_some(ViewMut { map: self, id })
     }
 
     /// Returns an iterator over views of all bonds in the map.
-    fn bonds(
-        &'_ self,
-    ) -> ViewIter<'_, Self, Bond, impl Iterator<Item = Id<Bond>> + ExactSizeIterator> {
+    fn bonds(&'_ self) -> ViewIter<'_, Self, Bond, impl Iterator<Item = Bond> + ExactSizeIterator> {
         ViewIter {
             map: self,
-            ids: IdIter(self.core().bonds.keys()),
+            ids: self.core().bond_ids(),
         }
     }
 
     /// Constructs an immutable `View<Substituent>` of the given substituent, returning `None` if the ID is
     /// invalid.
-    fn substituent(&'_ self, id: Id<Substituent>) -> Option<View<'_, Self, Substituent>> {
+    fn substituent(&'_ self, id: Substituent) -> Option<View<'_, Self, Substituent>> {
         self.core()
             .substituents
-            .contains_key(id)
+            .contains_key(id.into())
             .then_some(View { map: self, id })
     }
 
     /// Constructs a mutable `View<Substituent>Mut` of the given substituent, returning `None` if the ID is
     /// invalid.
-    fn substituent_mut(
-        &'_ mut self,
-        id: Id<Substituent>,
-    ) -> Option<ViewMut<'_, Self, Substituent>> {
+    fn substituent_mut(&'_ mut self, id: Substituent) -> Option<ViewMut<'_, Self, Substituent>> {
         self.core()
             .substituents
-            .contains_key(id)
+            .contains_key(id.into())
             .then_some(ViewMut { map: self, id })
     }
 
     /// Returns an iterator over views of all substituents in the map.
     fn substituents(
         &'_ self,
-    ) -> ViewIter<'_, Self, Substituent, impl Iterator<Item = Id<Substituent>> + ExactSizeIterator>
+    ) -> ViewIter<'_, Self, Substituent, impl Iterator<Item = Substituent> + ExactSizeIterator>
     {
         ViewIter {
             map: self,
-            ids: IdIter(self.core().substituents.keys()),
+            ids: self.core().substituent_ids(),
         }
     }
 
     /// Constructs an immutable `View<Molecule>` of the given molecule, returning `None` if the ID is
     /// invalid.
-    fn molecule(&'_ self, id: Id<Molecule>) -> Option<View<'_, Self, Molecule>> {
+    fn molecule(&'_ self, id: Molecule) -> Option<View<'_, Self, Molecule>> {
         self.core()
             .molecules
-            .contains_key(id)
+            .contains_key(id.into())
             .then_some(View { map: self, id })
     }
 
     /// Constructs a mutable `View<Molecule>Mut` of the given molecule, returning `None` if the ID is
     /// invalid.
-    fn molecule_mut(&'_ mut self, id: Id<Molecule>) -> Option<ViewMut<'_, Self, Molecule>> {
+    fn molecule_mut(&'_ mut self, id: Molecule) -> Option<ViewMut<'_, Self, Molecule>> {
         self.core()
             .molecules
-            .contains_key(id)
+            .contains_key(id.into())
             .then_some(ViewMut { map: self, id })
     }
 
     /// Returns an iterator over views of all molecules in the map.
     fn molecules(
         &'_ self,
-    ) -> ViewIter<'_, Self, Molecule, impl Iterator<Item = Id<Molecule>> + ExactSizeIterator> {
+    ) -> ViewIter<'_, Self, Molecule, impl Iterator<Item = Molecule> + ExactSizeIterator> {
         ViewIter {
             map: self,
-            ids: IdIter(self.core().molecules.keys()),
+            ids: self.core().molecule_ids(),
         }
     }
+
+    //fn view<E: Entity + Stored<Self>>(&'_ self, id: E) -> View<'_, Self, E> {
+    //    E::get_store(self)
+    //        .contains_key(id)
+    //        .then_some(View { map: self, id })
+    //}
 }

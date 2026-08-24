@@ -10,23 +10,11 @@ use slotmap::basic::Keys;
 
 use crate::*;
 
-/// Smallest particle still characterizing a chemical element.
-#[derive(Copy, Clone, Debug)]
-pub struct Atom;
-
-impl Entity for Atom {}
-
-impl KeyEntity for Atom {
-    fn kind() -> EntityKind {
-        EntityKind::Atom
-    }
-}
-
 /// The core data of an atom entity.
 #[derive(Clone, Debug)]
 pub(crate) struct AtomData {
     pub(crate) element: Element,
-    pub(crate) bonds: Vec<Id<Bond>>,
+    pub(crate) bonds: Vec<Bond>,
 }
 
 impl AtomData {
@@ -42,7 +30,7 @@ pub type AtomView<'a, M> = View<'a, M, Atom>;
 
 impl<'a, M: MolMap> View<'a, M, Atom> {
     fn core(&self) -> &AtomData {
-        self.map.core().atoms.get(self.id).unwrap()
+        self.map.core().atoms.get(self.id.into()).unwrap()
     }
 
     pub fn element(&self) -> Element {
@@ -53,7 +41,7 @@ impl<'a, M: MolMap> View<'a, M, Atom> {
         self.core().element.symbol()
     }
 
-    pub fn bonds(&self) -> &[Id<Bond>] {
+    pub fn bonds(&self) -> &[Bond] {
         &self.core().bonds
     }
 }

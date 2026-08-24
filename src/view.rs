@@ -8,7 +8,7 @@
 
 use std::iter::FusedIterator;
 
-use crate::{id::IdIter, *};
+use crate::{MolMap, entities::*};
 
 // Defines immutable and mutable views of an entity type for a generic [`MolMap`],
 // as well as an iterator over the immutable view type.
@@ -42,7 +42,7 @@ use crate::{id::IdIter, *};
 /// An immutable view of an individual entity in a specific [`MolMap`].
 pub struct View<'a, M: MolMap, E: Entity> {
     pub(crate) map: &'a M,
-    pub(crate) id: Id<E>,
+    pub(crate) id: E,
 }
 
 impl<'a, M: MolMap, E: Entity> View<'a, M, E> {
@@ -53,14 +53,8 @@ impl<'a, M: MolMap, E: Entity> View<'a, M, E> {
     //    self.map.core().[<$name:lower s>].get(self.id).unwrap()
     //}
 
-    pub fn id(&self) -> Id<E> {
+    pub fn id(&self) -> E {
         self.id
-    }
-}
-
-impl<'a, M: MolMap, E: Entity> From<View<'a, M, E>> for Id<E> {
-    fn from(view: View<'a, M, E>) -> Self {
-        view.id
     }
 }
 
@@ -73,7 +67,7 @@ impl<'a, M: MolMap, E: Entity> From<View<'a, M, E>> for Id<E> {
 #[derive(Debug)]
 pub struct ViewMut<'a, M: MolMap, E: Entity> {
     pub(crate) map: &'a mut M,
-    pub(crate) id: Id<E>,
+    pub(crate) id: E,
 }
 
 impl<'a, M: MolMap, E: Entity> ViewMut<'a, M, E> {
@@ -86,30 +80,24 @@ impl<'a, M: MolMap, E: Entity> ViewMut<'a, M, E> {
     }
 }
 
-impl<'a, M: MolMap, E: Entity> From<ViewMut<'a, M, E>> for Id<E> {
-    fn from(view: ViewMut<'a, M, E>) -> Self {
-        view.id
-    }
-}
-
 /// An iterator that yields an immutable view of each of a set of entities in turn.
 pub struct ViewIter<'a, M, E, I>
 where
     M: MolMap,
     E: Entity,
-    I: Iterator<Item = Id<E>>,
+    I: Iterator<Item = E>,
 {
     pub(crate) map: &'a M,
-    pub(crate) ids: IdIter<E, I>,
+    pub(crate) ids: I,
 }
 
 impl<'a, M, E, I> ViewIter<'a, M, E, I>
 where
     M: MolMap,
     E: Entity,
-    I: Iterator<Item = Id<E>>,
+    I: Iterator<Item = E>,
 {
-    pub fn ids(self) -> IdIter<E, I> {
+    pub fn ids(self) -> I {
         self.ids
     }
 }
@@ -118,7 +106,7 @@ impl<'a, M, E, I> Iterator for ViewIter<'a, M, E, I>
 where
     M: MolMap,
     E: Entity,
-    I: Iterator<Item = Id<E>>,
+    I: Iterator<Item = E>,
 {
     type Item = View<'a, M, E>;
 
@@ -135,7 +123,7 @@ impl<'a, M, E, I> ExactSizeIterator for ViewIter<'a, M, E, I>
 where
     M: MolMap,
     E: Entity,
-    I: Iterator<Item = Id<E>> + ExactSizeIterator,
+    I: Iterator<Item = E> + ExactSizeIterator,
 {
     fn len(&self) -> usize {
         self.ids.len()
@@ -146,6 +134,6 @@ impl<'a, M, E, I> FusedIterator for ViewIter<'a, M, E, I>
 where
     M: MolMap,
     E: Entity,
-    I: Iterator<Item = Id<E>> + ExactSizeIterator,
+    I: Iterator<Item = E> + FusedIterator,
 {
 }

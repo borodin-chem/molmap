@@ -13,7 +13,6 @@ pub use nalgebra;
 
 mod definition;
 mod element;
-mod entity;
 mod error;
 mod graph;
 mod id;
@@ -27,14 +26,11 @@ pub mod entities;
 
 pub(crate) use categories::*;
 pub use element::Element;
+pub(crate) use entities::Keyed;
 pub use entities::bond::BondType;
-pub use entities::{
-    atom::Atom, bond::Bond, molecule::Molecule, pseudoatom::Pseudoatom, substituent::Substituent,
-};
-pub(crate) use entity::KeyEntity;
-pub use entity::{Entity, EntityKind};
+pub use entities::{Atom, Bond, Molecule, Pseudoatom, Substituent};
+pub use entities::{Entity, EntityKind};
 pub use error::{MolMapError, MolMapResult};
-pub use id::Id;
 pub use maps::{MolMap0, MolMap2, MolMap3};
 pub use pseudoelement::Pseudoelement;
 pub use traits::{MolMap, SpatialMolMap};
