@@ -16,7 +16,7 @@ use std::iter::FusedIterator;
 
 use slotmap::{Key, new_key_type};
 
-use crate::{MolMapError, MolMapResult, id::EntityId};
+use crate::{MolMapError, MolMapResult, id::Id};
 
 /// The kind of an entity.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
@@ -73,21 +73,30 @@ impl TryFrom<u8> for EntityKind {
 ///
 /// This trait is sealed and cannot be implemented outside of the crate.
 pub trait Entity: Copy + Clone + Eq {
-    // It is important that this trait remains sealed! Any kinds of entity
-    // that molmap doesn't know about will lead to problems. It being sealed is
-    // also relied upon by traits that have this as a supertrait e.g. the entity
+    // It is important that this trait remains sealed! Any kinds of entity that
+    // molmap doesn't know about will lead to problems. It being sealed is also
+    // relied upon by traits that have this as a supertrait e.g. the entity
     // category traits (Bondable, Atomlike etc.).
     //
-    // What makes this trait sealed currently is the fact that EntityId is not a
-    // public type, so foreign types cannot implement new_unchecked or into_inner
-    // (and nor can other crates call those methods). So it is important that
-    // EntityId *remains* private.
-
+    // What makes this trait sealed currently is the fact that Id is not
+    // namable by other crates, so foreign types cannot implement new_unchecked
+    // or into_inner and therefore cannot implement the trait. It is therefore
+    // crucial that that remains the case i.e. the id module remains private and
+    // Id is not publicly re-exported anywhere.
+    //
+    // It's also very important that downstream code cannot create an entity of
+    // a specific kind from a generic Id without the discriminant being
+    // checked, so it is *essential* that new_unchecked not just cannot be
+    // *implemented* but also cannot be *called*. As long as Id stays
+    // unnamable, this is the case.
+    //
+    // It is fine for into_inner to be callable downstream and for an Id
+    // to be obtained, as long as nothing can be done with that Id.
     /// Creates a new ID for the requested kind of entity without checking that
     /// the discriminant of the ID is correct for that kind.
-    fn new_unchecked(id: EntityId) -> Self;
+    fn new_unchecked(id: Id) -> Self;
 
-    fn into_inner(self) -> EntityId;
+    fn into_inner(self) -> Id;
 
     fn kind(&self) -> EntityKind {
         self.into_inner().kind()
@@ -117,14 +126,14 @@ pub trait Entity: Copy + Clone + Eq {
 
 /// An entity that may be of any kind.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub struct AnyEntity(pub(crate) EntityId);
+pub struct AnyEntity(pub(crate) Id);
 
 impl Entity for AnyEntity {
-    fn new_unchecked(id: EntityId) -> Self {
+    fn new_unchecked(id: Id) -> Self {
         Self(id)
     }
 
-    fn into_inner(self) -> EntityId {
+    fn into_inner(self) -> Id {
         self.0
     }
 }
@@ -154,7 +163,7 @@ pub(crate) trait Keyed: Entity {
     }
 
     fn from_key(key: Self::KEY) -> Self {
-        Self::new_unchecked(EntityId::from_key_data(Self::KIND, key.data()))
+        Self::new_unchecked(Id::from_key_data(Self::KIND, key.data()))
     }
 
     fn to_key(self) -> Self::KEY {
@@ -170,14 +179,14 @@ macro_rules! new_keyed_entity {
         paste::paste! {
             $(#[$doc])*
             #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-            pub struct $kind(pub(crate) EntityId);
+            pub struct $kind(pub(crate) Id);
 
             impl Entity for $kind {
-                fn new_unchecked(id: EntityId) -> Self {
+                fn new_unchecked(id: Id) -> Self {
                     Self(id)
                 }
 
-                fn into_inner(self) -> EntityId {
+                fn into_inner(self) -> Id {
                     self.0
                 }
 
@@ -329,10 +338,10 @@ mod tests {
     const PSEUDOATOM_RAW: NonZeroU64 = NonZeroU64::new(0x1_03_00000A).unwrap(); // version: 1, kind: Pseudoatom, idx: 10
     const MOL_RAW: NonZeroU64 = NonZeroU64::new(0x1_1F_000001).unwrap(); // version: 1, kind: Molecule, idx: 1
 
-    const BOND: Bond = Bond(EntityId(BOND_RAW));
-    const ATOM: Atom = Atom(EntityId(ATOM_RAW));
-    const PSEUDOATOM: Pseudoatom = Pseudoatom(EntityId(PSEUDOATOM_RAW));
-    const MOL: Molecule = Molecule(EntityId(MOL_RAW));
+    const BOND: Bond = Bond(Id(BOND_RAW));
+    const ATOM: Atom = Atom(Id(ATOM_RAW));
+    const PSEUDOATOM: Pseudoatom = Pseudoatom(Id(PSEUDOATOM_RAW));
+    const MOL: Molecule = Molecule(Id(MOL_RAW));
 
     #[test]
     fn key_kind() {

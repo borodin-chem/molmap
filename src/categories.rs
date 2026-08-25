@@ -7,7 +7,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::entities::*;
-use crate::id::EntityId;
+use crate::id::Id;
 
 ///// A category encompassing multiple kinds of entity with shared behaviour.
 //pub trait Category: Entity {
@@ -62,14 +62,14 @@ macro_rules! define_category {
 
             #[doc = concat!("An entity that may be of any kind that implements the [`", stringify!([<$category>]), "`] trait.")]
             #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-            pub struct [<Any $category>](pub(crate) EntityId);
+            pub struct [<Any $category>](pub(crate) Id);
 
             impl Entity for [<Any $category>] {
-                fn new_unchecked(id: EntityId) -> Self {
+                fn new_unchecked(id: Id) -> Self {
                     Self(id)
                 }
 
-                fn into_inner(self) -> EntityId {
+                fn into_inner(self) -> Id {
                     self.0
                 }
             }
@@ -217,7 +217,7 @@ impl From<AnyAtomlike> for AnyBondable {
 mod tests {
     use std::num::NonZeroU64;
 
-    use crate::id::EntityId;
+    use crate::id::Id;
 
     use super::*;
 
@@ -230,10 +230,10 @@ mod tests {
     const PSEUDOATOM_RAW: NonZeroU64 = NonZeroU64::new(0x1_03_00000A).unwrap(); // version: 1, kind: Pseudoatom, idx: 10
     const MOL_RAW: NonZeroU64 = NonZeroU64::new(0x1_1F_000001).unwrap(); // version: 1, kind: Molecule, idx: 1
 
-    const BOND: Bond = Bond(EntityId(BOND_RAW));
-    const ATOM: Atom = Atom(EntityId(ATOM_RAW));
-    const PSEUDOATOM: Pseudoatom = Pseudoatom(EntityId(PSEUDOATOM_RAW));
-    const MOL: Molecule = Molecule(EntityId(MOL_RAW));
+    const BOND: Bond = Bond(Id(BOND_RAW));
+    const ATOM: Atom = Atom(Id(ATOM_RAW));
+    const PSEUDOATOM: Pseudoatom = Pseudoatom(Id(PSEUDOATOM_RAW));
+    const MOL: Molecule = Molecule(Id(MOL_RAW));
 
     //#[test]
     //fn tagged() {
@@ -252,9 +252,9 @@ mod tests {
 //
 //    #[test]
 //    fn category_kind() {
-//        let atomlike = Id::<Atomlike>::new_unchecked(EntityId(ATOM_RAW));
-//        let fundamental = Id::<Fundamental>::new_unchecked(EntityId(BOND_RAW));
-//        let collection = Id::<Collection>::new_unchecked(EntityId(MOL_RAW));
+//        let atomlike = Id::<Atomlike>::new_unchecked(Id(ATOM_RAW));
+//        let fundamental = Id::<Fundamental>::new_unchecked(Id(BOND_RAW));
+//        let collection = Id::<Collection>::new_unchecked(Id(MOL_RAW));
 //        assert_eq!(atomlike.kind(), EntityKind::Atom);
 //        assert_eq!(fundamental.kind(), EntityKind::Bond);
 //        assert_eq!(collection.kind(), EntityKind::Molecule);
@@ -274,7 +274,7 @@ mod tests {
 //        );
 //        // Conversion via the Entity works too
 //        //assert_eq!(
-//        //    Atomlike::try_from(EntityId::from(atom)).unwrap(),
+//        //    Atomlike::try_from(Id::from(atom)).unwrap(),
 //        //    atomlike
 //        //);
 //    }
@@ -287,8 +287,8 @@ mod tests {
 //        // There's simply no From implementation
 //        // It can be attempted via the Entity, but it should fail
 //        //let bond = BOND;
-//        //let attempt = Atomlike::try_from(EntityId::from(bond));
-//        //assert!(Atomlike::try_from(EntityId::from(bond)).is_err());
+//        //let attempt = Atomlike::try_from(Id::from(bond));
+//        //assert!(Atomlike::try_from(Id::from(bond)).is_err());
 //    }
 //
 //    #[test]
@@ -311,7 +311,7 @@ mod tests {
 //        let bond = BOND;
 //        assert_eq!(
 //            Id::<Fundamental>::from(bond),
-//            Id::<Fundamental>::new_unchecked(EntityId(BOND_RAW))
+//            Id::<Fundamental>::new_unchecked(Id(BOND_RAW))
 //        );
 //        assert_eq!(
 //            Id::<Bond>::try_from(Id::<Fundamental>::from(bond)).unwrap(),
@@ -320,7 +320,7 @@ mod tests {
 //        // Molecule to Collection to Entity to Molecule should all work
 //        let mol = MOL;
 //        let col: Collection = mol.into();
-//        let ent: EntityId = col.into();
+//        let ent: Id = col.into();
 //        let recovered: Molecule = ent.try_into().unwrap();
 //        assert_eq!(ent, mol.0);
 //        assert_eq!(recovered, mol);

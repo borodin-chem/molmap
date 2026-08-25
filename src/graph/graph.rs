@@ -10,7 +10,7 @@ use slotmap::{SlotMap, basic::Keys};
 
 use crate::{
     entities::{atom::*, bond::*, molecule::*, pseudoatom::*, substituent::*, *},
-    id::EntityId,
+    id::Id,
     *,
 };
 

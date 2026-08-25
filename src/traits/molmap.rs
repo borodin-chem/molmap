@@ -13,7 +13,7 @@ use slotmap::SlotMap;
 use crate::{
     entities::{AtomKey, atom::AtomData},
     graph::{MolGraph, Stored},
-    id::EntityId,
+    id::Id,
     view::ViewIter,
     *,
 };

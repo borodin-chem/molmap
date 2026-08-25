@@ -63,18 +63,18 @@ use crate::*;
 /// The ID of one of any kind of entity, where the kind of entity is encoded by
 /// an 8-bit discriminant.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-// It is crucial that this visibility remains pub(crate) and not pub, as it is
-// what ensures that Entity is a sealed trait!
-pub(crate) struct EntityId(pub(crate) NonZeroU64);
+// It is crucial that this module remains private and that Id is not re-exported
+// as pub, as its unnamability is what ensures that Entity is a sealed trait!
+pub struct Id(pub(crate) NonZeroU64);
 
 // Layout:
 // - Bits 63–32 = version (`version` field of `KeyData`)
 // - Bits 31–24 = discriminant/kind
 // - Bits 23–0  = index (`idx` field of `KeyData` truncated to 28 bits)
 
-impl EntityId {
+impl Id {
     const DISC_OFFSET: u64 = 24;
-    const DISC_MASK: u64 = 0xFF << EntityId::DISC_OFFSET;
+    const DISC_MASK: u64 = 0xFF << Id::DISC_OFFSET;
     // Like for KeyData, the maximum index is reserved for use as the null value
     const MAX_IDX: u32 = 0x0FFFFFFF;
 
@@ -117,7 +117,7 @@ impl EntityId {
     ///
     /// # Panics
     ///
-    /// Panics if the key's index equals or exceeds [`EntityId::MAX_IDX`] = 2<sup>28</sup> − 1,
+    /// Panics if the key's index equals or exceeds [`Id::MAX_IDX`] = 2<sup>28</sup> − 1,
     /// in which case the `MolMap` is full.
     #[inline]
     const fn from_raw_key(kind: EntityKind, ffi: u64) -> Self {
@@ -127,7 +127,7 @@ impl EntityId {
         }
         // The version is non-zero and therefore the FFI representation is too,
         // so this is safe to do
-        EntityId(unsafe {
+        Id(unsafe {
             NonZeroU64::new_unchecked(
                 ((kind as u64) << Self::DISC_OFFSET) | (ffi & !Self::DISC_MASK),
             )
@@ -144,7 +144,7 @@ impl EntityId {
     ///
     /// # Panics
     ///
-    /// Panics if the key's index equals or exceeds [`EntityId::MAX_IDX`] = 2<sup>28</sup> − 1,
+    /// Panics if the key's index equals or exceeds [`Id::MAX_IDX`] = 2<sup>28</sup> − 1,
     /// in which case the `MolMap` is full.
     #[inline]
     pub(crate) fn from_key_data(kind: EntityKind, key_data: KeyData) -> Self {
@@ -174,7 +174,7 @@ impl EntityId {
     }
 }
 
-impl Debug for EntityId {
+impl Debug for Id {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn entity_getters() {
-        let e = EntityId::from_raw(ATOM_RAW).unwrap();
+        let e = Id::from_raw(ATOM_RAW).unwrap();
         assert_eq!(e.discriminant(), 0);
         assert_eq!(e.version(), 3);
         assert_eq!(e.index(), 16);
@@ -234,30 +234,27 @@ mod tests {
     #[test]
     fn from_raw() {
         for n in [0x1_00000001, 0x1_00000002] {
-            assert_eq!(
-                EntityId::from_raw(n).unwrap(),
-                EntityId(NonZeroU64::new(n).unwrap()),
-            )
+            assert_eq!(Id::from_raw(n).unwrap(), Id(NonZeroU64::new(n).unwrap()),)
         }
     }
 
     #[test]
     fn from_key_data() {
         let k = KeyData::from_ffi(0x1_00000001); // idx: 1, version: 1
-        let id = EntityId::from_key_data(EntityKind::Atom, k);
+        let id = Id::from_key_data(EntityKind::Atom, k);
         // Atom has discriminant of 0
         assert_eq!(id.to_raw(), 0x1_00000001);
         new_key_type! { struct AtomKey; }
         let mut sm: SlotMap<AtomKey, usize> = SlotMap::with_key();
         let first = sm.insert(1); // idx: 1, version: 1
         assert_eq!(
-            EntityId::from_key_data(EntityKind::Atom, first.data()),
-            EntityId::from_raw(0x1_00000001).unwrap()
+            Id::from_key_data(EntityKind::Atom, first.data()),
+            Id::from_raw(0x1_00000001).unwrap()
         );
         let second = sm.insert(2); // idx: 2, version: 1
         assert_eq!(
-            EntityId::from_key_data(EntityKind::Atom, second.data()),
-            EntityId::from_raw(0x1_00000002).unwrap()
+            Id::from_key_data(EntityKind::Atom, second.data()),
+            Id::from_raw(0x1_00000002).unwrap()
         );
     }
 
@@ -265,14 +262,14 @@ mod tests {
     #[should_panic]
     fn panics_on_overflow() {
         let overflowed = KeyData::from_ffi(0x1_10000000);
-        let _ = EntityId::from_key_data(EntityKind::Molecule, overflowed);
+        let _ = Id::from_key_data(EntityKind::Molecule, overflowed);
     }
 
     #[test]
     fn key_data_round_trip() {
         // Round trip is survived by any valid key that hasn't overflowed
         let kd = KeyData::from_ffi(0x1_00123456); // idx: 123456, version: 1
-        let atom = EntityId::from_key_data(EntityKind::Atom, kd);
+        let atom = Id::from_key_data(EntityKind::Atom, kd);
         let recovered = atom.to_key_data();
         assert_eq!(kd, recovered);
         // Unfortunately, a null key doesn't survive a round trip
@@ -285,16 +282,16 @@ mod tests {
     #[test]
     fn different_discriminants_same_keys() {
         // First assigned key in two different slotmaps
-        let atom = EntityId::from_raw(0x1_02_000001).unwrap();
-        let bond = EntityId::from_raw(0x1_01_000001).unwrap();
+        let atom = Id::from_raw(0x1_02_000001).unwrap();
+        let bond = Id::from_raw(0x1_01_000001).unwrap();
         assert_eq!(atom.to_raw_key(), bond.to_raw_key());
     }
 
     #[test]
     fn entity_kind() {
-        let atom = EntityId::from_raw(ATOM_RAW).unwrap();
-        let bond = EntityId::from_raw(BOND_RAW).unwrap();
-        let mol = EntityId::from_raw(MOLECULE_RAW).unwrap();
+        let atom = Id::from_raw(ATOM_RAW).unwrap();
+        let bond = Id::from_raw(BOND_RAW).unwrap();
+        let mol = Id::from_raw(MOLECULE_RAW).unwrap();
         assert_eq!(atom.kind(), EntityKind::Atom);
         assert_eq!(bond.kind(), EntityKind::Bond);
         assert_eq!(mol.kind(), EntityKind::Molecule);
