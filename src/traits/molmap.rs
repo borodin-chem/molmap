@@ -35,11 +35,23 @@ pub trait MolMapCore {
     fn core_mut(&mut self) -> &mut MolGraph;
 }
 
-impl<'m, M: MolMap> Stored<'m, M> for Atom {
+// The Stored trait allows methods of MolGraph and the MolMap types to be
+// generic over all kinds of entity *when the same thing is done for each kind*.
+// However, the number of methods in the public API this applies to is limited:
+// - Methods that involve existing entities should go via the respective View
+//   (which delegate to methods on the map, which are unlikely to be generic)
+// - Methods that are different for each entity type (e.g. entity addition)
+//   should not be generic (as they would require a new trait anyway)
+
+impl<M: MolMap> Stored<M> for Atom {
     type DATA = AtomData;
 
-    fn get_store(map: &'m M) -> &'m SlotMap<Self::KEY, Self::DATA> {
+    fn get_store(map: &M) -> &SlotMap<Self::KEY, Self::DATA> {
         &map.core().atoms
+    }
+
+    fn get_store_mut(map: &mut M) -> &mut SlotMap<Self::KEY, Self::DATA> {
+        &mut map.core_mut().atoms
     }
 }
 

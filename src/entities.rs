@@ -162,7 +162,7 @@ pub enum TaggedEntity {
 
 /// A fundamental kind of entity in a [`MolMap`], with a backing `SlotMap`.
 pub(crate) trait Keyed: Entity {
-    type KEY: slotmap::Key;
+    type KEY: slotmap::Key + 'static;
     const KIND: EntityKind;
 
     /// Returns the corresponding kind of the entity.

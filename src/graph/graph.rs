@@ -6,6 +6,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::iter::FusedIterator;
+
 use slotmap::{SlotMap, basic::Keys};
 
 use crate::{
@@ -35,18 +37,29 @@ pub struct MolGraph {
     pub(crate) molecules: SlotMap<MoleculeKey, MoleculeData>,
 }
 
-/// A trait implemented for each keyed entity type stored in the map.
-pub(crate) trait Stored<'m, M>: Entity + Keyed {
-    type DATA;
+// The Stored trait allows methods of MolGraph and the MolMap types to be
+// generic over all kinds of entity *when the same thing is done for each kind*.
 
-    fn get_store(map: &'m M) -> &'m SlotMap<Self::KEY, Self::DATA>;
+/// A trait implemented for each keyed entity type stored in the map.
+pub(crate) trait Stored<M>: Entity + Keyed {
+    type DATA: 'static;
+
+    /// Returns a reference to the map's `SlotMap` that holds this entity.
+    fn get_store(map: &M) -> &SlotMap<Self::KEY, Self::DATA>;
+
+    /// Returns a mutable reference to the map's `SlotMap` that holds this entity.
+    fn get_store_mut(map: &mut M) -> &mut SlotMap<Self::KEY, Self::DATA>;
 }
 
-impl Stored<'_, MolGraph> for Atom {
+impl Stored<MolGraph> for Atom {
     type DATA = AtomData;
 
-    fn get_store(map: &MolGraph) -> &SlotMap<AtomKey, AtomData> {
+    fn get_store(map: &MolGraph) -> &SlotMap<Self::KEY, Self::DATA> {
         &map.atoms
+    }
+
+    fn get_store_mut(map: &mut MolGraph) -> &mut SlotMap<Self::KEY, Self::DATA> {
+        &mut map.atoms
     }
 }
 
@@ -81,13 +94,23 @@ impl MolGraph {
     }
 }
 
+/// Methods generic over all stored kinds of entity, that do the same regardless of kind.
+impl MolGraph {
+    /// Checks if the map currently contains the given entity.
+    pub(crate) fn contains<E: Entity + Stored<MolGraph>>(&self, id: E) -> bool {
+        E::get_store(self).contains_key(id.to_key())
+    }
+
+    /// Returns an iterator over all the IDs of all of a given entity type in the map.
+    pub(crate) fn all<E: Entity + Stored<MolGraph>>(
+        &'_ self,
+    ) -> impl Iterator<Item = E> + ExactSizeIterator + FusedIterator {
+        E::get_store(self).keys().map(|k| E::from_key(k))
+    }
+}
+
 /// Methods for querying entity IDs.
 impl MolGraph {
-    ///// Returns an iterator over all the IDs of all of a given entity type in the map.
-    //pub(crate) fn ids<'m, E: Entity + Stored<'m, MolGraph>>(&'m self) -> impl Iterator<Item = E> {
-    //    E::get_store(self).keys().map(|k| E::from_key(k))
-    //}
-
     /// Returns an iterator over all the IDs of all atoms in the map.
     pub(crate) fn atom_ids(&'_ self) -> impl Iterator<Item = Atom> + ExactSizeIterator {
         self.atoms.keys().map(|k| Atom::from_key(k))
