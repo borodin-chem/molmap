@@ -80,37 +80,43 @@ impl Id {
 
     /// Extracts the discriminant field.
     #[inline]
-    fn discriminant(&self) -> u8 {
-        ((u64::from(self.0) & Self::DISC_MASK) >> Self::DISC_OFFSET) as u8
+    const fn discriminant(&self) -> u8 {
+        ((self.0.get() & Self::DISC_MASK) >> Self::DISC_OFFSET) as u8
     }
 
     /// Extracts the version field.
     #[inline]
-    fn version(&self) -> u32 {
-        (u64::from(self.0) >> 32) as u32
+    const fn version(&self) -> u32 {
+        (self.0.get() >> 32) as u32
     }
 
     /// Extracts the index field.
     #[inline]
-    fn index(&self) -> u32 {
-        (u64::from(self.0) & !Self::DISC_MASK) as u32
+    const fn index(&self) -> u32 {
+        (self.0.get() & !Self::DISC_MASK) as u32
     }
 
     /// Wraps a (non-zero) integer to create an ID.
     ///
-    /// Returns `None` if `n` is zero.
+    /// Returns `None` if `n` is zero or if the discriminant is an invalid value.
     #[inline]
     pub(crate) const fn from_raw(n: u64) -> Option<Self> {
-        match NonZeroU64::new(n) {
-            Some(non_zero) => Some(Self(non_zero)),
-            None => None,
+        if let Some(non_zero) = NonZeroU64::new(n) {
+            let id = Self(non_zero);
+            if EntityKind::from_u8(id.discriminant()).is_some() {
+                Some(id)
+            } else {
+                None
+            }
+        } else {
+            None
         }
     }
 
     /// Returns the inner value with the discriminant as a normal `u64`.
     #[inline]
-    pub(crate) fn to_raw(self) -> u64 {
-        u64::from(self.0)
+    pub(crate) const fn to_raw(self) -> u64 {
+        self.0.get()
     }
 
     /// Wraps the FFI representation of a `slotmap::Key` to create an ID.
@@ -136,8 +142,8 @@ impl Id {
 
     /// Returns the inner value without the discriminant (equivalent to the FFI representation of the `slotmap::Key`).
     #[inline]
-    fn to_raw_key(self) -> u64 {
-        u64::from(self.0) & !Self::DISC_MASK
+    const fn to_raw_key(self) -> u64 {
+        self.0.get() & !Self::DISC_MASK
     }
 
     /// Wraps the key data of a `slotmap::Key` to create an ID.
@@ -163,14 +169,14 @@ impl Id {
     ///
     /// Following `slotmap`, the null key is the one with the maximum index.
     #[inline]
-    fn is_null(&self) -> bool {
+    const fn is_null(&self) -> bool {
         self.index() == Self::MAX_IDX
     }
 
     /// Returns the kind of entity that the ID represents, amongst all possible
     /// kinds of entity.
-    pub(crate) fn kind(&self) -> EntityKind {
-        EntityKind::try_from(self.discriminant()).expect("The discriminant should never be invalid")
+    pub(crate) const fn kind(&self) -> EntityKind {
+        EntityKind::from_u8(self.discriminant()).expect("The discriminant should never be invalid")
     }
 }
 
@@ -201,7 +207,7 @@ mod tests {
 
     const BOND_RAW: u64 = 0x1_01_000008; // version: 1, kind: Bond, idx: 8
     const ATOM_RAW: u64 = 0x3_00_000010; // version: 3, kind: Atom, idx: 16, (version always odd for occupied slots)
-    const PSEUDOATOM_RAW: u64 = 0x1_03_00000A; // version: 1, kind: Pseudoatom, idx: 10
+    const PSEUDOATOM_RAW: u64 = 0x1_02_00000A; // version: 1, kind: Pseudoatom, idx: 10
     const MOLECULE_RAW: u64 = 0x1_1F_000001; // version: 1, kind: Molecule, idx: 1
 
     #[test]
@@ -214,13 +220,13 @@ mod tests {
         assert_eq!(null.as_ffi(), KD_NULL_RAW);
         let mut sm: SlotMap<DefaultKey, usize> = SlotMap::new();
         let first = sm.insert(1); // idx: 1, version: 1
-        assert_eq!(first.data().as_ffi(), 0x00000001_00000001);
+        assert_eq!(first.data().as_ffi(), 0x00000001_00_000001);
         let second = sm.insert(2); // idx: 2, version: 1
-        assert_eq!(second.data().as_ffi(), 0x00000001_00000002);
+        assert_eq!(second.data().as_ffi(), 0x00000001_00_000002);
         // Remove a key then insert a new one, should reuse the index
         sm.remove(first); // idx 1 now free
         let third = sm.insert(3); // idx: 1, version: 3
-        assert_eq!(third.data().as_ffi(), 0x00000003_00000001);
+        assert_eq!(third.data().as_ffi(), 0x00000003_00_000001);
     }
 
     #[test]
@@ -233,28 +239,37 @@ mod tests {
 
     #[test]
     fn from_raw() {
-        for n in [0x1_00000001, 0x1_00000002] {
-            assert_eq!(Id::from_raw(n).unwrap(), Id(NonZeroU64::new(n).unwrap()),)
+        for n in [0x1_00_000001, 0x1_00_000002, 0x1_01_000003] {
+            assert_eq!(Id::from_raw(n).unwrap(), Id(NonZeroU64::new(n).unwrap()))
         }
     }
 
     #[test]
+    fn from_raw_invalid() {
+        // Shouldn't be able to create an Id from 0
+        assert!(Id::from_raw(0).is_none());
+        // Shouldn't be able to create an Id with an invalid discriminant
+        assert!(Id::from_raw(0x1_06_000001).is_none());
+        assert!(Id::from_raw(0x1_FF_000001).is_none());
+    }
+
+    #[test]
     fn from_key_data() {
-        let k = KeyData::from_ffi(0x1_00000001); // idx: 1, version: 1
+        let k = KeyData::from_ffi(0x1_00_000001); // idx: 1, version: 1
         let id = Id::from_key_data(EntityKind::Atom, k);
         // Atom has discriminant of 0
-        assert_eq!(id.to_raw(), 0x1_00000001);
+        assert_eq!(id.to_raw(), 0x1_00_000001);
         new_key_type! { struct AtomKey; }
         let mut sm: SlotMap<AtomKey, usize> = SlotMap::with_key();
         let first = sm.insert(1); // idx: 1, version: 1
         assert_eq!(
             Id::from_key_data(EntityKind::Atom, first.data()),
-            Id::from_raw(0x1_00000001).unwrap()
+            Id::from_raw(0x1_00_000001).unwrap()
         );
         let second = sm.insert(2); // idx: 2, version: 1
         assert_eq!(
             Id::from_key_data(EntityKind::Atom, second.data()),
-            Id::from_raw(0x1_00000002).unwrap()
+            Id::from_raw(0x1_00_000002).unwrap()
         );
     }
 
@@ -268,7 +283,7 @@ mod tests {
     #[test]
     fn key_data_round_trip() {
         // Round trip is survived by any valid key that hasn't overflowed
-        let kd = KeyData::from_ffi(0x1_00123456); // idx: 123456, version: 1
+        let kd = KeyData::from_ffi(0x1_00_123456); // idx: 123456, version: 1
         let atom = Id::from_key_data(EntityKind::Atom, kd);
         let recovered = atom.to_key_data();
         assert_eq!(kd, recovered);

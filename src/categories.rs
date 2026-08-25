@@ -9,16 +9,6 @@
 use crate::entities::*;
 use crate::id::Id;
 
-///// A category encompassing multiple kinds of entity with shared behaviour.
-//pub trait Category: Entity {
-//    const KINDS: &[EntityKind];
-//
-//    /// Returns `true` if the given kind of entity falls in this category.
-//    fn valid_kind(kind: EntityKind) -> bool {
-//        Self::KINDS.contains(&kind)
-//    }
-//}
-
 macro_rules! define_category {
     (
         $(#[$doc:meta])*
@@ -199,14 +189,6 @@ impl From<AnyAtomlike> for AnyFundamental {
     }
 }
 
-//impl<E: Atomlike> IntoCategory<BondableEntity> for E {
-//    type Tagged = TaggedBondable;
-//
-//    fn erase(self) -> BondableEntity {
-//        Id::new_unchecked(self.into_inner())
-//    }
-//}
-
 impl From<AnyAtomlike> for AnyBondable {
     fn from(entity: AnyAtomlike) -> Self {
         Self::new_unchecked(entity.into_inner())
@@ -225,126 +207,116 @@ mod tests {
     const ATOM_NULL_RAW: u64 = 0x0000001_00_FFFFFF; // The null atom key
     const KD_NULL_RAW: u64 = 0x0000001_FF_FFFFFF; // What KeyData considers to be null
 
-    const BOND_RAW: NonZeroU64 = NonZeroU64::new(0x1_01_000008).unwrap(); // version: 1, kind: Bond, idx: 8
-    const ATOM_RAW: NonZeroU64 = NonZeroU64::new(0x3_00_000010).unwrap(); // version: 3, kind: Atom, idx: 16, (version always odd for occupied slots)
-    const PSEUDOATOM_RAW: NonZeroU64 = NonZeroU64::new(0x1_03_00000A).unwrap(); // version: 1, kind: Pseudoatom, idx: 10
-    const MOL_RAW: NonZeroU64 = NonZeroU64::new(0x1_1F_000001).unwrap(); // version: 1, kind: Molecule, idx: 1
+    const BOND_RAW: u64 = 0x1_01_000008; // version: 1, kind: Bond, idx: 8
+    const ATOM_RAW: u64 = 0x3_00_000010; // version: 3, kind: Atom, idx: 16, (version always odd for occupied slots)
+    const PSEUDOATOM_RAW: u64 = 0x1_03_00000A; // version: 1, kind: Pseudoatom, idx: 10
+    const MOLECULE_RAW: u64 = 0x1_1F_000001; // version: 1, kind: Molecule, idx: 1
 
-    const BOND: Bond = Bond(Id(BOND_RAW));
-    const ATOM: Atom = Atom(Id(ATOM_RAW));
-    const PSEUDOATOM: Pseudoatom = Pseudoatom(Id(PSEUDOATOM_RAW));
-    const MOL: Molecule = Molecule(Id(MOL_RAW));
+    const BOND: Bond = Bond(Id(NonZeroU64::new(BOND_RAW).unwrap()));
+    const ATOM: Atom = Atom(Id(NonZeroU64::new(ATOM_RAW).unwrap()));
+    const PSEUDOATOM: Pseudoatom = Pseudoatom(Id(NonZeroU64::new(PSEUDOATOM_RAW).unwrap()));
+    const MOLECULE: Molecule = Molecule(Id(NonZeroU64::new(MOLECULE_RAW).unwrap()));
+
+    #[test]
+    fn category_kind() {
+        let atomlike = AnyAtomlike::new_unchecked(ATOM.into_inner());
+        let fundamental = AnyFundamental::new_unchecked(BOND.into_inner());
+        let collection = AnyCollection::new_unchecked(MOLECULE.into_inner());
+        assert_eq!(atomlike.kind(), EntityKind::Atom);
+        assert_eq!(fundamental.kind(), EntityKind::Bond);
+        assert_eq!(collection.kind(), EntityKind::Molecule);
+    }
+
+    #[test]
+    fn convert_key_to_category() {
+        // Can convert via the trait
+        let _: AnyAtomlike = ATOM.as_atomlike();
+        let _: AnyAtomlike = PSEUDOATOM.as_atomlike();
+        let _: AnyBondable = ATOM.as_bondable();
+        // Conversion to an Atomlike is infallible
+        let atomlike: AnyAtomlike = ATOM.into();
+        // ID stays the same
+        assert_eq!(ATOM.into_inner(), atomlike.into_inner());
+        // Can be converted back to keyed ID form without issue, still the same
+        assert_eq!(Atom::new_unchecked(atomlike.into_inner()), ATOM);
+    }
 
     //#[test]
-    //fn tagged() {
-    //    // Mostly want to test the ergonomics of getting a tagged representation
-    //    let tagged: TaggedAtomlike = IntoCategory::to_tagged(ATOM);
-    //    match tagged {
-    //        TaggedAtomlike::Atom(_) => (),
-    //        TaggedAtomlike::Pseudoatom(_) => panic!(),
-    //    }
-    //    match ATOM.to_tagged() {
-    //        TaggedAtomlike::Atom(_) => (),
-    //        TaggedAtomlike::Pseudoatom(_) => panic!(),
-    //    }
+    //fn convert_key_to_category_fails() {
+    //    // TODO Consider whether to remove this test or to reinstate the TryFrom impl
+    //    //
+    //    // Conversion of a Bond to an Atomlike is forbidden
+    //    // There's simply no From implementation
+    //    // It can be attempted via the Entity, but it should fail
+    //    //let bond = BOND;
+    //    //let attempt = Atomlike::try_from(Id::from(bond));
+    //    //assert!(Atomlike::try_from(Id::from(bond)).is_err());
     //}
+
+    //#[test]
+    //fn convert_category_to_key() {
+    //    let atom: AnyFundamental = ATOM.into();
+    //    let bond: AnyFundamental = BOND.into();
+    //    // Conversion should work when the attempted conversion aligns with the kind
+    //    assert!(Id::<Atom>::try_from(atom).is_ok());
+    //    assert!(Id::<Bond>::try_from(bond).is_ok());
+    //    // But not otherwise
+    //    assert!(Id::<Bond>::try_from(atom).is_err());
+    //    assert!(Id::<Atom>::try_from(bond).is_err());
+    //    assert!(Id::<Pseudoatom>::try_from(atom).is_err());
+    //    assert!(Id::<Pseudoatom>::try_from(bond).is_err());
+    //}
+
+    //#[test]
+    //fn convert_key_cat_key_round_trip() {
+    //    // Bond to Fundamental works, as does round trip
+    //    let bond = BOND;
+    //    assert_eq!(
+    //        Id::<Fundamental>::from(bond),
+    //        Id::<Fundamental>::new_unchecked(Id(BOND_RAW))
+    //    );
+    //    assert_eq!(
+    //        Id::<Bond>::try_from(Id::<Fundamental>::from(bond)).unwrap(),
+    //        bond
+    //    );
+    //    // Molecule to Collection to Entity to Molecule should all work
+    //    let mol = MOL;
+    //    let col: Collection = mol.into();
+    //    let ent: Id = col.into();
+    //    let recovered: Molecule = ent.try_into().unwrap();
+    //    assert_eq!(ent, mol.0);
+    //    assert_eq!(recovered, mol);
+    //}
+
+    #[test]
+    fn convert_between_categories() {
+        let atom = AnyAtomlike::new_unchecked(ATOM.into_inner());
+        let pseudoatom = AnyAtomlike::new_unchecked(PSEUDOATOM.into_inner());
+        assert_eq!(
+            AnyFundamental::from(atom),
+            AnyFundamental::new_unchecked(ATOM.into_inner())
+        );
+        assert_eq!(
+            AnyFundamental::from(pseudoatom),
+            AnyFundamental::new_unchecked(PSEUDOATOM.into_inner())
+        );
+        assert_eq!(
+            AnyBondable::from(atom),
+            AnyBondable::new_unchecked(ATOM.into_inner())
+        );
+        assert_eq!(
+            AnyBondable::from(pseudoatom),
+            AnyBondable::new_unchecked(PSEUDOATOM.into_inner())
+        );
+    }
+
+    #[test]
+    fn tagged() {
+        // Mostly want to check the ergonomics of getting a tagged representation
+        let tagged: TaggedAtomlike = ATOM.as_tagged_atomlike();
+        match tagged {
+            TaggedAtomlike::Atom(_) => (),
+            TaggedAtomlike::Pseudoatom(_) => panic!(),
+        }
+    }
 }
-//
-//    #[test]
-//    fn category_kind() {
-//        let atomlike = Id::<Atomlike>::new_unchecked(Id(ATOM_RAW));
-//        let fundamental = Id::<Fundamental>::new_unchecked(Id(BOND_RAW));
-//        let collection = Id::<Collection>::new_unchecked(Id(MOL_RAW));
-//        assert_eq!(atomlike.kind(), EntityKind::Atom);
-//        assert_eq!(fundamental.kind(), EntityKind::Bond);
-//        assert_eq!(collection.kind(), EntityKind::Molecule);
-//    }
-//
-//    #[test]
-//    fn convert_key_to_category() {
-//        let atom = ATOM;
-//        // Conversion to an Atomlike is infallible
-//        let atomlike: Atomlike = atom.into();
-//        // ID stays the same
-//        assert_eq!(atom.into_inner(), atomlike.into_inner());
-//        // Underlying key is the same
-//        assert_eq!(
-//            atom.into_inner().to_raw_key(),
-//            atomlike.into_inner().to_raw_key()
-//        );
-//        // Conversion via the Entity works too
-//        //assert_eq!(
-//        //    Atomlike::try_from(Id::from(atom)).unwrap(),
-//        //    atomlike
-//        //);
-//    }
-//
-//    #[test]
-//    fn convert_key_to_category_fails() {
-//        // TODO Consider whether to remove this test or to reinstate the TryFrom impl
-//        //
-//        // Conversion of a Bond to an Atomlike is forbidden
-//        // There's simply no From implementation
-//        // It can be attempted via the Entity, but it should fail
-//        //let bond = BOND;
-//        //let attempt = Atomlike::try_from(Id::from(bond));
-//        //assert!(Atomlike::try_from(Id::from(bond)).is_err());
-//    }
-//
-//    #[test]
-//    fn convert_category_to_key() {
-//        let atom: Fundamental = ATOM.into();
-//        let bond: Fundamental = BOND.into();
-//        // Conversion should work when the attempted conversion aligns with the kind
-//        assert!(Id::<Atom>::try_from(atom).is_ok());
-//        assert!(Id::<Bond>::try_from(bond).is_ok());
-//        // But not otherwise
-//        assert!(Id::<Bond>::try_from(atom).is_err());
-//        assert!(Id::<Atom>::try_from(bond).is_err());
-//        assert!(Id::<Pseudoatom>::try_from(atom).is_err());
-//        assert!(Id::<Pseudoatom>::try_from(bond).is_err());
-//    }
-//
-//    #[test]
-//    fn convert_key_cat_key_round_trip() {
-//        // Bond to Fundamental works, as does round trip
-//        let bond = BOND;
-//        assert_eq!(
-//            Id::<Fundamental>::from(bond),
-//            Id::<Fundamental>::new_unchecked(Id(BOND_RAW))
-//        );
-//        assert_eq!(
-//            Id::<Bond>::try_from(Id::<Fundamental>::from(bond)).unwrap(),
-//            bond
-//        );
-//        // Molecule to Collection to Entity to Molecule should all work
-//        let mol = MOL;
-//        let col: Collection = mol.into();
-//        let ent: Id = col.into();
-//        let recovered: Molecule = ent.try_into().unwrap();
-//        assert_eq!(ent, mol.0);
-//        assert_eq!(recovered, mol);
-//    }
-//
-//    #[test]
-//    fn convert_between_categories() {
-//        let atom = Id::<Atomlike>::from_raw_unchecked(ATOM_RAW);
-//        let pseudoatom = Id::<Atomlike>::from_raw_unchecked(PSEUDOATOM_RAW);
-//        assert_eq!(
-//            Id::<Fundamental>::from(atom),
-//            Id::<Fundamental>::from_raw_unchecked(ATOM_RAW)
-//        );
-//        assert_eq!(
-//            Id::<Fundamental>::from(pseudoatom),
-//            Id::<Fundamental>::from_raw_unchecked(PSEUDOATOM_RAW)
-//        );
-//        assert_eq!(
-//            Id::<Bondable>::from(atom),
-//            Id::<Bondable>::from_raw_unchecked(ATOM_RAW)
-//        );
-//        assert_eq!(
-//            Id::<Bondable>::from(pseudoatom),
-//            Id::<Bondable>::from_raw_unchecked(PSEUDOATOM_RAW)
-//        );
-//    }
-//}

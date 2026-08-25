@@ -30,6 +30,21 @@ pub enum EntityKind {
     Molecule = 0x1F,
 }
 
+impl EntityKind {
+    /// Returns the corresponding variant if `value` is a valid discriminant, or
+    /// `None` otherwise.
+    pub const fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0x00 => Some(Self::Atom),
+            0x01 => Some(Self::Bond),
+            0x02 => Some(Self::Pseudoatom),
+            0x10 => Some(Self::Substituent),
+            0x1F => Some(Self::Molecule),
+            _ => None,
+        }
+    }
+}
+
 impl From<EntityKind> for u8 {
     #[inline]
     fn from(kind: EntityKind) -> Self {
@@ -41,14 +56,7 @@ impl TryFrom<u8> for EntityKind {
     type Error = MolMapError;
 
     fn try_from(value: u8) -> MolMapResult<Self> {
-        match value {
-            0x00 => Ok(Self::Atom),
-            0x01 => Ok(Self::Bond),
-            0x02 => Ok(Self::Pseudoatom),
-            0x10 => Ok(Self::Substituent),
-            0x1F => Ok(Self::Molecule),
-            _ => Err(MolMapError::UnknownEntityKind(value)),
-        }
+        Self::from_u8(value).ok_or(MolMapError::UnknownEntityKind(value))
     }
 }
 
@@ -283,42 +291,6 @@ new_keyed_entity!(
     /// is also permitted). Do not rely on any of these things being true.
     pub struct Molecule;
 );
-
-// /// An iterator over a set of IDs.
-// #[derive(Copy, Clone, Debug)]
-// pub struct Iter<E, I>(pub(crate) I)
-// where
-//     E: Entity,
-//     I: Iterator<Item = E>;
-
-// impl<E, I> Iterator for Iter<E, I>
-// where
-//     E: Entity,
-//     I: Iterator<Item = E>,
-// {
-//     type Item = E;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.0.next()
-//     }
-// }
-
-// impl<E, I> ExactSizeIterator for Iter<E, I>
-// where
-//     E: Entity,
-//     I: Iterator<Item = E> + ExactSizeIterator,
-// {
-//     fn len(&self) -> usize {
-//         self.0.len()
-//     }
-// }
-
-// impl<E, I> FusedIterator for Iter<E, I>
-// where
-//     E: Entity,
-//     I: Iterator<Item = E> + FusedIterator,
-// {
-// }
 
 #[cfg(test)]
 mod tests {
