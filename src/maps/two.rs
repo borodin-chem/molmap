@@ -9,17 +9,12 @@
 use nalgebra::{Point, Point2};
 use slotmap::SecondaryMap;
 
-use crate::{
-    Element, MolMap,
-    graph::MolGraph,
-    ids::*,
-    traits::{MolMapCore, SpatialMolMap},
-};
+use crate::{graph::MolGraph, graph::keys::*, maps::MolMapCore, *};
 
 #[derive(Clone, Debug, Default)]
 pub struct MolMap2 {
     pub(crate) core: MolGraph,
-    pub(crate) atom_positions: SecondaryMap<AtomId, Point2<f64>>,
+    pub(crate) atom_positions: SecondaryMap<AtomKey, Point2<f64>>,
 }
 
 impl MolMapCore for MolMap2 {
@@ -57,22 +52,22 @@ impl MolMap for MolMap2 {
 }
 
 impl SpatialMolMap<2> for MolMap2 {
-    fn atom_position(&self, id: AtomId) -> Point<f64, 2> {
-        *self.atom_positions.get(id).unwrap()
+    fn atom_position(&self, id: Atom) -> Point<f64, 2> {
+        *self.atom_positions.get(id.into()).unwrap()
     }
 }
 
 impl MolMap2 {
-    pub fn add_atom(&mut self, element: Element, position: Point2<f64>) -> AtomId {
+    pub fn add_atom(&mut self, element: Element, position: Point2<f64>) -> Atom {
         let new_id = self.core.add_atom(element);
-        self.atom_positions.insert(new_id, position);
+        self.atom_positions.insert(new_id.into(), position);
         new_id
     }
 }
 
 fn all_atom_positions<const D: usize, M: SpatialMolMap<{ D }>>(map: M) -> Vec<Point<f64, { D }>> {
     let mut result = Vec::new();
-    for id in map.atom_ids() {
+    for id in map.iter() {
         result.push(map.atom_position(id));
     }
     result

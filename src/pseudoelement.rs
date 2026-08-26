@@ -6,17 +6,17 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::entities::definition::DefinitionId;
+use crate::definition::Definition;
 
 /// The "element" of a pseudoatom, represented in a chemical formula by a symbol
 /// like a real element, but representing a group of atoms.
 ///
-/// While there is a significant number of such [symbols in common use(https://en.wikipedia.org/wiki/Skeletal_formula#Pseudoelement_symbols),
+/// While there are a significant number of such [symbols in common use](https://en.wikipedia.org/wiki/Skeletal_formula#Pseudoelement_symbols),
 /// and many are widely accepted and thus essentially unambiguous in what they
 /// refer to, only the few listed explicitly in the
 /// [2008 IUPAC Recommendations for chemical structure diagrams](https://doi.org/10.1351/pac200880020277)
 /// are defined as named variants; others should be defined with custom definitions.
-#[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[non_exhaustive]
 #[allow(non_camel_case_types)]
 pub enum Pseudoelement {
@@ -33,7 +33,7 @@ pub enum Pseudoelement {
     Ms,  // mesyl
     Ts,  // tosyl
     Cp,  // cyclopentadienyl
-    Defined(DefinitionId),
+    Defined(Definition),
 }
 
 impl Pseudoelement {
