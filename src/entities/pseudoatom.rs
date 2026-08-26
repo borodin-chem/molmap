@@ -14,7 +14,7 @@ use crate::*;
 /// represents something else.
 /// It may have an unknown composition like R, or a known structure like Ph.
 #[derive(Clone, Debug)]
-pub(crate) struct PseudoatomData {
+pub struct PseudoatomData {
     pub(crate) pseudoelement: Pseudoelement,
     pub(crate) bonds: Vec<Bond>,
 }
@@ -31,11 +31,7 @@ impl PseudoatomData {
 pub type PseudoatomView<'a, M> = View<'a, M, Pseudoatom>;
 
 impl<'a, M: MolMap> View<'a, M, Pseudoatom> {
-    fn core(&self) -> &PseudoatomData {
-        self.map.core().pseudoatoms.get(self.id.into()).unwrap()
-    }
-
     pub fn bonds(&self) -> &[Bond] {
-        &self.core().bonds
+        &self.data().bonds
     }
 }

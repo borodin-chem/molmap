@@ -99,10 +99,14 @@ impl MolMap0 {
     /// # Errors
     ///
     /// Fails if either of `start` and `end` are invalid.
-    pub fn add_bond(&mut self, start: impl Bondable, end: impl Bondable) -> MolMapResult<Bond> {
-        if !self.core.contains_bondable(start) {
+    pub fn add_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    where
+        A: Bondable,
+        B: Bondable,
+    {
+        if !self.contains(start) {
             return Err(MolMapError::Id(start.into_inner()));
-        } else if !self.core.contains_bondable(end) {
+        } else if !self.contains(end) {
             return Err(MolMapError::Id(end.into_inner()));
         };
         Ok(self.core.add_bond(start, end))

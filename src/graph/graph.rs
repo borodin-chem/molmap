@@ -37,32 +37,6 @@ pub struct MolGraph {
     pub(crate) molecules: SlotMap<MoleculeKey, MoleculeData>,
 }
 
-// The Stored trait allows methods of MolGraph and the MolMap types to be
-// generic over all kinds of entity *when the same thing is done for each kind*.
-
-/// A trait implemented for each keyed entity type stored in the map.
-pub(crate) trait Stored<M>: Entity + Keyed {
-    type DATA: 'static;
-
-    /// Returns a reference to the map's `SlotMap` that holds this entity.
-    fn get_store(map: &M) -> &SlotMap<Self::KEY, Self::DATA>;
-
-    /// Returns a mutable reference to the map's `SlotMap` that holds this entity.
-    fn get_store_mut(map: &mut M) -> &mut SlotMap<Self::KEY, Self::DATA>;
-}
-
-impl Stored<MolGraph> for Atom {
-    type DATA = AtomData;
-
-    fn get_store(map: &MolGraph) -> &SlotMap<Self::KEY, Self::DATA> {
-        &map.atoms
-    }
-
-    fn get_store_mut(map: &mut MolGraph) -> &mut SlotMap<Self::KEY, Self::DATA> {
-        &mut map.atoms
-    }
-}
-
 /// Constructor methods.
 impl MolGraph {
     /// Creates a new, empty `MolGraph`.
@@ -96,106 +70,40 @@ impl MolGraph {
 
 /// Methods generic over all stored kinds of entity, that do the same regardless of kind.
 impl MolGraph {
+    /// Returns a reference to the `SlotMap` that holds the entity.
+    #[inline]
+    pub(crate) fn get_slotmap<E: Entity + Keyed>(&self) -> &SlotMap<E::KEY, E::DATA> {
+        E::get_slotmap(self)
+    }
+
+    /// Returns a mutable reference to the `SlotMap` that holds the entity.
+    #[inline]
+    pub(crate) fn get_slotmap_mut<E: Entity + Keyed>(&mut self) -> &mut SlotMap<E::KEY, E::DATA> {
+        E::get_slotmap_mut(self)
+    }
+
+    /// Returns a reference to the entity's data struct.
+    #[inline]
+    pub(crate) fn get_data<E: Entity + Keyed>(&self, entity: E) -> Option<&E::DATA> {
+        self.get_slotmap::<E>().get(entity.to_key())
+    }
+
+    /// Returns a mutable reference to the entity's data struct.
+    #[inline]
+    pub(crate) fn get_data_mut<E: Entity + Keyed>(&mut self, entity: E) -> Option<&mut E::DATA> {
+        self.get_slotmap_mut::<E>().get_mut(entity.to_key())
+    }
+
     /// Checks if the map currently contains the given entity.
-    pub(crate) fn contains<E: Entity + Stored<MolGraph>>(&self, id: E) -> bool {
-        E::get_store(self).contains_key(id.to_key())
+    pub(crate) fn contains<E: Entity + Keyed>(&self, entity: E) -> bool {
+        self.get_slotmap::<E>().contains_key(entity.to_key())
     }
 
     /// Returns an iterator over all the IDs of all of a given entity type in the map.
-    pub(crate) fn all<E: Entity + Stored<MolGraph>>(
+    pub(crate) fn iter_ids<E: Entity + Keyed>(
         &'_ self,
     ) -> impl Iterator<Item = E> + ExactSizeIterator + FusedIterator {
-        E::get_store(self).keys().map(|k| E::from_key(k))
-    }
-}
-
-/// Methods for querying entity IDs.
-impl MolGraph {
-    /// Returns an iterator over all the IDs of all atoms in the map.
-    pub(crate) fn atom_ids(&'_ self) -> impl Iterator<Item = Atom> + ExactSizeIterator {
-        self.atoms.keys().map(|k| Atom::from_key(k))
-    }
-
-    /// Returns an iterator over all the IDs of all pseudoatoms in the map.
-    pub(crate) fn pseudoatom_ids(&'_ self) -> impl Iterator<Item = Pseudoatom> + ExactSizeIterator {
-        self.pseudoatoms.keys().map(|k| Pseudoatom::from_key(k))
-    }
-
-    /// Returns an iterator over all the IDs of all bonds in the map.
-    pub(crate) fn bond_ids(&'_ self) -> impl Iterator<Item = Bond> + ExactSizeIterator {
-        self.bonds.keys().map(|k| Bond::from_key(k))
-    }
-
-    /// Returns an iterator over all the IDs of all substituents in the map.
-    pub(crate) fn substituent_ids(
-        &'_ self,
-    ) -> impl Iterator<Item = Substituent> + ExactSizeIterator {
-        self.substituents.keys().map(|k| Substituent::from_key(k))
-    }
-
-    /// Returns an iterator over all the IDs of all molecules in the map.
-    pub(crate) fn molecule_ids(&'_ self) -> impl Iterator<Item = Molecule> + ExactSizeIterator {
-        self.molecules.keys().map(|k| Molecule::from_key(k))
-    }
-
-    /// Checks if the map currently contains the atom with the given ID.
-    pub(crate) fn contains_atom(&self, id: Atom) -> bool {
-        self.atoms.contains_key(id.to_key())
-    }
-
-    /// Checks if the map currently contains the pseudoatom with the given ID.
-    pub(crate) fn contains_pseudoatom(&self, id: Pseudoatom) -> bool {
-        self.pseudoatoms.contains_key(id.to_key())
-    }
-
-    /// Checks if the map currently contains the bond with the given ID.
-    pub(crate) fn contains_bond(&self, id: Bond) -> bool {
-        self.bonds.contains_key(id.to_key())
-    }
-
-    /// Checks if the map currently contains the substituent with the given ID.
-    pub(crate) fn contains_substituent(&self, id: Substituent) -> bool {
-        self.substituents.contains_key(id.to_key())
-    }
-
-    /// Checks if the map currently contains the molecule with the given ID.
-    pub(crate) fn contains_molecule(&self, id: Molecule) -> bool {
-        self.molecules.contains_key(id.to_key())
-    }
-
-    /// Checks if the map currently contains the atomlike with the given ID.
-    pub(crate) fn contains_atomlike(&self, id: impl Atomlike) -> bool {
-        match id.as_tagged_atomlike() {
-            TaggedAtomlike::Atom(atom_id) => self.contains_atom(atom_id),
-            TaggedAtomlike::Pseudoatom(pseudoatom_id) => self.contains_pseudoatom(pseudoatom_id),
-        }
-    }
-
-    /// Checks if the map currently contains the fundamental with the given ID.
-    pub(crate) fn contains_fundamental(&self, id: impl Fundamental) -> bool {
-        match id.as_tagged_fundamental() {
-            TaggedFundamental::Atom(atom_id) => self.contains_atom(atom_id),
-            TaggedFundamental::Pseudoatom(pseudoatom_id) => self.contains_pseudoatom(pseudoatom_id),
-            TaggedFundamental::Bond(bond_id) => self.contains_bond(bond_id),
-        }
-    }
-
-    /// Checks if the map currently contains the bondable with the given ID.
-    pub(crate) fn contains_bondable(&self, id: impl Bondable) -> bool {
-        match id.as_tagged_bondable() {
-            TaggedBondable::Atom(atom_id) => self.contains_atom(atom_id),
-            TaggedBondable::Pseudoatom(pseudoatom_id) => self.contains_pseudoatom(pseudoatom_id),
-        }
-    }
-
-    /// Checks if the map currently contains the collection with the given ID.
-    pub(crate) fn contains_collection(&self, id: impl Collection) -> bool {
-        match id.as_tagged_collection() {
-            TaggedCollection::Substituent(substituent_id) => {
-                self.contains_substituent(substituent_id)
-            }
-            TaggedCollection::Molecule(molecule_id) => self.contains_molecule(molecule_id),
-        }
+        self.get_slotmap::<E>().keys().map(|k| E::from_key(k))
     }
 }
 
@@ -278,7 +186,7 @@ impl MolGraph {
     ///
     /// This is infallible – if the atom is not in the map, nothing changes.
     pub(crate) fn delete_atom(&mut self, id: Atom) -> bool {
-        if !self.contains_atom(id) {
+        if !self.contains(id) {
             return false;
         }
         // Make sure we always remove bonds first
@@ -303,7 +211,7 @@ impl MolGraph {
     ///
     /// This is infallible – if the pseudoatom is not in the map, nothing changes.
     pub(crate) fn delete_pseudoatom(&mut self, id: Pseudoatom) -> bool {
-        if !self.contains_pseudoatom(id) {
+        if !self.contains(id) {
             return false;
         }
         // Make sure we always remove bonds first
@@ -377,7 +285,7 @@ impl MolGraph {
     ///
     /// This is infallible – if the substituent is not in the map, nothing changes.
     pub(crate) fn delete_substituent(&mut self, id: Substituent) -> bool {
-        if !self.contains_substituent(id) {
+        if !self.contains(id) {
             return false;
         };
         let members = self.substituents.get(id.into()).unwrap().members.clone();
@@ -403,7 +311,7 @@ impl MolGraph {
     ///
     /// This is infallible – if the molecule is not in the map, nothing changes.
     pub(crate) fn delete_molecule(&mut self, id: Molecule) -> bool {
-        if !self.contains_molecule(id) {
+        if !self.contains(id) {
             return false;
         };
         let members = self.molecules.get(id.into()).unwrap().members.clone();

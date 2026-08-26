@@ -67,7 +67,7 @@ impl MolMap3 {
 
 fn all_atom_positions<const D: usize, M: SpatialMolMap<{ D }>>(map: M) -> Vec<Point<f64, { D }>> {
     let mut result = Vec::new();
-    for id in map.atom_ids() {
+    for id in map.iter_ids() {
         result.push(map.atom_position(id));
     }
     result

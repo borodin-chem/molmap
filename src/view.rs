@@ -46,15 +46,18 @@ pub struct View<'a, M: MolMap, E: Entity> {
 }
 
 impl<'a, M: MolMap, E: Entity> View<'a, M, E> {
-    //#[doc = concat!(
-    //    "Returns a reference to the corresponding ", stringify!([<$name>]), " struct in the core [`MolGraph`]."
-    //)]
-    //fn core(&self) -> &[<$name>] {
-    //    self.map.core().[<$name:lower s>].get(self.id).unwrap()
-    //}
-
     pub fn id(&self) -> E {
         self.id
+    }
+}
+
+impl<'a, M: MolMap, E: Entity + Keyed> View<'a, M, E> {
+    /// Returns a reference to the entity's data struct in the core [`MolGraph`]."
+    pub(crate) fn data(&self) -> &E::DATA {
+        self.map
+            .core()
+            .get_data(self.id)
+            .expect("ID is known to be valid")
     }
 }
 

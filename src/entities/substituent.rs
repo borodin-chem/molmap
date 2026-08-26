@@ -31,7 +31,7 @@ pub enum SubstituentCentre {
 /// "to" the centre. This allows molecules to be built up conveniently by adding and
 /// connecting substituents rather than individual atoms.
 #[derive(Clone, Debug)]
-pub(crate) struct SubstituentData {
+pub struct SubstituentData {
     pub(crate) centre: SubstituentCentre,
     pub(crate) members: Vec<AnyFundamental>,
 }
@@ -48,23 +48,19 @@ impl SubstituentData {
 pub type SubstituentView<'a, M> = View<'a, M, Substituent>;
 
 impl<'a, M: MolMap> View<'a, M, Substituent> {
-    fn core(&self) -> &SubstituentData {
-        self.map.core().substituents.get(self.id.into()).unwrap()
-    }
-
     /// Returns details of the centre(s) of the substituent.
     pub fn centre(&self) -> &SubstituentCentre {
-        &self.core().centre
+        &self.data().centre
     }
 
     /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.
     pub fn members(&self) -> impl Iterator<Item = impl Fundamental> {
-        self.core().members.iter().copied()
+        self.data().members.iter().copied()
     }
 
     /// Checks if the substituent contains the given atom, pseudoatom, or bond.
     pub fn contains(&self, fundamental: impl Fundamental) -> bool {
-        self.core().members.contains(&fundamental.as_fundamental())
+        self.data().members.contains(&fundamental.as_fundamental())
     }
 }
 

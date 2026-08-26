@@ -19,7 +19,7 @@ pub enum BondType {
 
 /// The core data of a bond entity.
 #[derive(Clone, Debug)]
-pub(crate) struct BondData {
+pub struct BondData {
     pub(crate) bond_type: BondType,
     pub(crate) order: f32,
     pub(crate) start: AnyBondable,
@@ -40,20 +40,16 @@ impl BondData {
 pub type BondView<'a, M> = View<'a, M, Bond>;
 
 impl<'a, M: MolMap> View<'a, M, Bond> {
-    fn core(&self) -> &BondData {
-        self.map.core().bonds.get(self.id.into()).unwrap()
-    }
-
     pub fn bond_type(&self) -> BondType {
-        self.core().bond_type
+        self.data().bond_type
     }
 
     pub fn order(&self) -> f32 {
-        self.core().order
+        self.data().order
     }
 
     pub fn partners(&self) -> [impl Bondable; 2] {
-        let inner = self.core();
+        let inner = self.data();
         [inner.start, inner.end]
     }
 }

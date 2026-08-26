@@ -12,7 +12,7 @@ use crate::*;
 
 /// The core data of an atom entity.
 #[derive(Clone, Debug)]
-pub(crate) struct AtomData {
+pub struct AtomData {
     pub(crate) element: Element,
     pub(crate) bonds: Vec<Bond>,
 }
@@ -29,19 +29,15 @@ impl AtomData {
 pub type AtomView<'a, M> = View<'a, M, Atom>;
 
 impl<'a, M: MolMap> View<'a, M, Atom> {
-    fn core(&self) -> &AtomData {
-        self.map.core().atoms.get(self.id.into()).unwrap()
-    }
-
     pub fn element(&self) -> Element {
-        self.core().element
+        self.data().element
     }
 
     pub fn symbol(&self) -> &str {
-        self.core().element.symbol()
+        self.data().element.symbol()
     }
 
     pub fn bonds(&self) -> &[Bond] {
-        &self.core().bonds
+        &self.data().bonds
     }
 }

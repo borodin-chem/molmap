@@ -9,4 +9,3 @@
 mod graph;
 
 pub(crate) use graph::MolGraph;
-pub(crate) use graph::Stored;

@@ -14,9 +14,17 @@ pub mod substituent;
 
 use std::iter::FusedIterator;
 
-use slotmap::{Key, new_key_type};
+use slotmap::{Key, SlotMap, new_key_type};
 
-use crate::{MolMapError, MolMapResult, id::Id};
+use crate::{
+    MolMapError, MolMapResult,
+    entities::{
+        atom::AtomData, bond::BondData, molecule::MoleculeData, pseudoatom::PseudoatomData,
+        substituent::SubstituentData,
+    },
+    graph::MolGraph,
+    id::Id,
+};
 
 /// The kind of an entity.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
@@ -87,7 +95,7 @@ pub trait Entity: Copy + Clone + Eq {
     // category traits (Bondable, Atomlike etc.).
     //
     // What makes this trait sealed currently is the fact that Id is not
-    // namable by other crates, so foreign types cannot implement new_unchecked
+    // nameable by other crates, so foreign types cannot implement new_unchecked
     // or into_inner and therefore cannot implement the trait. It is therefore
     // crucial that that remains the case i.e. the id module remains private and
     // Id is not publicly re-exported anywhere.
@@ -96,7 +104,7 @@ pub trait Entity: Copy + Clone + Eq {
     // a specific kind from a generic Id without the discriminant being
     // checked, so it is *essential* that new_unchecked not just cannot be
     // *implemented* but also cannot be *called*. As long as Id stays
-    // unnamable, this is the case.
+    // unnameable, this is the case.
     //
     // It is fine for into_inner to be callable downstream and for an Id
     // to be obtained, as long as nothing can be done with that Id.
@@ -106,6 +114,7 @@ pub trait Entity: Copy + Clone + Eq {
 
     fn into_inner(self) -> Id;
 
+    /// Returns the corresponding kind of the entity.
     fn kind(&self) -> EntityKind {
         self.into_inner().kind()
     }
@@ -160,15 +169,12 @@ pub enum TaggedEntity {
     Molecule(Molecule) = EntityKind::Molecule as u8,
 }
 
-/// A fundamental kind of entity in a [`MolMap`], with a backing `SlotMap`.
-pub(crate) trait Keyed: Entity {
+/// A fundamental kind of entity in the graph, with a backing `SlotMap`.
+pub trait Keyed: Entity {
     type KEY: slotmap::Key + 'static;
-    const KIND: EntityKind;
+    type DATA: 'static;
 
-    /// Returns the corresponding kind of the entity.
-    fn kind() -> EntityKind {
-        Self::KIND
-    }
+    const KIND: EntityKind;
 
     fn from_key(key: Self::KEY) -> Self {
         Self::new_unchecked(Id::from_key_data(Self::KIND, key.data()))
@@ -177,6 +183,12 @@ pub(crate) trait Keyed: Entity {
     fn to_key(self) -> Self::KEY {
         Self::KEY::from(self.into_inner().to_key_data())
     }
+
+    /// Returns a reference to the graph's `SlotMap` that holds this entity.
+    fn get_slotmap(graph: &MolGraph) -> &SlotMap<Self::KEY, Self::DATA>;
+
+    /// Returns a mutable reference to the graph's `SlotMap` that holds this entity.
+    fn get_slotmap_mut(graph: &mut MolGraph) -> &mut SlotMap<Self::KEY, Self::DATA>;
 }
 
 macro_rules! new_keyed_entity {
@@ -198,17 +210,33 @@ macro_rules! new_keyed_entity {
                     self.0
                 }
 
+                fn kind(&self) -> EntityKind {
+                    Self::KIND
+                }
+
+                #[inline]
                 fn as_tagged_entity(self) -> TaggedEntity {
                     TaggedEntity::$kind($kind::new_unchecked(self.into_inner()))
                 }
             }
 
-            new_key_type! { pub(crate) struct [<$kind Key>]; }
+            new_key_type! { pub struct [<$kind Key>]; }
 
             impl Keyed for $kind {
                 type KEY = [<$kind Key>];
+                type DATA = [<$kind Data>];
 
                 const KIND: EntityKind = EntityKind::$kind;
+
+                #[inline]
+                fn get_slotmap(map: &MolGraph) -> &SlotMap<Self::KEY, Self::DATA> {
+                    &map.[<$kind:lower s>]
+                }
+
+                #[inline]
+                fn get_slotmap_mut(map: &mut MolGraph) -> &mut SlotMap<Self::KEY, Self::DATA> {
+                    &mut map.[<$kind:lower s>]
+                }
             }
 
             impl From<$kind> for [<$kind Key>] {

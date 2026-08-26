@@ -12,7 +12,7 @@ use crate::*;
 
 /// The core data of a molecule entity.
 #[derive(Clone, Debug)]
-pub(crate) struct MoleculeData {
+pub struct MoleculeData {
     pub(crate) members: HashSet<AnyFundamental>,
 }
 
@@ -27,17 +27,13 @@ impl MoleculeData {
 pub type MoleculeView<'a, M> = View<'a, M, Molecule>;
 
 impl<'a, M: MolMap> View<'a, M, Molecule> {
-    fn core(&self) -> &MoleculeData {
-        self.map.core().molecules.get(self.id.into()).unwrap()
-    }
-
     /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.
     pub fn members(&self) -> impl Iterator<Item = impl Fundamental> {
-        self.core().members.iter().copied()
+        self.data().members.iter().copied()
     }
 
     /// Checks if the molecule contains the given atom, pseudoatom, or bond.
     pub fn contains(&self, fundamental: impl Fundamental) -> bool {
-        self.core().members.contains(&fundamental.as_fundamental())
+        self.data().members.contains(&fundamental.as_fundamental())
     }
 }
