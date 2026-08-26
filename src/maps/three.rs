@@ -59,16 +59,16 @@ impl SpatialMolMap<3> for MolMap3 {
 
 impl MolMap3 {
     pub fn add_atom(&mut self, element: Element, position: Point3<f64>) -> Atom {
-        let new_id = self.core.add_atom(element);
-        self.atom_positions.insert(new_id.into(), position);
-        new_id
+        let new_atom = self.core.add_atom(element);
+        self.atom_positions.insert(new_atom.into(), position);
+        new_atom
     }
 }
 
 fn all_atom_positions<const D: usize, M: SpatialMolMap<{ D }>>(map: M) -> Vec<Point<f64, { D }>> {
     let mut result = Vec::new();
-    for id in map.iter_ids() {
-        result.push(map.atom_position(id));
+    for atom in map.iter() {
+        result.push(map.atom_position(atom));
     }
     result
 }

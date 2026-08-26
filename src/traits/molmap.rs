@@ -110,11 +110,11 @@ pub trait MolMap: Sized + MolMapCore {
         }
     }
 
-    /// Returns an iterator over all the IDs of all of a given kind of entity in the map.
-    fn iter_ids<E: Entity + Keyed>(
+    /// Returns an iterator over all of a given kind of entity in the map.
+    fn iter<E: Entity + Keyed>(
         &'_ self,
     ) -> impl Iterator<Item = E> + ExactSizeIterator + FusedIterator {
-        self.core().iter_ids::<E>()
+        self.core().iter::<E>()
     }
 
     // Getters
@@ -146,7 +146,7 @@ pub trait MolMap: Sized + MolMapCore {
     ) -> ViewIter<'_, Self, E, impl Iterator<Item = E> + ExactSizeIterator> {
         ViewIter {
             map: self,
-            ids: self.iter_ids(),
+            ids: self.iter(),
         }
     }
 }

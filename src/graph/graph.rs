@@ -120,8 +120,8 @@ impl MolGraph {
         self.slotmap::<E>().contains_key(entity.to_key())
     }
 
-    /// Returns an iterator over all the IDs of all of a given entity type in the map.
-    pub(crate) fn iter_ids<E: Entity + Keyed>(
+    /// Returns an iterator over all of a given kind of entity in the map.
+    pub(crate) fn iter<E: Entity + Keyed>(
         &'_ self,
     ) -> impl Iterator<Item = E> + ExactSizeIterator + FusedIterator {
         self.slotmap::<E>().keys().map(|k| E::from_key(k))
@@ -349,48 +349,6 @@ impl MolGraph {
         }
         self.molecules.remove(molecule.into()).is_some()
     }
-
-    ///// Removes an atom or pseudoatom from the map.
-    /////
-    ///// Returns whether the atomlike was present in the map.
-    /////
-    ///// Bonds to the atom or pseudoatom are also deleted.
-    /////
-    ///// If the atomlike is not in the map, nothing changes.
-    //pub(crate) fn delete_atomlike(&mut self, atomlike: impl Atomlike) -> bool {
-    //    match atomlike.as_tagged_atomlike() {
-    //        TaggedAtomlike::Atom(id) => self.delete_atom(id),
-    //        TaggedAtomlike::Pseudoatom(id) => self.delete_pseudoatom(id),
-    //    }
-    //}
-
-    ///// Removes an atom, pseudoatom, or bond from the map.
-    /////
-    ///// Returns whether the fundamental was present in the map.
-    /////
-    ///// Bonds to an atom or pseudoatom are also deleted.
-    ///// The bonding partners of a bond are not deleted.
-    /////
-    ///// If the fundamental is not in the map, nothing changes.
-    //pub(crate) fn delete_fundamental(&mut self, fundamental: impl Fundamental) -> bool {
-    //    match fundamental.as_tagged_fundamental() {
-    //        TaggedFundamental::Atom(id) => self.delete_atom(id),
-    //        TaggedFundamental::Pseudoatom(id) => self.delete_pseudoatom(id),
-    //        TaggedFundamental::Bond(id) => self.delete_bond(id),
-    //    }
-    //}
-
-    ///// Removes a collection from the map, as well as all of its members.
-    /////
-    ///// Returns whether the collection was present in the map.
-    /////
-    ///// If the collection is not in the map, nothing changes.
-    //pub(crate) fn delete_collection(&mut self, collection: impl Collection) -> bool {
-    //    match collection.as_tagged_collection() {
-    //        TaggedCollection::Substituent(id) => self.delete_substituent(id),
-    //        TaggedCollection::Molecule(id) => self.delete_molecule(id),
-    //    }
-    //}
 }
 
 /// Methods to change collection membership.
