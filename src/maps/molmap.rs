@@ -59,8 +59,8 @@ pub trait MolMap: Sized + MolMapCore {
 
     /// Creates an empty `MolMap`.
     ///
-    /// As the constituent `SlotMap`s are created with an initial capacity of 0, reallocations
-    /// will occur frequently if many entities are subsequently inserted.
+    /// As the constituent `SlotMap`s are created with an initial capacity of 0,
+    /// reallocations will occur frequently if many entities are subsequently inserted.
     /// If you have an idea of approximately how large the `MolMap` needs to be, it is
     /// recommended to use `MolMap.with_capacity` or `with_capacities` instead.
     fn new() -> Self;
@@ -92,7 +92,7 @@ pub trait MolMap: Sized + MolMapCore {
     /// Checks if the map currently contains the given entity.
     fn contains<E: Entity>(&self, entity: E) -> bool {
         // This version of contains is flexible, for the public API, and can do
-        // the check for any
+        // the check for any Entity type, not just Keyed ones
         match entity.as_tagged_entity() {
             TaggedEntity::Atom(atom) => Atom::get_slotmap(self.core()).contains_key(atom.to_key()),
             TaggedEntity::Bond(bond) => Bond::get_slotmap(self.core()).contains_key(bond.to_key()),
@@ -138,11 +138,37 @@ pub trait MolMap: Sized + MolMapCore {
         })
     }
 
+    /// Returns an iterator over views of all the given entities, returning `None`
+    /// if any ID is invalid.
+    ///
+    /// This method is most useful for situations where it is important to have
+    /// ensured all IDs are valid before beginning some operation involving them.
+    ///
+    /// As the IDs are validated eagerly using a clone of the iterator, in other
+    /// situations it is probably more sensible to use `map` on the ID iterator
+    /// to get an iterator that returns views for each entity in turn, lazily.
+    fn views<E, I>(&'_ mut self, entities: I) -> Option<Views<'_, Self, E, I::IntoIter>>
+    where
+        E: Entity + Keyed,
+        I: IntoIterator<Item = E>,
+        I::IntoIter: Clone,
+    {
+        let entities = entities.into_iter();
+        if entities.clone().all(|e| self.contains(e)) {
+            Some(Views {
+                map: self,
+                ids: entities,
+            })
+        } else {
+            None
+        }
+    }
+
     /// Returns an iterator over views of all of a given kind of entity in the map.
     fn iter_views<E: Entity + Keyed>(
         &'_ self,
-    ) -> ViewIter<'_, Self, E, impl Iterator<Item = E> + ExactSizeIterator> {
-        ViewIter {
+    ) -> Views<'_, Self, E, impl Iterator<Item = E> + ExactSizeIterator> {
+        Views {
             map: self,
             ids: self.iter(),
         }
