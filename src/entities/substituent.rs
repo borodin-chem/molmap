@@ -45,9 +45,9 @@ impl SubstituentData {
     }
 }
 
-pub type SubstituentView<'a, M> = View<'a, M, Substituent>;
+pub type SubstituentView<'m, M> = View<'m, M, Substituent>;
 
-impl<'a, M: MolMap> View<'a, M, Substituent> {
+impl<'m, M: MolMap> View<'m, M, Substituent> {
     /// Returns details of the centre(s) of the substituent.
     pub fn centre(&self) -> &SubstituentCentre {
         &self.data().centre
@@ -64,7 +64,7 @@ impl<'a, M: MolMap> View<'a, M, Substituent> {
     }
 }
 
-impl<'a, M: MolMap> ViewMut<'a, M, Substituent> {
+impl<'m, M: MolMap> ViewMut<'m, M, Substituent> {
     ///// Attempts to change the centre of the substituent to the one requested.
     /////
     ///// # Errors

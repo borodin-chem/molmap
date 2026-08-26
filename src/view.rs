@@ -40,18 +40,18 @@ use crate::{MolMap, entities::*, graph::keys::Keyed};
 //    does not consume the mutable view)
 
 /// An immutable view of an individual entity in a specific [`MolMap`].
-pub struct View<'a, M: MolMap, E: Entity> {
-    pub(crate) map: &'a M,
+pub struct View<'m, M: MolMap, E: Entity> {
+    pub(crate) map: &'m M,
     pub(crate) id: E,
 }
 
-impl<'a, M: MolMap, E: Entity> View<'a, M, E> {
+impl<'m, M: MolMap, E: Entity> View<'m, M, E> {
     pub fn id(&self) -> E {
         self.id
     }
 }
 
-impl<'a, M: MolMap, E: Entity + Keyed> View<'a, M, E> {
+impl<'m, M: MolMap, E: Entity + Keyed> View<'m, M, E> {
     /// Returns a reference to the entity's data struct in the core [`MolGraph`]."
     pub(crate) fn data(&self) -> &E::DATA {
         self.map.core().data(self.id)
@@ -65,14 +65,14 @@ impl<'a, M: MolMap, E: Entity + Keyed> View<'a, M, E> {
 /// operation. As such, all public methods of a mutable view, other than `id`,
 /// consume it.
 #[derive(Debug)]
-pub struct ViewMut<'a, M: MolMap, E: Entity> {
-    pub(crate) map: &'a mut M,
+pub struct ViewMut<'m, M: MolMap, E: Entity> {
+    pub(crate) map: &'m mut M,
     pub(crate) id: E,
 }
 
-impl<'a, M: MolMap, E: Entity> ViewMut<'a, M, E> {
+impl<'m, M: MolMap, E: Entity> ViewMut<'m, M, E> {
     /// Returns an immutable view of the same entity.
-    fn as_view(&'a self) -> View<'a, M, E> {
+    fn as_view(&'m self) -> View<'m, M, E> {
         View {
             map: &*self.map,
             id: self.id,
@@ -81,17 +81,17 @@ impl<'a, M: MolMap, E: Entity> ViewMut<'a, M, E> {
 }
 
 /// An iterator that yields an immutable view of each of a set of entities in turn.
-pub struct ViewIter<'a, M, E, I>
+pub struct ViewIter<'m, M, E, I>
 where
     M: MolMap,
     E: Entity,
     I: Iterator<Item = E>,
 {
-    pub(crate) map: &'a M,
+    pub(crate) map: &'m M,
     pub(crate) ids: I,
 }
 
-impl<'a, M, E, I> ViewIter<'a, M, E, I>
+impl<'m, M, E, I> ViewIter<'m, M, E, I>
 where
     M: MolMap,
     E: Entity,
@@ -102,13 +102,13 @@ where
     }
 }
 
-impl<'a, M, E, I> Iterator for ViewIter<'a, M, E, I>
+impl<'m, M, E, I> Iterator for ViewIter<'m, M, E, I>
 where
     M: MolMap,
     E: Entity,
     I: Iterator<Item = E>,
 {
-    type Item = View<'a, M, E>;
+    type Item = View<'m, M, E>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(id) = self.ids.next() {
@@ -119,7 +119,7 @@ where
     }
 }
 
-impl<'a, M, E, I> ExactSizeIterator for ViewIter<'a, M, E, I>
+impl<'m, M, E, I> ExactSizeIterator for ViewIter<'m, M, E, I>
 where
     M: MolMap,
     E: Entity,
@@ -130,7 +130,7 @@ where
     }
 }
 
-impl<'a, M, E, I> FusedIterator for ViewIter<'a, M, E, I>
+impl<'m, M, E, I> FusedIterator for ViewIter<'m, M, E, I>
 where
     M: MolMap,
     E: Entity,

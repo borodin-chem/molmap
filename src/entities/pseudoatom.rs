@@ -28,9 +28,9 @@ impl PseudoatomData {
     }
 }
 
-pub type PseudoatomView<'a, M> = View<'a, M, Pseudoatom>;
+pub type PseudoatomView<'m, M> = View<'m, M, Pseudoatom>;
 
-impl<'a, M: MolMap> View<'a, M, Pseudoatom> {
+impl<'m, M: MolMap> View<'m, M, Pseudoatom> {
     pub fn bonds(&self) -> &[Bond] {
         &self.data().bonds
     }

@@ -24,9 +24,9 @@ impl MoleculeData {
     }
 }
 
-pub type MoleculeView<'a, M> = View<'a, M, Molecule>;
+pub type MoleculeView<'m, M> = View<'m, M, Molecule>;
 
-impl<'a, M: MolMap> View<'a, M, Molecule> {
+impl<'m, M: MolMap> View<'m, M, Molecule> {
     /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.
     pub fn members(&self) -> impl Iterator<Item = impl Fundamental> {
         self.data().members.iter().copied()

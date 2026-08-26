@@ -37,9 +37,9 @@ impl BondData {
     }
 }
 
-pub type BondView<'a, M> = View<'a, M, Bond>;
+pub type BondView<'m, M> = View<'m, M, Bond>;
 
-impl<'a, M: MolMap> View<'a, M, Bond> {
+impl<'m, M: MolMap> View<'m, M, Bond> {
     pub fn bond_type(&self) -> BondType {
         self.data().bond_type
     }
