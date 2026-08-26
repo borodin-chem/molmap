@@ -8,9 +8,11 @@
 
 use std::{fmt::Debug, iter::FusedIterator};
 
+use nalgebra::{Point, Point2};
+use slotmap::SecondaryMap;
 use slotmap::SlotMap;
 
-use crate::{graph::MolGraph, graph::keys::*, view::ViewIter, *};
+use crate::{entities::*, graph::MolGraph, graph::keys::*, view::*};
 
 /// A trait implemented by all `MolMap` types to provide access to their core
 /// `MolGraph` without exposing a public interface to it.
@@ -92,19 +94,15 @@ pub trait MolMap: Sized + MolMapCore {
         // This version of contains is flexible, for the public API, and can do
         // the check for any
         match entity.as_tagged_entity() {
-            entities::TaggedEntity::Atom(atom) => {
-                Atom::get_slotmap(self.core()).contains_key(atom.to_key())
-            }
-            entities::TaggedEntity::Bond(bond) => {
-                Bond::get_slotmap(self.core()).contains_key(bond.to_key())
-            }
-            entities::TaggedEntity::Pseudoatom(pseudoatom) => {
+            TaggedEntity::Atom(atom) => Atom::get_slotmap(self.core()).contains_key(atom.to_key()),
+            TaggedEntity::Bond(bond) => Bond::get_slotmap(self.core()).contains_key(bond.to_key()),
+            TaggedEntity::Pseudoatom(pseudoatom) => {
                 Pseudoatom::get_slotmap(self.core()).contains_key(pseudoatom.to_key())
             }
-            entities::TaggedEntity::Substituent(substituent) => {
+            TaggedEntity::Substituent(substituent) => {
                 Substituent::get_slotmap(self.core()).contains_key(substituent.to_key())
             }
-            entities::TaggedEntity::Molecule(molecule) => {
+            TaggedEntity::Molecule(molecule) => {
                 Molecule::get_slotmap(self.core()).contains_key(molecule.to_key())
             }
         }

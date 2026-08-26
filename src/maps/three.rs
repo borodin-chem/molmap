@@ -9,7 +9,11 @@
 use nalgebra::{Point, Point3};
 use slotmap::SecondaryMap;
 
-use crate::{graph::MolGraph, graph::keys::*, traits::MolMapCore, *};
+use crate::{
+    graph::{MolGraph, keys::*},
+    maps::molmap::MolMapCore,
+    *,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct MolMap3 {

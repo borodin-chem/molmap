@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::*;
+use crate::{MolMap, categories::*, entities::*, view::*};
 
 /// The type of a bond e.g. covalent, ionic.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -36,8 +36,6 @@ impl BondData {
         }
     }
 }
-
-pub type BondView<'m, M> = View<'m, M, Bond>;
 
 impl<'m, M: MolMap> View<'m, M, Bond> {
     pub fn bond_type(&self) -> BondType {

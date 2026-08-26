@@ -6,13 +6,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{
-    entities::{atom::*, bond::*, molecule::*, pseudoatom::*, substituent::*, *},
-    graph::MolGraph,
-    id::Id,
-    *,
-};
-use slotmap::{Key, SlotMap, basic::Keys, new_key_type};
+//! Definitions of the slotmap::Key types for each kind of entity and their
+//! correspondences to the entity types.
+
+use slotmap::{Key, SlotMap, new_key_type};
+
+use crate::{entities::*, graph::MolGraph, graph::entities::*, id::Id};
 
 /// A fundamental kind of entity in the graph, with a backing `SlotMap`.
 pub trait Keyed: Entity {

@@ -6,6 +6,53 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+//! Definition of the entity ID type and its relationship to slotmap::Key types.
+//!
+//! Each kind of entity has a corresponding SlotMap in a MolGraph and therefore
+//! its own slotmap::Key type. These could be used as IDs for the entities.
+//! However, in various places it is necessary to store polymorphic IDs (i.e. IDs
+//! of multiple kinds of entity) in a single collection, which thus requires some
+//! sort of type erasure.
+//!
+//! The strategy originally pursued was to wrap the keys in "category ID" enums,
+//! but this makes the category ID types 12 bytes vs 8 for the the entity key
+//! types, and as they are widely used, that just means a lot of unnecessary
+//! memory use.
+//!
+//! So, instead, we convert the entity keys to universal "entity IDs". These are
+//! identical to the raw `u64` representations of the keys (obtained using the
+//! `as_ffi` method) but with the high 8 bits of the index field co-opted to
+//! store a discriminant that indicates the entity kind.
+//!
+//! In this way, an ID can be cast from the "key ID" type, which is specific to
+//! the kind of entity, to a "category ID" type, which could be one of a number
+//! of different kinds, at zero cost (because the same underlying representation
+//! is kept), and with the kind of entity it corresponds to recoverable
+//! dynamically, despite no increase in size.
+//!
+//! It also means that all IDs are globally unique.
+//!
+//! The version of a SlotMap key wraps, so even if 2^31 deletion-addition cycles
+//! occur at the same slot, there will be no issues; the only situation in which
+//! a stale key will spuriously refer to something other than it originally did
+//! is if *exactly* 2^31 deletion-addition cycles have occurred at the same slot
+//! since the original key was generated and access is attempted with the stale
+//! original key. This is exceptionally unlikely.
+//!
+//! If the bits for the discriminant are stolen from the version field, the
+//! version has to be hard capped at the maximum value of the remaining bits i.e.
+//! 2^27, as anything higher will not survive a round trip.
+//!
+//! As such, it is better to take the bits from the index field, as that already
+//! has a hard cap (we just reduce it). This means the number of atoms is limited
+//! to 2^24, as is the number of bonds (or indeed any individual entity).
+//!
+//! As the discriminant is encoded by 8 bits, the number of different entity
+//! types is limited to 256. Only those in the range of 0 to 127 are reserved for
+//! use in the core `MolGraph`; the rest are left for use by extensions that wish
+//! to add additional entity types but still use IDs that are compatible (i.e.
+//! non-conflicting) with these IDs.
+
 use std::fmt::{Debug, Formatter};
 use std::iter::FusedIterator;
 use std::marker::PhantomData;
@@ -13,52 +60,7 @@ use std::num::{IntErrorKind, NonZeroU16, NonZeroU32, NonZeroU64};
 
 use slotmap::{Key, KeyData};
 
-use crate::*;
-
-// Each kind of entity has a corresponding SlotMap in a MolGraph and therefore
-// its own slotmap::Key type. These could be used as IDs for the entities.
-// However, in various places it is necessary to store polymorphic IDs (i.e. IDs
-// of multiple kinds of entity) in a single collection, which thus requires some
-// sort of type erasure.
-//
-// The strategy originally pursued was to wrap the keys in "category ID" enums,
-// but this makes the category ID types 12 bytes vs 8 for the the entity key
-// types, and as they are widely used, that just means a lot of unnecessary
-// memory use.
-//
-// So, instead, we convert the entity keys to universal "entity IDs". These are
-// identical to the raw `u64` representations of the keys (obtained using the
-// `as_ffi` method) but with the high 8 bits of the index field co-opted to
-// store a discriminant that indicates the entity kind.
-//
-// In this way, an ID can be cast from the "key ID" type, which is specific to
-// the kind of entity, to a "category ID" type, which could be one of a number
-// of different kinds, at zero cost (because the same underlying representation
-// is kept), and with the kind of entity it corresponds to recoverable
-// dynamically, despite no increase in size.
-//
-// It also means that all IDs are globally unique.
-//
-// The version of a SlotMap key wraps, so even if 2^31 deletion-addition cycles
-// occur at the same slot, there will be no issues; the only situation in which
-// a stale key will spuriously refer to something other than it originally did
-// is if *exactly* 2^31 deletion-addition cycles have occurred at the same slot
-// since the original key was generated and access is attempted with the stale
-// original key. This is exceptionally unlikely.
-//
-// If the bits for the discriminant are stolen from the version field, the
-// version has to be hard capped at the maximum value of the remaining bits i.e.
-// 2^27, as anything higher will not survive a round trip.
-//
-// As such, it is better to take the bits from the index field, as that already
-// has a hard cap (we just reduce it). This means the number of atoms is limited
-// to 2^24, as is the number of bonds (or indeed any individual entity).
-//
-// As the discriminant is encoded by 8 bits, the number of different entity
-// types is limited to 256. Only those in the range of 0 to 127 are reserved for
-// use in the core `MolGraph`; the rest are left for use by extensions that wish
-// to add additional entity types but still use IDs that are compatible (i.e.
-// non-conflicting) with these IDs.
+use crate::entities::*;
 
 /// The ID of one of any kind of entity, where the kind of entity is encoded by
 /// an 8-bit discriminant.

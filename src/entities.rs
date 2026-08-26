@@ -6,25 +6,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-pub mod atom;
-pub mod bond;
-pub mod molecule;
-pub mod pseudoatom;
-pub mod substituent;
+//! Definitions of the basic kinds of entity.
 
 use std::iter::FusedIterator;
 
 use slotmap::{Key, SlotMap, new_key_type};
 
-use crate::{
-    MolMapError, MolMapResult,
-    entities::{
-        atom::AtomData, bond::BondData, molecule::MoleculeData, pseudoatom::PseudoatomData,
-        substituent::SubstituentData,
-    },
-    graph::MolGraph,
-    id::Id,
-};
+use crate::{error::*, id::Id};
 
 /// The kind of an entity.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]

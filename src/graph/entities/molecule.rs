@@ -8,7 +8,7 @@
 
 use std::collections::HashSet;
 
-use crate::*;
+use crate::{MolMap, categories::*, entities::*, view::*};
 
 /// The core data of a molecule entity.
 #[derive(Clone, Debug)]
@@ -23,8 +23,6 @@ impl MoleculeData {
         }
     }
 }
-
-pub type MoleculeView<'m, M> = View<'m, M, Molecule>;
 
 impl<'m, M: MolMap> View<'m, M, Molecule> {
     /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.

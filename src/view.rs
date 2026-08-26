@@ -6,13 +6,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+//! Immutable and mutable views of an entity in a specific [`MolMap`].
+
 use std::iter::FusedIterator;
 
 use crate::{MolMap, entities::*, graph::keys::Keyed};
 
-// Defines immutable and mutable views of an entity type for a generic [`MolMap`],
-// as well as an iterator over the immutable view type.
-//
 // The view structs simply hold an immutable or mutable reference to the parent map,
 // as appropriate, and the corresponding ID. Both have the visibility `pub(crate)`
 // so that views can be easily constructed in other places in `molmap`, but not by

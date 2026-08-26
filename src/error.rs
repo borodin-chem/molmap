@@ -6,11 +6,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::EntityKind;
-use crate::categories::AnyFundamental;
-use crate::id::Id;
+//! Errors specific to the crate.
 
-/// Errors specific to the crate.
+use crate::{categories::AnyFundamental, entities::EntityKind, id::Id};
+
+/// An `Error` type for errors specific to the crate.
 #[derive(thiserror::Error, Debug)]
 pub enum MolMapError {
     /// Returned when an ID is invalid.

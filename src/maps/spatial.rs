@@ -9,7 +9,7 @@
 use nalgebra::{Point, Point2};
 use slotmap::SecondaryMap;
 
-use crate::*;
+use crate::{MolMap, entities::*};
 
 /// A [`MolMap`] that also holds the spatial positions (with dimensionality `D`)
 /// of its entities.

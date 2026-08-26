@@ -8,13 +8,14 @@
 
 use std::iter::FusedIterator;
 
-use slotmap::{SlotMap, basic::Keys, new_key_type};
+use slotmap::{SlotMap, basic::Keys};
 
 use crate::{
-    entities::{atom::*, bond::*, molecule::*, pseudoatom::*, substituent::*, *},
-    graph::keys::*,
+    Element, Pseudoelement,
+    categories::*,
+    entities::*,
+    graph::{entities::*, keys::*},
     id::Id,
-    *,
 };
 
 /// An arena-like data structure to represent a set of chemical entities,
