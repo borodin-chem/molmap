@@ -8,21 +8,15 @@
 
 use std::collections::HashSet;
 
-use slotmap::{basic::Keys, new_key_type};
-
-use crate::{
-    entities::macros::define_entity_views,
-    ids::{FundamentalId, MoleculeId, MoleculeIds},
-    traits::MolMap,
-};
+use crate::{MolMap, categories::*, entities::*, view::*};
 
 /// The core data of a molecule entity.
 #[derive(Clone, Debug)]
-pub(crate) struct Molecule {
-    pub(crate) members: HashSet<FundamentalId>,
+pub struct MoleculeData {
+    pub(crate) members: HashSet<AnyFundamental>,
 }
 
-impl Molecule {
+impl MoleculeData {
     pub fn new() -> Self {
         Self {
             members: HashSet::new(),
@@ -30,16 +24,14 @@ impl Molecule {
     }
 }
 
-define_entity_views!(Molecule);
-
-impl<'a, M: MolMap> MoleculeView<'a, M> {
+impl<'m, M: MolMap> View<'m, M, Molecule> {
     /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.
-    pub fn members(&self) -> impl Iterator<Item = FundamentalId> {
-        self.core().members.iter().copied()
+    pub fn members(&self) -> impl Iterator<Item = impl Fundamental> {
+        self.data().members.iter().copied()
     }
 
     /// Checks if the molecule contains the given atom, pseudoatom, or bond.
-    pub fn contains(&self, fundamental: FundamentalId) -> bool {
-        self.core().members.contains(&fundamental)
+    pub fn contains(&self, fundamental: impl Fundamental) -> bool {
+        self.data().members.contains(&fundamental.as_fundamental())
     }
 }

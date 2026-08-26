@@ -8,23 +8,40 @@
 
 #![allow(unused)]
 
-// Re-export nalgebra to make it easier for others to use
-pub use nalgebra;
-
+// Private modules
+// ---------------
+mod definition;
 mod element;
-mod entities;
-mod error;
 mod graph;
+mod id;
 mod maps;
 mod pseudoelement;
 
-pub mod ids;
-pub mod traits;
-pub mod views;
+// ----------
+// Public API
+// ----------
 
+// Publicly accessible modules
+// ---------------------------
+pub mod categories;
+pub mod entities;
+pub mod error;
+pub mod view;
+
+// Top-level items
+// ---------------
 pub use element::Element;
-pub use entities::bond::BondType;
-pub use error::{MolMapError, MolMapResult};
-pub use maps::{MolMap0, MolMap2, MolMap3};
+pub use graph::entities::BondType;
+pub use maps::{MolMap, SpatialMolMap}; // Traits
+pub use maps::{MolMap0, MolMap2, MolMap3}; // Common map types
 pub use pseudoelement::Pseudoelement;
-pub use traits::{MolMap, SpatialMolMap};
+
+// Selected re-exports from public modules
+// ---------------------------------------
+pub use entities::{Atom, Bond, Molecule, Pseudoatom, Substituent}; // All the basic kinds of entity
+
+// Foreign re-exports
+// ------------------
+// Foreign crates or things from them
+// Re-exporting nalgebra makes it easier for others to use
+pub use nalgebra;

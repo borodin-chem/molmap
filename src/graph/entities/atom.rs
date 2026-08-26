@@ -4,25 +4,18 @@
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.;
 
-use slotmap::basic::Keys;
-
-use crate::{
-    Element, MolMapError, MolMapResult,
-    entities::macros::define_entity_views,
-    ids::{AtomId, AtomIds, BondId},
-    traits::MolMap,
-};
+use crate::{Element, MolMap, categories::*, entities::*, view::*};
 
 /// The core data of an atom entity.
 #[derive(Clone, Debug)]
-pub(crate) struct Atom {
+pub struct AtomData {
     pub(crate) element: Element,
-    pub(crate) bonds: Vec<BondId>,
+    pub(crate) bonds: Vec<Bond>,
 }
 
-impl Atom {
+impl AtomData {
     pub(crate) fn new(element: Element) -> Self {
         Self {
             element,
@@ -31,18 +24,16 @@ impl Atom {
     }
 }
 
-define_entity_views!(Atom);
-
-impl<'a, M: MolMap> AtomView<'a, M> {
+impl<'a, M: MolMap> View<'a, M, Atom> {
     pub fn element(&self) -> Element {
-        self.core().element
+        self.data().element
     }
 
     pub fn symbol(&self) -> &str {
-        self.core().element.symbol()
+        self.data().element.symbol()
     }
 
-    pub fn bonds(&self) -> &[BondId] {
-        &self.core().bonds
+    pub fn bonds(&self) -> &[Bond] {
+        &self.data().bonds
     }
 }

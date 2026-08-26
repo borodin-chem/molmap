@@ -6,10 +6,19 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+//! Definitions of the various map types provided by `molmap` and their supporting
+//! types and traits.
+
+mod molmap;
+mod spatial;
 mod three;
 mod two;
 mod zero;
 
+pub(crate) use molmap::MolMapCore;
+
+pub use molmap::MolMap;
+pub use spatial::SpatialMolMap;
 pub use three::MolMap3;
 pub use two::MolMap2;
 pub use zero::MolMap0;
