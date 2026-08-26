@@ -26,7 +26,6 @@ pub mod entities;
 
 pub(crate) use categories::*;
 pub use element::Element;
-pub(crate) use entities::Keyed;
 pub use entities::bond::BondType;
 pub use entities::{Atom, Bond, Molecule, Pseudoatom, Substituent};
 pub use entities::{Entity, EntityKind};

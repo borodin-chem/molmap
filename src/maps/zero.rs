@@ -70,8 +70,7 @@ impl MolMap0 {
         (
             centre,
             self.core()
-                .atoms
-                .get(centre.into())
+                .get_data(centre)
                 .expect("We just created this atom, so ID must be valid")
                 .bonds
                 .as_slice(),
@@ -148,8 +147,7 @@ impl MolMap0 {
             sub,
             centre,
             self.core()
-                .atoms
-                .get(centre.into())
+                .get_data(centre)
                 .expect("We just created this atom, so ID must be valid")
                 .bonds
                 .as_slice(),
@@ -210,16 +208,29 @@ mod tests {
     #[test]
     fn add_atom() {
         let mut mm = MolMap0::new();
-        assert!(mm.core.atoms.is_empty());
+        assert!(mm.core().slotmap::<Atom>().is_empty());
         let h1 = mm.add_atom(Element::H);
-        assert_eq!(mm.core.atoms.len(), 1);
+        assert_eq!(mm.core().slotmap::<Atom>().len(), 1);
         let c1 = mm.add_atom(Element::C);
-        assert_eq!(mm.core.atoms.len(), 2);
+        assert_eq!(mm.core().slotmap::<Atom>().len(), 2);
         // Check the atoms can be accessed by their ID, and that the elements are correct
-        assert_eq!(mm.core.atoms.get(h1.into()).unwrap().element, Element::H);
-        assert_eq!(mm.core.atoms.get(c1.into()).unwrap().element, Element::C);
+        assert_eq!(
+            mm.core().slotmap::<Atom>().get(h1.into()).unwrap().element,
+            Element::H
+        );
+        assert_eq!(
+            mm.core().slotmap::<Atom>().get(c1.into()).unwrap().element,
+            Element::C
+        );
         // Check that the bond arrays are created empty
-        assert!(mm.core.atoms.get(h1.into()).unwrap().bonds.is_empty());
+        assert!(
+            mm.core()
+                .slotmap::<Atom>()
+                .get(h1.into())
+                .unwrap()
+                .bonds
+                .is_empty()
+        );
     }
 
     //#[test]
@@ -239,9 +250,9 @@ mod tests {
     //    let mut mm = MolMap0::new();
     //    let h1 = mm.add_atom(Element::H);
     //    let c1 = mm.add_atom(Element::C);
-    //    assert_eq!(mm.core.atoms.len(), 2);
+    //    assert_eq!(mm.core().slotmap::<Atom>().len(), 2);
     //    mm.remove_atom(h1);
-    //    assert_eq!(mm.core.atoms.len(), 1);
+    //    assert_eq!(mm.core().slotmap::<Atom>().len(), 1);
     //}
 
     //#[test]
@@ -256,15 +267,35 @@ mod tests {
     #[test]
     fn add_bond_between_atoms() {
         let mut mm = MolMap0::new();
-        assert!(mm.core.bonds.is_empty());
+        assert!(mm.core().slotmap::<Bond>().is_empty());
         let h1 = mm.add_atom(Element::H);
         let h2 = mm.add_atom(Element::H);
         let b1 = mm.add_bond(h1, h2).unwrap();
-        assert!(mm.core.bonds.contains_key(b1.into()));
-        assert!(mm.core.atoms.get(h1.into()).unwrap().bonds.contains(&b1));
-        assert!(mm.core.atoms.get(h2.into()).unwrap().bonds.contains(&b1));
-        assert_eq!(mm.core.bonds.get(b1.into()).unwrap().start, h1.into());
-        assert_eq!(mm.core.bonds.get(b1.into()).unwrap().end, h2.into());
+        assert!(mm.core().slotmap::<Bond>().contains_key(b1.into()));
+        assert!(
+            mm.core()
+                .slotmap::<Atom>()
+                .get(h1.into())
+                .unwrap()
+                .bonds
+                .contains(&b1)
+        );
+        assert!(
+            mm.core()
+                .slotmap::<Atom>()
+                .get(h2.into())
+                .unwrap()
+                .bonds
+                .contains(&b1)
+        );
+        assert_eq!(
+            mm.core().slotmap::<Bond>().get(b1.into()).unwrap().start,
+            h1.into()
+        );
+        assert_eq!(
+            mm.core().slotmap::<Bond>().get(b1.into()).unwrap().end,
+            h2.into()
+        );
     }
 
     //#[test]
@@ -273,15 +304,15 @@ mod tests {
     //    let h1 = mm.add_atom(Element::H);
     //    let h2 = mm.add_atom(Element::H);
     //    let b1 = mm.add_bond(h1.into(), h2.into()).unwrap();
-    //    assert!(mm.core.bonds.contains_key(b1));
-    //    assert!(mm.core.atoms.get(h1).unwrap().bonds.contains(&b1));
-    //    assert!(mm.core.atoms.get(h2).unwrap().bonds.contains(&b1));
-    //    assert_eq!(mm.core.bonds.get(b1).unwrap().start, h1.into());
-    //    assert_eq!(mm.core.bonds.get(b1).unwrap().end, h2.into());
+    //    assert!(mm.core().slotmap::<Bond>().contains_key(b1));
+    //    assert!(mm.core().slotmap::<Atom>().get(h1).unwrap().bonds.contains(&b1));
+    //    assert!(mm.core().slotmap::<Atom>().get(h2).unwrap().bonds.contains(&b1));
+    //    assert_eq!(mm.core().slotmap::<Bond>().get(b1).unwrap().start, h1.into());
+    //    assert_eq!(mm.core().slotmap::<Bond>().get(b1).unwrap().end, h2.into());
     //    mm.remove_bond(b1);
-    //    assert!(!mm.core.bonds.contains_key(b1));
-    //    assert!(!mm.core.atoms.get(h1).unwrap().bonds.contains(&b1));
-    //    assert!(!mm.core.atoms.get(h2).unwrap().bonds.contains(&b1));
+    //    assert!(!mm.core().slotmap::<Bond>().contains_key(b1));
+    //    assert!(!mm.core().slotmap::<Atom>().get(h1).unwrap().bonds.contains(&b1));
+    //    assert!(!mm.core().slotmap::<Atom>().get(h2).unwrap().bonds.contains(&b1));
     //}
 
     //#[test]

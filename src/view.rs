@@ -8,7 +8,7 @@
 
 use std::iter::FusedIterator;
 
-use crate::{MolMap, entities::*};
+use crate::{MolMap, entities::*, graph::keys::Keyed};
 
 // Defines immutable and mutable views of an entity type for a generic [`MolMap`],
 // as well as an iterator over the immutable view type.
@@ -54,10 +54,7 @@ impl<'a, M: MolMap, E: Entity> View<'a, M, E> {
 impl<'a, M: MolMap, E: Entity + Keyed> View<'a, M, E> {
     /// Returns a reference to the entity's data struct in the core [`MolGraph`]."
     pub(crate) fn data(&self) -> &E::DATA {
-        self.map
-            .core()
-            .get_data(self.id)
-            .expect("ID is known to be valid")
+        self.map.core().data(self.id)
     }
 }
 

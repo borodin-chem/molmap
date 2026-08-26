@@ -10,13 +10,7 @@ use std::{fmt::Debug, iter::FusedIterator};
 
 use slotmap::SlotMap;
 
-use crate::{
-    entities::{AtomKey, atom::AtomData},
-    graph::MolGraph,
-    id::Id,
-    view::ViewIter,
-    *,
-};
+use crate::{graph::MolGraph, graph::keys::*, view::ViewIter, *};
 
 /// A trait implemented by all `MolMap` types to provide access to their core
 /// `MolGraph` without exposing a public interface to it.
@@ -94,10 +88,10 @@ pub trait MolMap: Sized + MolMapCore {
     // ------------------
 
     /// Checks if the map currently contains the given entity.
-    fn contains<E: Entity>(&self, id: E) -> bool {
+    fn contains<E: Entity>(&self, entity: E) -> bool {
         // This version of contains is flexible, for the public API, and can do
         // the check for any
-        match id.as_tagged_entity() {
+        match entity.as_tagged_entity() {
             entities::TaggedEntity::Atom(atom) => {
                 Atom::get_slotmap(self.core()).contains_key(atom.to_key())
             }
@@ -131,13 +125,19 @@ pub trait MolMap: Sized + MolMapCore {
     // - iterating over (immutable) views
 
     /// Constructs an immutable view of the given entity, returning `None` if the ID is invalid.
-    fn view<E: Entity + Keyed>(&'_ self, id: E) -> Option<View<'_, Self, E>> {
-        self.contains(id).then_some(View { map: self, id })
+    fn view<E: Entity + Keyed>(&'_ self, entity: E) -> Option<View<'_, Self, E>> {
+        self.contains(entity).then_some(View {
+            map: self,
+            id: entity,
+        })
     }
 
     /// Constructs a mutable view of the given entity, returning `None` if the ID is invalid.
-    fn view_mut<E: Entity + Keyed>(&'_ mut self, id: E) -> Option<ViewMut<'_, Self, E>> {
-        self.contains(id).then_some(ViewMut { map: self, id })
+    fn view_mut<E: Entity + Keyed>(&'_ mut self, entity: E) -> Option<ViewMut<'_, Self, E>> {
+        self.contains(entity).then_some(ViewMut {
+            map: self,
+            id: entity,
+        })
     }
 
     /// Returns an iterator over views of all of a given kind of entity in the map.
