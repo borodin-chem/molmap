@@ -12,6 +12,7 @@ use nalgebra::{Point, Point2};
 use slotmap::SecondaryMap;
 use slotmap::SlotMap;
 
+use crate::categories::Collection;
 use crate::{entities::*, graph::MolGraph, graph::keys::*, view::*};
 
 /// A trait implemented by all `MolMap` types to provide access to their core

@@ -24,7 +24,7 @@ impl AtomData {
     }
 }
 
-impl<'a, M: MolMap> View<'a, M, Atom> {
+impl<'m, M: MolMap> View<'m, M, Atom> {
     pub fn element(&self) -> Element {
         self.data().element
     }

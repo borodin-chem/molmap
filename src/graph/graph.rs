@@ -129,7 +129,7 @@ impl MolGraph {
     }
 }
 
-/// Methods for entity addition and deletion.
+/// Methods for entity addition.
 impl MolGraph {
     /// Adds an atom to the map.
     pub(crate) fn add_atom(&mut self, element: Element) -> Atom {
@@ -201,7 +201,10 @@ impl MolGraph {
     pub(crate) fn add_molecule(&mut self) -> Molecule {
         self.molecules.insert(MoleculeData::new()).into()
     }
+}
 
+/// Methods for entity removal.
+impl MolGraph {
     /// Removes an atom from the map, as well as any bonds to it.
     ///
     /// Returns whether the atom was present in the map.
