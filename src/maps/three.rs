@@ -11,14 +11,14 @@ use slotmap::SecondaryMap;
 
 use crate::{
     graph::{MolGraph, keys::*},
-    maps::molmap::MolMapCore,
+    maps::{MolMapCore, spatial::*},
     *,
 };
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct MolMap3 {
     pub(crate) core: MolGraph,
-    pub(crate) atom_positions: SecondaryMap<AtomKey, Point3<f64>>,
+    pub(crate) positions: Positions<3>,
 }
 
 impl MolMapCore for MolMap3 {
@@ -37,7 +37,7 @@ impl MolMap for MolMap3 {
     fn new() -> Self {
         Self {
             core: MolGraph::new(),
-            atom_positions: SecondaryMap::new(),
+            positions: Positions::new(),
         }
     }
 
@@ -50,29 +50,19 @@ impl MolMap for MolMap3 {
     ) -> Self {
         Self {
             core: MolGraph::with_capacities(atoms, pseudoatoms, bonds, substituents, molecules),
-            atom_positions: SecondaryMap::with_capacity(atoms),
+            positions: Positions::with_capacities(atoms, pseudoatoms, bonds),
         }
     }
 }
 
-impl SpatialMolMap<3> for MolMap3 {
-    fn atom_position(&self, id: Atom) -> Point<f64, 3> {
-        *self.atom_positions.get(id.into()).unwrap()
+impl SpatialMolMapCore<3> for MolMap3 {
+    fn positions(&self) -> &Positions<3> {
+        &self.positions
+    }
+
+    fn positions_mut(&mut self) -> &mut Positions<3> {
+        &mut self.positions
     }
 }
 
-impl MolMap3 {
-    pub fn add_atom(&mut self, element: Element, position: Point3<f64>) -> Atom {
-        let new_atom = self.core.add_atom(element);
-        self.atom_positions.insert(new_atom.into(), position);
-        new_atom
-    }
-}
-
-fn all_atom_positions<const D: usize, M: SpatialMolMap<{ D }>>(map: M) -> Vec<Point<f64, { D }>> {
-    let mut result = Vec::new();
-    for atom in map.iter() {
-        result.push(map.atom_position(atom));
-    }
-    result
-}
+impl SpatialMolMap<3> for MolMap3 {}
