@@ -129,7 +129,7 @@ impl MolGraph {
     }
 }
 
-/// Methods for entity addition and deletion.
+/// Methods for entity addition.
 impl MolGraph {
     /// Adds an atom to the map.
     pub(crate) fn add_atom(&mut self, element: Element) -> Atom {
@@ -201,7 +201,10 @@ impl MolGraph {
     pub(crate) fn add_molecule(&mut self) -> Molecule {
         self.molecules.insert(MoleculeData::new()).into()
     }
+}
 
+/// Methods for entity removal.
+impl MolGraph {
     /// Removes an atom from the map, as well as any bonds to it.
     ///
     /// Returns whether the atom was present in the map.
@@ -412,10 +415,10 @@ impl MolGraph {
     ///
     /// Panics if `substituent` is invalid, but is unaffected if any of the fundamental
     /// IDs are invalid.
-    pub(crate) fn extend_substituent<T, F>(&mut self, substituent: Substituent, fundamentals: T)
+    pub(crate) fn extend_substituent<E, I>(&mut self, substituent: Substituent, fundamentals: I)
     where
-        T: IntoIterator<Item = F>,
-        F: Fundamental,
+        E: Fundamental,
+        I: IntoIterator<Item = E>,
     {
         let sub = self.substituents.get_mut(substituent.into()).unwrap();
         // Can't just call extend, because we don't allow the IDs to be added twice
@@ -433,10 +436,10 @@ impl MolGraph {
     ///
     /// Panics if `molecule` is invalid, but is unaffected if any of the fundamental
     /// IDs are invalid.
-    pub(crate) fn extend_molecule<T, F>(&mut self, molecule: Molecule, fundamentals: T)
+    pub(crate) fn extend_molecule<E, I>(&mut self, molecule: Molecule, fundamentals: I)
     where
-        T: IntoIterator<Item = F>,
-        F: Fundamental,
+        E: Fundamental,
+        I: IntoIterator<Item = E>,
     {
         let mol = self.molecules.get_mut(molecule.into()).unwrap();
         mol.members

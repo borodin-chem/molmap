@@ -46,7 +46,7 @@ impl<'m, M: MolMap> View<'m, M, Bond> {
         self.data().order
     }
 
-    pub fn partners(&self) -> [impl Bondable; 2] {
+    pub fn partners(&self) -> [AnyBondable; 2] {
         let inner = self.data();
         [inner.start, inner.end]
     }

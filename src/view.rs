@@ -80,7 +80,7 @@ impl<'m, M: MolMap, E: Entity> ViewMut<'m, M, E> {
 }
 
 /// An iterator that yields an immutable view of each of a set of entities in turn.
-pub struct ViewIter<'m, M, E, I>
+pub struct Views<'m, M, E, I>
 where
     M: MolMap,
     E: Entity,
@@ -90,7 +90,7 @@ where
     pub(crate) ids: I,
 }
 
-impl<'m, M, E, I> ViewIter<'m, M, E, I>
+impl<'m, M, E, I> Views<'m, M, E, I>
 where
     M: MolMap,
     E: Entity,
@@ -101,7 +101,7 @@ where
     }
 }
 
-impl<'m, M, E, I> Iterator for ViewIter<'m, M, E, I>
+impl<'m, M, E, I> Iterator for Views<'m, M, E, I>
 where
     M: MolMap,
     E: Entity,
@@ -118,7 +118,7 @@ where
     }
 }
 
-impl<'m, M, E, I> ExactSizeIterator for ViewIter<'m, M, E, I>
+impl<'m, M, E, I> ExactSizeIterator for Views<'m, M, E, I>
 where
     M: MolMap,
     E: Entity,
@@ -129,7 +129,7 @@ where
     }
 }
 
-impl<'m, M, E, I> FusedIterator for ViewIter<'m, M, E, I>
+impl<'m, M, E, I> FusedIterator for Views<'m, M, E, I>
 where
     M: MolMap,
     E: Entity,

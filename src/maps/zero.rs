@@ -6,7 +6,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{categories::*, error::*, graph::MolGraph, maps::MolMapCore, *};
+use crate::{
+    categories::*,
+    entities::Entity,
+    error::*,
+    graph::MolGraph,
+    maps::MolMapCore,
+    view::{View, ViewMut},
+    *,
+};
 
 /// A pure molecular graph, without spatial positions.
 #[derive(Clone, Debug, Default)]
@@ -46,9 +54,8 @@ impl MolMap for MolMap0 {
     }
 }
 
+/// Methods for entity addition.
 impl MolMap0 {
-    // Methods to add entities
-
     /// Adds an atom to the map.
     pub fn add_atom(&mut self, element: Element) -> Atom {
         self.core.add_atom(element)
@@ -175,6 +182,260 @@ impl MolMap0 {
     }
 }
 
+// Implement public API for deleting entities/changing their collection membership,
+// via mutable views
+
+impl<'m> ViewMut<'m, MolMap0, Atom> {
+    /// Removes the atom from the map, as well as any bonds to it.
+    pub fn delete(self) {
+        self.map.core_mut().delete_atom(self.id);
+    }
+}
+
+impl<'m> ViewMut<'m, MolMap0, Pseudoatom> {
+    /// Removes the pseudoatom from the map, as well as any bonds to it.
+    pub fn delete(self) {
+        self.map.core_mut().delete_pseudoatom(self.id);
+    }
+}
+
+impl<'m> ViewMut<'m, MolMap0, Bond> {
+    /// Removes the bond from the map (but not its bonding partners).
+    pub fn delete(self) {
+        self.map.core_mut().delete_bond(self.id);
+    }
+}
+
+impl<'m> ViewMut<'m, MolMap0, Substituent> {
+    /// Removes the substituent from the map, as well as all of its members.
+    pub fn delete(self) {
+        self.map.core_mut().delete_substituent(self.id);
+    }
+
+    /// Adds an atom, pseudoatom, or bond to the substituent.
+    ///
+    /// Returns whether the fundamental was newly inserted.
+    ///
+    /// If the fundamental is already a member of another substituent, it is removed
+    /// from it before it is inserted into this one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the fundamental is invalid.
+    pub fn insert(self, fundamental: impl Fundamental) -> MolMapResult<bool> {
+        if !self.map.contains(fundamental) {
+            return Err(MolMapError::Id(fundamental.into_inner()));
+        };
+        if let Some(parent) = self.map.core().parent_substituent(fundamental) {
+            if parent == self.id {
+                return Ok(false);
+            } else {
+                self.map
+                    .core_mut()
+                    .remove_from_substituent(parent, fundamental);
+            }
+        }
+        // All clear to add it to this substituent now
+        // Note this will always return Ok(true)
+        Ok(self
+            .map
+            .core_mut()
+            .insert_into_substituent(self.id, fundamental))
+    }
+
+    /// Adds atoms, pseudoatoms, or bonds from an iterator to the substituent.
+    ///
+    /// If any of the fundamentals are already members of other substituents, they are
+    /// removed before they are inserted into this one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the fundamentals are invalid, in which case the
+    /// map will remain unchanged; the returned error will hold the ID of the first
+    /// invalid fundamental encountered.
+    pub fn extend<E, I>(self, fundamentals: I) -> MolMapResult<()>
+    where
+        E: Entity + Into<AnyFundamental>,
+        I: IntoIterator<Item = E>,
+        I::IntoIter: Clone,
+    {
+        let fundamentals = fundamentals.into_iter();
+        for f in fundamentals.clone() {
+            if !self.map.contains(f) {
+                return Err(MolMapError::Id(f.into_inner()));
+            }
+        }
+        for f in fundamentals {
+            let f: AnyFundamental = f.into();
+            if let Some(parent) = self.map.core().parent_substituent(f) {
+                if parent == self.id {
+                    // Already a member, so skip it
+                    continue;
+                } else {
+                    self.map.core_mut().remove_from_substituent(parent, f);
+                }
+            }
+            // All clear to add it to this substituent now
+            self.map.core_mut().insert_into_substituent(self.id, f);
+        }
+        Ok(())
+    }
+
+    /// Removes an atom, pseudoatom, or bond from the substituent.
+    ///
+    /// Returns whether the fundamental was a member of the substituent.
+    ///
+    /// If the fundamental is an atomlike and is the centre of the substituent,
+    /// the centre is adjusted accordingly; if it is the lone centre, the
+    /// substituent becomes centreless. If it is one of two centres,
+    /// however, the centre remains `SubstituentCentre::Multiple` rather than
+    /// becoming `Single`.
+    ///
+    /// The substituent continues to exist, even if empty, as does the removed
+    /// fundamental.
+    pub fn remove(self, fundamental: impl Fundamental) -> bool {
+        self.map
+            .core_mut()
+            .remove_from_substituent(self.id, fundamental)
+    }
+
+    /// Empties the substituent by removing all its members, returning an iterator
+    /// over the IDs of the former members.
+    ///
+    /// The substituent and all removed fundamentals continue to exist.
+    ///
+    /// After this operation, the substituent will be centreless.
+    pub fn drain(self) -> impl Iterator<Item = impl Fundamental> {
+        self.map.core_mut().drain_substituent(self.id)
+    }
+
+    /// Empties the substituent by deleting all its members.
+    ///
+    /// The substituent itself continues to exist, and will be centreless.
+    pub fn clear(self) {
+        self.map.core_mut().clear_substituent(self.id);
+    }
+
+    /// Empties the substituent and then removes it from the map, returning the IDs of
+    /// the former members.
+    ///
+    /// All removed fundamentals continue to exist.
+    pub fn dissolve(self) -> impl Iterator<Item = impl Fundamental> {
+        self.map.core_mut().dissolve_substituent(self.id)
+    }
+}
+
+impl<'m> ViewMut<'m, MolMap0, Molecule> {
+    /// Removes the molecule from the map, as well as all of its members.
+    pub fn delete(self) {
+        self.map.core_mut().delete_molecule(self.id);
+    }
+
+    /// Adds an atom, pseudoatom, or bond to the molecule.
+    ///
+    /// Returns whether the fundamental was newly inserted.
+    ///
+    /// If the fundamental is already a member of another molecule, it is removed
+    /// from it before it is inserted into this one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the fundamental is invalid.
+    pub fn insert(self, fundamental: impl Fundamental) -> MolMapResult<bool> {
+        if !self.map.contains(fundamental) {
+            return Err(MolMapError::Id(fundamental.into_inner()));
+        };
+        if let Some(parent) = self.map.core().parent_molecule(fundamental) {
+            if parent == self.id {
+                return Ok(false);
+            } else {
+                self.map
+                    .core_mut()
+                    .remove_from_molecule(parent, fundamental);
+            }
+        }
+        // All clear to add it to this molecule now
+        // Note this will always return Ok(true)
+        Ok(self
+            .map
+            .core_mut()
+            .insert_into_molecule(self.id, fundamental))
+    }
+
+    /// Adds atoms, pseudoatoms, or bonds from an iterator to the molecule.
+    ///
+    /// If any of the fundamentals are already members of other molecules, they are
+    /// removed before they are inserted into this one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the fundamentals are invalid, in which case the
+    /// map will remain unchanged; the returned error will hold the ID of the first
+    /// invalid fundamental encountered.
+    pub fn extend<E, I>(self, fundamentals: I) -> MolMapResult<()>
+    where
+        E: Entity + Into<AnyFundamental>,
+        I: IntoIterator<Item = E>,
+        I::IntoIter: Clone,
+    {
+        let fundamentals = fundamentals.into_iter();
+        for f in fundamentals.clone() {
+            if !self.map.contains(f) {
+                return Err(MolMapError::Id(f.into_inner()));
+            }
+        }
+        for f in fundamentals {
+            let f: AnyFundamental = f.into();
+            if let Some(parent) = self.map.core().parent_molecule(f) {
+                if parent == self.id {
+                    // Already a member, so skip it
+                    continue;
+                } else {
+                    self.map.core_mut().remove_from_molecule(parent, f);
+                }
+            }
+            // All clear to add it to this substituent now
+            self.map.core_mut().insert_into_molecule(self.id, f);
+        }
+        Ok(())
+    }
+
+    /// Removes an atom, pseudoatom, or bond from the molecule.
+    ///
+    /// Returns whether the fundamental was a member of the molecule.
+    ///
+    /// The molecule continues to exist even if empty, as does the removed
+    /// fundamental.
+    pub fn remove(self, fundamental: impl Fundamental) -> bool {
+        self.map
+            .core_mut()
+            .remove_from_molecule(self.id, fundamental)
+    }
+
+    /// Empties the molecule by removing all its members, returning an iterator
+    /// over the IDs of the former members.
+    ///
+    /// The molecule and all removed fundamentals continue to exist.
+    pub fn drain(self) -> impl Iterator<Item = impl Fundamental> {
+        self.map.core_mut().drain_molecule(self.id)
+    }
+
+    /// Empties the molecule by deleting all its members.
+    ///
+    /// The molecule itself continues to exist.
+    pub fn clear(self) {
+        self.map.core_mut().clear_molecule(self.id);
+    }
+
+    /// Empties the molecule and then removes it from the map, returning the IDs of the
+    /// former members.
+    ///
+    /// All removed fundamentals continue to exist.
+    pub fn dissolve(self) -> impl Iterator<Item = impl Fundamental> {
+        self.map.core_mut().dissolve_molecule(self.id)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::Element;
@@ -233,36 +494,37 @@ mod tests {
         );
     }
 
-    //#[test]
-    //fn add_pseudoatom() {
-    //    let mut mm = MolMap0::new();
-    //    assert!(mm.core.pseudoatoms.is_empty());
-    //    let r1 = mm.add_pseudoatom("R");
-    //    assert_eq!(mm.core.pseudoatoms.len(), 1);
-    //    // Check the pseudoatom can be accessed by its ID, and that the symbol is correct
-    //    assert_eq!(mm.core.pseudoatoms.get(r1).unwrap().symbol, "R");
-    //    // Check that the bond arrays are created empty
-    //    assert!(mm.core.pseudoatoms.get(r1).unwrap().bonds.is_empty());
-    //}
+    #[test]
+    fn add_pseudoatom() {
+        let mut mm = MolMap0::new();
+        assert!(mm.core().slotmap::<Pseudoatom>().is_empty());
+        let ph = mm.add_pseudoatom(Pseudoelement::Ph);
+        assert_eq!(mm.core().slotmap::<Pseudoatom>().len(), 1);
+        // Check the pseudoatom can be accessed by its ID, and that the symbol is correct
+        // TODO
+        //assert_eq!(mm.view(ph).unwrap().symbol(), "Ph");
+        // Check that the bond arrays are created empty
+        assert!(mm.view(ph).unwrap().bonds().is_empty());
+    }
 
-    //#[test]
-    //fn remove_atom() {
-    //    let mut mm = MolMap0::new();
-    //    let h1 = mm.add_atom(Element::H);
-    //    let c1 = mm.add_atom(Element::C);
-    //    assert_eq!(mm.core().slotmap::<Atom>().len(), 2);
-    //    mm.remove_atom(h1);
-    //    assert_eq!(mm.core().slotmap::<Atom>().len(), 1);
-    //}
+    #[test]
+    fn delete_atom() {
+        let mut mm = MolMap0::new();
+        let h1 = mm.add_atom(Element::H);
+        let c1 = mm.add_atom(Element::C);
+        assert_eq!(mm.core().slotmap::<Atom>().len(), 2);
+        mm.view_mut(h1).unwrap().delete();
+        assert_eq!(mm.core().slotmap::<Atom>().len(), 1);
+    }
 
-    //#[test]
-    //fn remove_pseudoatom() {
-    //    let mut mm = MolMap0::new();
-    //    let r1 = mm.add_pseudoatom("R");
-    //    assert_eq!(mm.core.pseudoatoms.len(), 1);
-    //    mm.remove_pseudoatom(r1);
-    //    assert!(mm.core.pseudoatoms.is_empty());
-    //}
+    #[test]
+    fn delete_pseudoatom() {
+        let mut mm = MolMap0::new();
+        let et = mm.add_pseudoatom(Pseudoelement::Et);
+        assert_eq!(mm.core().slotmap::<Pseudoatom>().len(), 1);
+        mm.view_mut(et).unwrap().delete();
+        assert!(mm.core().slotmap::<Pseudoatom>().is_empty());
+    }
 
     #[test]
     fn add_bond_between_atoms() {
@@ -298,22 +560,28 @@ mod tests {
         );
     }
 
-    //#[test]
-    //fn remove_bond_between_atoms() {
-    //    let mut mm = MolMap0::new();
-    //    let h1 = mm.add_atom(Element::H);
-    //    let h2 = mm.add_atom(Element::H);
-    //    let b1 = mm.add_bond(h1.into(), h2.into()).unwrap();
-    //    assert!(mm.core().slotmap::<Bond>().contains_key(b1));
-    //    assert!(mm.core().slotmap::<Atom>().get(h1).unwrap().bonds.contains(&b1));
-    //    assert!(mm.core().slotmap::<Atom>().get(h2).unwrap().bonds.contains(&b1));
-    //    assert_eq!(mm.core().slotmap::<Bond>().get(b1).unwrap().start, h1.into());
-    //    assert_eq!(mm.core().slotmap::<Bond>().get(b1).unwrap().end, h2.into());
-    //    mm.remove_bond(b1);
-    //    assert!(!mm.core().slotmap::<Bond>().contains_key(b1));
-    //    assert!(!mm.core().slotmap::<Atom>().get(h1).unwrap().bonds.contains(&b1));
-    //    assert!(!mm.core().slotmap::<Atom>().get(h2).unwrap().bonds.contains(&b1));
-    //}
+    #[test]
+    fn delete_bond_between_atoms() {
+        let mut mm = MolMap0::new();
+        let h1 = mm.add_atom(Element::H);
+        let h2 = mm.add_atom(Element::H);
+        let b1 = mm.add_bond(h1, h2).unwrap();
+        assert!(mm.contains(b1));
+        for (i, &h) in [h1, h2].iter().enumerate() {
+            assert!(mm.view(h).unwrap().bonds().contains(&b1));
+            assert_eq!(mm.view(b1).unwrap().partners()[i], h.as_bondable());
+        }
+        // Now delete the bond and check the effects
+        mm.view_mut(b1).unwrap().delete();
+        // Bond should obviously be gone
+        assert!(!mm.contains(b1));
+        // Atoms should remain, however
+        for h in [h1, h2] {
+            assert!(mm.contains(h));
+            // Neither atom should have any bonds now
+            assert!(mm.view(h).unwrap().bonds().is_empty());
+        }
+    }
 
     //#[test]
     //fn add_substituent() {
