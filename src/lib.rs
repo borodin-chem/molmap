@@ -32,7 +32,7 @@ pub mod view;
 // ---------------
 pub use element::Element;
 pub use graph::entities::BondType;
-pub use maps::{MolMap, SpatialMolMap}; // Traits
+pub use maps::MolMap; // Traits
 pub use maps::{MolMap0, MolMap2, MolMap3}; // Common map types
 pub use pseudoelement::Pseudoelement;
 
