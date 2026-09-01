@@ -8,14 +8,18 @@
 
 //! Errors specific to the crate.
 
-use crate::{categories::AnyFundamental, entities::EntityKind, id::Id};
+use crate::{
+    categories::AnyFundamental,
+    entities::{AnyEntity, Entity, EntityKind},
+    id::Id,
+};
 
 /// An `Error` type for errors specific to the crate.
 #[derive(thiserror::Error, Debug)]
 pub enum MolMapError {
     /// Returned when an ID is invalid.
     #[error("The ID was not found in the Map")]
-    Id(Id),
+    Id(AnyEntity),
     /// Returned when a fundamental is not in fact a member of a specific collection.
     #[error("The fundamental is not a member of this collection")]
     Membership(AnyFundamental),
@@ -26,10 +30,11 @@ pub enum MolMapError {
     /// because it does not correspond to a valid discriminant.
     #[error("Not a recognized kind of entity")]
     UnknownEntityKind(u8),
-    /// Returned when attempting to convert an entity kind enum to a kind
-    /// that it is not a subset of.
-    #[error("The entity kind is not within the subset of possible entity kinds")]
-    IncorrectEntityKind(EntityKind, Id),
+    /// Returned when an attempt was made to convert a dynamic entity type to the wrong
+    /// concrete entity type or to another dynamic entity type that the kind is not
+    /// valid for.
+    #[error("The entity is not of the correct kind for this conversion")]
+    IncorrectEntityKind(EntityKind, AnyEntity),
 }
 
 /// A `Result` type for situations where the crate's [`MolMapError`] might be returned.

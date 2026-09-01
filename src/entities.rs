@@ -12,7 +12,7 @@ use std::iter::FusedIterator;
 
 use slotmap::{Key, SlotMap, new_key_type};
 
-use crate::{error::*, id::Id};
+use crate::{categories::Category, error::*, graph::keys::Keyed, id::Id};
 
 /// The kind of an entity.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
@@ -100,6 +100,7 @@ pub trait Entity: Copy + Clone + Eq {
     /// the discriminant of the ID is correct for that kind.
     fn new_unchecked(id: Id) -> Self;
 
+    /// Returns the underlying unique 64-bit ID of the entity.
     fn into_inner(self) -> Id;
 
     /// Returns the corresponding kind of the entity.
@@ -107,31 +108,51 @@ pub trait Entity: Copy + Clone + Eq {
         self.into_inner().kind()
     }
 
+    /// Upcasts the specific entity type to a dynamic type representing any entity.
+    ///
+    /// The kind of the entity remains encoded in the ID itself and can be recovered
+    /// dynamically at runtime using [`Entity::kind`] or [`resolve`].
     fn as_entity(self) -> AnyEntity {
         AnyEntity(self.into_inner())
     }
 
-    /// Returns the specific entity type wrapped in an enum variant, for exhaustive matching.
-    fn as_tagged_entity(self) -> TaggedEntity {
-        match self.kind() {
-            EntityKind::Atom => TaggedEntity::Atom(Atom::new_unchecked(self.into_inner())),
-            EntityKind::Bond => TaggedEntity::Bond(Bond::new_unchecked(self.into_inner())),
-            EntityKind::Pseudoatom => {
-                TaggedEntity::Pseudoatom(Pseudoatom::new_unchecked(self.into_inner()))
-            }
-            EntityKind::Substituent => {
-                TaggedEntity::Substituent(Substituent::new_unchecked(self.into_inner()))
-            }
-            EntityKind::Molecule => {
-                TaggedEntity::Molecule(Molecule::new_unchecked(self.into_inner()))
-            }
-        }
+    /// Returns the concrete type appropriate for the specific kind of entity, wrapped
+    /// in an enum where the variant corresponds to its kind.
+    ///
+    /// This method achieves the same as `self.as_entity().resolve()`, but may have a
+    /// performance advantage for concrete entity types (i.e. those that implement
+    /// [`Kind`]), as they do not require any dynamic resolution of the entity's kind,
+    /// while conversion of the intermediate [`AnyEntity`] involves a runtime bitfield
+    /// check.
+    #[inline]
+    fn to_resolved(self) -> ResolvedEntity {
+        // By default go via the erased form - implementors can override if they
+        // can do it more efficiently
+        self.as_entity().resolve()
     }
 }
 
 /// An entity that may be of any kind.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct AnyEntity(pub(crate) Id);
+
+impl AnyEntity {
+    pub fn resolve(self) -> ResolvedEntity {
+        match self.kind() {
+            EntityKind::Atom => ResolvedEntity::Atom(Atom::new_unchecked(self.into_inner())),
+            EntityKind::Bond => ResolvedEntity::Bond(Bond::new_unchecked(self.into_inner())),
+            EntityKind::Pseudoatom => {
+                ResolvedEntity::Pseudoatom(Pseudoatom::new_unchecked(self.into_inner()))
+            }
+            EntityKind::Substituent => {
+                ResolvedEntity::Substituent(Substituent::new_unchecked(self.into_inner()))
+            }
+            EntityKind::Molecule => {
+                ResolvedEntity::Molecule(Molecule::new_unchecked(self.into_inner()))
+            }
+        }
+    }
+}
 
 impl Entity for AnyEntity {
     fn new_unchecked(id: Id) -> Self {
@@ -143,13 +164,15 @@ impl Entity for AnyEntity {
     }
 }
 
-/// An entity of a kind, tagged to show which specific kind.
+impl Category for AnyEntity {}
+
+/// An entity of any kind, but tagged to show which specific kind.
 ///
 /// Matching on this enum is exhaustive for all the possible kinds of entity.
 #[derive(Copy, Clone, Debug)]
 #[repr(u8)]
 //#[non_exhaustive]
-pub enum TaggedEntity {
+pub enum ResolvedEntity {
     Atom(Atom) = EntityKind::Atom as u8,
     Bond(Bond) = EntityKind::Bond as u8,
     Pseudoatom(Pseudoatom) = EntityKind::Pseudoatom as u8,
@@ -157,7 +180,14 @@ pub enum TaggedEntity {
     Molecule(Molecule) = EntityKind::Molecule as u8,
 }
 
-macro_rules! new_keyed_entity {
+/// A basic, concrete kind of entity in a `MolMap`, backed by its own storage.
+///
+/// All entity types implement [`Entity`] and one of either `Kind` or [`Category`],
+/// according to whether the kind is known statically or only obtainable dynamically.
+pub trait Kind: Entity + Keyed {}
+// Essentially the public-facing form of Keyed
+
+macro_rules! new_entity_kind {
     (
         $(#[$doc:meta])*
         $vis:vis struct $kind:ident;
@@ -177,24 +207,50 @@ macro_rules! new_keyed_entity {
                 }
 
                 fn kind(&self) -> EntityKind {
-                    EntityKind::$kind
+                    Self::KIND
                 }
 
                 #[inline]
-                fn as_tagged_entity(self) -> TaggedEntity {
-                    TaggedEntity::$kind($kind::new_unchecked(self.into_inner()))
+                fn to_resolved(self) -> ResolvedEntity {
+                    ResolvedEntity::$kind($kind::new_unchecked(self.into_inner()))
+                }
+            }
+
+            impl Kind for $kind {}
+
+            // Conversion to and from AnyEntity
+
+            impl From<$kind> for AnyEntity {
+                fn from(entity: $kind) -> AnyEntity {
+                    entity.as_entity()
+                }
+            }
+
+            impl TryFrom<AnyEntity> for $kind {
+                type Error = MolMapError;
+
+                fn try_from(entity: AnyEntity) -> Result<Self, Self::Error> {
+                    match entity.kind() {
+                        EntityKind::$kind => Ok(Self::new_unchecked(entity.into_inner())),
+                        _ => {
+                            Err(crate::error::MolMapError::IncorrectEntityKind(
+                                entity.kind(),
+                                entity,
+                            ))
+                        },
+                    }
                 }
             }
         }
     };
 }
 
-new_keyed_entity!(
+new_entity_kind!(
     /// Smallest particle still characterizing a chemical element.
     pub struct Atom;
 );
 
-new_keyed_entity!(
+new_entity_kind!(
     /// A chemical bond: an attraction between molecular entities.
     ///
     /// > There is a chemical bond between two atoms or groups of atoms in the case
@@ -206,7 +262,7 @@ new_keyed_entity!(
     pub struct Bond;
 );
 
-new_keyed_entity!(
+new_entity_kind!(
     /// A pseudoatom: something that forms bonds and can be represented by an
     /// "element symbol" like a normal atom but represents something else.
     ///
@@ -214,7 +270,7 @@ new_keyed_entity!(
     pub struct Pseudoatom;
 );
 
-new_keyed_entity!(
+new_entity_kind!(
     /// A substituent: a group of atoms, bonded internally, identified as a unit and
     /// usually part of a larger molecule. Often synonymous with "functional group" or
     /// "moiety".
@@ -234,7 +290,7 @@ new_keyed_entity!(
     pub struct Substituent;
 );
 
-new_keyed_entity!(
+new_entity_kind!(
     /// A molecule: a discrete group of atoms held together by chemical bonds.
     ///
     /// > An electrically neutral entity consisting of more than one atom (_n_ > 1).

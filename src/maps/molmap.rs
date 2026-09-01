@@ -94,25 +94,27 @@ pub trait MolMap: Sized + MolMapCore {
     fn contains<E: Entity>(&self, entity: E) -> bool {
         // This version of contains is flexible, for the public API, and can do
         // the check for any Entity type, not just Keyed ones
-        match entity.as_tagged_entity() {
-            TaggedEntity::Atom(atom) => Atom::get_slotmap(self.core()).contains_key(atom.to_key()),
-            TaggedEntity::Bond(bond) => Bond::get_slotmap(self.core()).contains_key(bond.to_key()),
-            TaggedEntity::Pseudoatom(pseudoatom) => {
+        match entity.to_resolved() {
+            ResolvedEntity::Atom(atom) => {
+                Atom::get_slotmap(self.core()).contains_key(atom.to_key())
+            }
+            ResolvedEntity::Bond(bond) => {
+                Bond::get_slotmap(self.core()).contains_key(bond.to_key())
+            }
+            ResolvedEntity::Pseudoatom(pseudoatom) => {
                 Pseudoatom::get_slotmap(self.core()).contains_key(pseudoatom.to_key())
             }
-            TaggedEntity::Substituent(substituent) => {
+            ResolvedEntity::Substituent(substituent) => {
                 Substituent::get_slotmap(self.core()).contains_key(substituent.to_key())
             }
-            TaggedEntity::Molecule(molecule) => {
+            ResolvedEntity::Molecule(molecule) => {
                 Molecule::get_slotmap(self.core()).contains_key(molecule.to_key())
             }
         }
     }
 
     /// Returns an iterator over all of a given kind of entity in the map.
-    fn iter<E: Entity + Keyed>(
-        &'_ self,
-    ) -> impl Iterator<Item = E> + ExactSizeIterator + FusedIterator {
+    fn iter<E: Kind>(&'_ self) -> impl Iterator<Item = E> + ExactSizeIterator + FusedIterator {
         self.core().iter::<E>()
     }
 
@@ -124,7 +126,7 @@ pub trait MolMap: Sized + MolMapCore {
     // - iterating over (immutable) views
 
     /// Constructs an immutable view of the given entity, returning `None` if the ID is invalid.
-    fn view<E: Entity + Keyed>(&'_ self, entity: E) -> Option<View<'_, Self, E>> {
+    fn view<E: Kind>(&'_ self, entity: E) -> Option<View<'_, Self, E>> {
         self.contains(entity).then_some(View {
             map: self,
             id: entity,
@@ -132,7 +134,7 @@ pub trait MolMap: Sized + MolMapCore {
     }
 
     /// Constructs a mutable view of the given entity, returning `None` if the ID is invalid.
-    fn view_mut<E: Entity + Keyed>(&'_ mut self, entity: E) -> Option<ViewMut<'_, Self, E>> {
+    fn view_mut<E: Kind>(&'_ mut self, entity: E) -> Option<ViewMut<'_, Self, E>> {
         self.contains(entity).then_some(ViewMut {
             map: self,
             id: entity,
@@ -150,7 +152,7 @@ pub trait MolMap: Sized + MolMapCore {
     /// to get an iterator that returns views for each entity in turn, lazily.
     fn views<E, I>(&'_ mut self, entities: I) -> Option<Views<'_, Self, E, I::IntoIter>>
     where
-        E: Entity + Keyed,
+        E: Kind,
         I: IntoIterator<Item = E>,
         I::IntoIter: Clone,
     {
@@ -166,7 +168,7 @@ pub trait MolMap: Sized + MolMapCore {
     }
 
     /// Returns an iterator over views of all of a given kind of entity in the map.
-    fn iter_views<E: Entity + Keyed>(
+    fn iter_views<E: Kind>(
         &'_ self,
     ) -> Views<'_, Self, E, impl Iterator<Item = E> + ExactSizeIterator> {
         Views {

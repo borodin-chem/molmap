@@ -114,10 +114,10 @@ impl<const D: usize> SpatialMolMap<D> {
     /// # Panics
     ///
     /// Panics if the atomlike is not in the map.
-    pub(crate) fn atomlike_position<E: Atomlike>(&self, atomlike: E) -> &Point<f64, D> {
-        match atomlike.as_tagged_atomlike() {
-            TaggedAtomlike::Atom(atom) => self.atom_position(atom),
-            TaggedAtomlike::Pseudoatom(pseudoatom) => self.pseudoatom_position(pseudoatom),
+    pub(crate) fn atomlike_position(&self, atomlike: impl Atomlike) -> &Point<f64, D> {
+        match Atomlike::to_resolved(atomlike) {
+            ResolvedAtomlike::Atom(atom) => self.atom_position(atom),
+            ResolvedAtomlike::Pseudoatom(pseudoatom) => self.pseudoatom_position(pseudoatom),
         }
     }
 
@@ -126,11 +126,7 @@ impl<const D: usize> SpatialMolMap<D> {
     /// # Panics
     ///
     /// Panics if either atomlike is not in the map.
-    pub(crate) fn interatomlike_line<A: Atomlike, B: Atomlike>(
-        &self,
-        a: A,
-        b: B,
-    ) -> Vector<f64, D> {
+    pub(crate) fn interatomlike_line(&self, a: impl Atomlike, b: impl Atomlike) -> Vector<f64, D> {
         self.atomlike_position(b) - self.atomlike_position(a)
     }
 
@@ -140,9 +136,9 @@ impl<const D: usize> SpatialMolMap<D> {
     ///
     /// Panics if the bond is not in the map.
     pub(crate) fn bond_origin(&self, bond: Bond) -> &Point<f64, D> {
-        match self.core().data(bond).start.as_tagged_bondable() {
-            TaggedBondable::Atom(atom) => self.atom_position(atom),
-            TaggedBondable::Pseudoatom(pseudoatom) => self.pseudoatom_position(pseudoatom),
+        match self.core().data(bond).start.resolve() {
+            ResolvedBondable::Atom(atom) => self.atom_position(atom),
+            ResolvedBondable::Pseudoatom(pseudoatom) => self.pseudoatom_position(pseudoatom),
         }
     }
 
@@ -152,9 +148,9 @@ impl<const D: usize> SpatialMolMap<D> {
     ///
     /// Panics if the bond is not in the map.
     pub(crate) fn bond_terminus(&self, bond: Bond) -> &Point<f64, D> {
-        match self.core().data(bond).end.as_tagged_bondable() {
-            TaggedBondable::Atom(atom) => self.atom_position(atom),
-            TaggedBondable::Pseudoatom(pseudoatom) => self.pseudoatom_position(pseudoatom),
+        match self.core().data(bond).end.resolve() {
+            ResolvedBondable::Atom(atom) => self.atom_position(atom),
+            ResolvedBondable::Pseudoatom(pseudoatom) => self.pseudoatom_position(pseudoatom),
         }
     }
 
@@ -185,15 +181,15 @@ impl<const D: usize> SpatialMolMap<D> {
     ///// Only the positions of the constituent atoms and pseudoatoms are taken into
     ///// consideration, not the bonds, nor any other member fundamentals.
     //pub(crate) fn collection_centroid<E: Collection>(&self, collection: E) -> Point<f64, D> {
-    //    let members: Vec<AnyFundamental> = match collection.as_tagged_collection() {
-    //        TaggedCollection::Substituent(substituent) => self
+    //    let members: Vec<AnyFundamental> = match Collection::to_resolved(collection) {
+    //        ResolvedCollection::Substituent(substituent) => self
     //            .core
     //            .data(substituent)
     //            .members
     //            .iter()
     //            .filter(|f| f.kind())
     //                //.map(|f| self.atomlike_position(atomlike)),
-    //        TaggedCollection::Molecule(molecule) => {
+    //        ResolvedCollection::Molecule(molecule) => {
     //            self.core.data(molecule).members.iter().copied().collect()
     //        }
     //    };
