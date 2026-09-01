@@ -652,7 +652,7 @@ impl MolGraph {
     }
 }
 
-/// Methods to ascertain membership.
+/// Methods to query or ascertain membership.
 impl MolGraph {
     /// Determines the substituent that contains the atom, pseudoatom, or bond, if any.
     pub(crate) fn parent_substituent(&self, fundamental: impl Fundamental) -> Option<Substituent> {

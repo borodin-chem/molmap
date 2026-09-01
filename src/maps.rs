@@ -16,10 +16,8 @@ mod two;
 mod zero;
 
 pub(crate) use molmap::MolMapCore;
-pub(crate) use spatial::SpatialMolMap;
 
 pub use molmap::MolMap;
+pub use spatial::SpatialMolMap;
+pub use spatial::{MolMap2, MolMap3};
 pub use zero::MolMap0;
-
-pub type MolMap2 = SpatialMolMap<2>;
-pub type MolMap3 = SpatialMolMap<3>;
