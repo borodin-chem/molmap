@@ -262,16 +262,16 @@ define_category! {
     }
 }
 
-define_category! {
-    /// An entity that an `Object` can be attached to.
-    Anchor {
-        Atom,
-        Pseudoatom,
-        Bond,
-        Substituent,
-        Molecule,
-    }
-}
+//define_category! {
+//    /// An entity that an `Object` can be attached to.
+//    Anchor {
+//        Atom,
+//        Pseudoatom,
+//        Bond,
+//        Substituent,
+//        Molecule,
+//    }
+//}
 
 // Some additional overlaps
 
