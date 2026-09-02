@@ -13,6 +13,7 @@ use nalgebra::{self as na, SVector};
 use slotmap::SecondaryMap;
 
 use crate::graph::entities::SubstituentCentre;
+use crate::view::ViewMut;
 use crate::{
     MolMap,
     categories::*,
@@ -341,5 +342,41 @@ impl<'m, const D: usize> View<'m, SpatialMolMap<D>, Molecule> {
     /// consideration, not the bonds, nor any other member fundamentals.
     pub fn centroid(&self) -> Option<Point<f64, D>> {
         self.map.molecule_centroid(self.id)
+    }
+}
+
+/// Methods for setting positions and applying transformations.
+impl<const D: usize> SpatialMolMap<D> {
+    /// Sets the position of the given atom to the provided value.
+    ///
+    /// This does not panic – if the atom is not in the map, nothing happens.
+    pub(crate) fn set_atom_position(&mut self, atom: Atom, position: Point<f64, D>) {
+        self.atom_positions.insert(atom.to_key(), position);
+    }
+
+    /// Sets the position of the given pseudoatom to the provided value.
+    ///
+    /// This does not panic – if the pseudoatom is not in the map, nothing happens.
+    pub(crate) fn set_pseudoatom_position(
+        &mut self,
+        pseudoatom: Pseudoatom,
+        position: Point<f64, D>,
+    ) {
+        self.pseudoatom_positions
+            .insert(pseudoatom.to_key(), position);
+    }
+}
+
+impl<'m, const D: usize> ViewMut<'m, SpatialMolMap<D>, Atom> {
+    /// Sets the position of the atom to the provided value.
+    pub fn set_position(self, position: Point<f64, D>) {
+        self.map.set_atom_position(self.id, position)
+    }
+}
+
+impl<'m, const D: usize> ViewMut<'m, SpatialMolMap<D>, Pseudoatom> {
+    /// Sets the position of the pseudoatom to the provided value.
+    pub fn set_position(self, position: Point<f64, D>) {
+        self.map.set_pseudoatom_position(self.id, position)
     }
 }
