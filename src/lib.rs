@@ -32,8 +32,9 @@ pub mod view;
 // ---------------
 pub use element::Element;
 pub use graph::entities::BondType;
-pub use maps::{MolMap, SpatialMolMap}; // Traits
-pub use maps::{MolMap0, MolMap2, MolMap3}; // Common map types
+pub use maps::MolMap; // Traits
+pub use maps::MolMap0;
+pub use maps::{MolMap2, MolMap3, SpatialMolMap};
 pub use pseudoelement::Pseudoelement;
 
 // Selected re-exports from public modules
@@ -45,3 +46,4 @@ pub use entities::{Atom, Bond, Molecule, Pseudoatom, Substituent}; // All the ba
 // Foreign crates or things from them
 // Re-exporting nalgebra makes it easier for others to use
 pub use nalgebra;
+pub use nalgebra::{Point2, Point3, Vector2, Vector3};

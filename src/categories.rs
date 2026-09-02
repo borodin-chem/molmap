@@ -9,7 +9,29 @@
 //! Definitions and implementations of the entity category traits.
 
 use crate::entities::*;
+use crate::error::{MolMapError, MolMapResult};
 use crate::id::Id;
+
+pub use crate::entities::{AnyEntity, Entity, ResolvedEntity};
+
+/// A dynamic ID type representing any kind of entity that implements the corresponding trait.
+///
+/// All entity types implement [`Entity`] and one of either [`Kind`] or `Category`,
+/// according to whether the kind is known statically or only obtainable dynamically.
+pub trait Category: Entity {
+    /// Attempts to convert the dynamic entity type to a concrete one, failing if the
+    /// entity is not of the corresponding kind.
+    fn downcast<E: Kind>(self) -> MolMapResult<E> {
+        if self.kind() == E::KIND {
+            Ok(E::new_unchecked(self.into_inner()))
+        } else {
+            Err(crate::error::MolMapError::IncorrectEntityKind(
+                self.kind(),
+                self.as_entity(),
+            ))
+        }
+    }
+}
 
 macro_rules! define_category {
     (
@@ -31,30 +53,51 @@ macro_rules! define_category {
             //    [anonymous/abstract type](https://doc.rust-lang.org/reference/types/impl-trait.html),
             //    in order to recover the kind of entity and the true underlying Entity type
             //
-            // These are equivalent to the triad of Entity/AnyEntity/TaggedEntity for
-            // specific subsets.
+            // These are equivalent to the triad of Entity/AnyEntity/ResolvedEntity for
+            // specific subsets. Indeed, Entity should act like any other Category.
 
             // 1. The trait, to be implemented by entity types
 
             $(#[$doc])*
             pub trait $category: Entity {
-                #[doc = "Erases the specific entity type."]
+                #[doc = concat!("Upcasts the specific entity type to a dynamic type representing any kind of [`", stringify!([<$category>]), "`] entity.")]
                 #[doc = ""]
-                #[doc = "The kind of the entity remains encoded in the ID and can be recovered at runtime using [`Entity::kind`] or [`to_tagged`]."]
+                #[doc = "The kind of the entity remains encoded in the ID itself and can be recovered dynamically at runtime using [`Entity::kind`] or [`resolve`]."]
                 fn [<as_ $category:lower>](self) -> [<Any $category>] {
                     [<Any $category>](self.into_inner())
                 }
 
-                #[doc = "Returns the specific entity type wrapped in an enum variant, for exhaustive matching."]
-                fn [<as_tagged_ $category:lower>](self) -> [<Tagged $category>];
+                #[doc = "Returns the appropriate concrete entity type wrapped in an enum where the variant corresponds to its kind."]
+                #[doc = ""]
+                #[doc = concat!("This method achieves the same as `self.", stringify!([<as_ $category:lower>]), "().resolve()`, but may have a ")]
+                #[doc = "performance advantage for concrete entity types (i.e. those that implement "]
+                #[doc = "[`Kind`]), as they do not require any dynamic resolution of the entity's kind, "]
+                #[doc = concat!("while conversion of the intermediate [`", stringify!([<Any $category>]), "`] involves a runtime bitfield ")]
+                #[doc = "check."]
+                #[inline]
+                fn to_resolved(self) -> [<Resolved $category>] {
+                    // By default go via the erased form - implementors can override if they
+                    // can do it more efficiently
+                    self.[<as_ $category:lower>]().resolve()
+                }
             }
 
-
-            // 2. A union entity type for representing a type-erased entity
+            // 2. A category struct for representing a kind-erased entity of the category
 
             #[doc = concat!("An entity that may be of any kind that implements the [`", stringify!([<$category>]), "`] trait.")]
+            #[doc = ""]
+            #[doc = "The kind of the entity remains encoded in the ID itself and can be recovered dynamically at runtime using [`Entity::kind`] or [`resolve`]."]
             #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
             pub struct [<Any $category>](pub(crate) Id);
+
+            impl [<Any $category>] {
+                pub fn resolve(self) -> [<Resolved $category>] {
+                    match self.kind() {
+                        $(EntityKind::$kind => [<Resolved $category>]::$kind($kind::new_unchecked(self.0)),)+
+                        _ => unreachable!(),
+                    }
+                }
+            }
 
             impl Entity for [<Any $category>] {
                 fn new_unchecked(id: Id) -> Self {
@@ -66,43 +109,48 @@ macro_rules! define_category {
                 }
             }
 
+            impl Category for [<Any $category>] {}
+
             // 3. The corresponding tagged ID type for exhaustive matching
             // The enum has a variant for each kind that implements the trait
 
-            #[doc = concat!("An entity of a kind that implements the [`", stringify!([<$category>]), "`] trait, tagged to show which specific kind.")]
+            #[doc = concat!("An entity of any kind that implements the [`", stringify!([<$category>]), "`] trait, but tagged to show which specific kind.")]
             #[doc = ""]
             #[doc = "Matching on this enum is exhaustive for all the possible kinds of entity that it could be."]
             #[derive(Copy, Clone, Debug)]
-            pub enum [<Tagged $category>] {
+            pub enum [<Resolved $category>] {
                 $($kind($kind),)+
+            }
+
+            impl [<Resolved $category>] {
+                #[doc = concat!("Reverses the resolution to afford the dynamic type representing any kind of [`", stringify!([<$category>]), "`] entity.")]
+                pub fn [<as_ $category:lower>](self) -> [<Any $category>] {
+                    let inner = match self {
+                        $(Self::$kind(concrete) => concrete.into_inner(),)+
+                    };
+                    [<Any $category>]::new_unchecked(inner)
+                }
             }
 
             // Now, implement the trait for each kind of entity specified
 
             $(
                 impl $category for $kind {
-                    fn [<as_tagged_ $category:lower>](self) -> [<Tagged $category>] {
+                    fn to_resolved(self) -> [<Resolved $category>] {
                         // Unlike conversion of the union type, this is trivial and
                         // low-cost because we know what the kind is based on the type
-                        [<Tagged $category>]::$kind(self)
+                        [<Resolved $category>]::$kind(self)
                     }
                 }
             )+
 
-            // Also implement it for the union type for consistency
+            // Also implement the trait for the erased struct type for consistency
 
-            impl $category for [<Any $category>] {
-                fn [<as_tagged_ $category:lower>](self) -> [<Tagged $category>] {
-                    match self.0.kind() {
-                        $(EntityKind::$kind => [<Tagged $category>]::$kind($kind::new_unchecked(self.0)),)+
-                        _ => unreachable!(),
-                    }
-                }
-            }
+            impl $category for [<Any $category>] {}
 
             // Infallible conversion with From for use by users.
             // These just replicate the conversions available via the trait's
-            // `as_Trait` and `to_tagged` methods.
+            // `as_Trait` and `to_resolved` methods.
             // Can't be a blanket implementation due to the orphan rule, but we
             // can do it on a kind-by-kind basis.
             // This means the user can feel assured that they can call `into()` on
@@ -116,16 +164,60 @@ macro_rules! define_category {
                     }
                 }
 
-                impl From<$kind> for [<Tagged $category>] {
+                impl From<$kind> for [<Resolved $category>] {
                     fn from(entity: $kind) -> Self {
-                        $category::[<as_tagged_ $category:lower>](entity)
+                        $category::to_resolved(entity)
                     }
                 }
             )+
 
-            impl From<[<Any $category>]> for [<Tagged $category>] {
+            // Infallible conversion between struct and enum forms.
+
+            impl From<[<Any $category>]> for [<Resolved $category>] {
                 fn from(entity: [<Any $category>]) -> Self {
-                    $category::[<as_tagged_ $category:lower>](entity)
+                    $category::to_resolved(entity)
+                }
+            }
+
+            impl From<[<Resolved $category>]> for [<Any $category>] {
+                fn from(resolved: [<Resolved $category>]) -> Self {
+                    resolved.[<as_ $category:lower>]()
+                }
+            }
+
+            // Fallible conversion with TryFrom for use by users.
+
+            $(
+                impl TryFrom<[<Any $category>]> for $kind {
+                    type Error = MolMapError;
+
+                    fn try_from(entity: [<Any $category>]) -> Result<Self, Self::Error> {
+                        entity.downcast()
+                    }
+                }
+            )+
+
+            // Conversion to and from AnyEntity
+
+            impl From<[<Any $category>]> for AnyEntity {
+                fn from(entity: [<Any $category>]) -> AnyEntity {
+                    entity.as_entity()
+                }
+            }
+
+            impl TryFrom<AnyEntity> for [<Any $category>] {
+                type Error = MolMapError;
+
+                fn try_from(entity: AnyEntity) -> Result<Self, Self::Error> {
+                    match entity.kind() {
+                        $(EntityKind::$kind => Ok(Self::new_unchecked(entity.into_inner())),)+
+                        _ => {
+                            Err(crate::error::MolMapError::IncorrectEntityKind(
+                                entity.kind(),
+                                entity.into(),
+                            ))
+                        },
+                    }
                 }
             }
         }
@@ -172,30 +264,59 @@ define_category! {
     }
 }
 
-define_category! {
-    /// An entity that an `Object` can be attached to.
-    Anchor {
-        Atom,
-        Pseudoatom,
-        Bond,
-        Substituent,
-        Molecule,
-    }
-}
+//define_category! {
+//    /// An entity that an `Object` can be attached to.
+//    Anchor {
+//        Atom,
+//        Pseudoatom,
+//        Bond,
+//        Substituent,
+//        Molecule,
+//    }
+//}
 
 // Some additional overlaps
 
-impl From<AnyAtomlike> for AnyFundamental {
-    fn from(entity: AnyAtomlike) -> Self {
-        Self::new_unchecked(entity.into_inner())
-    }
+/// Implements traits as appropriate for categories `A` and `B`, where `A` is a strict subset of `B`.
+///
+/// Any entity that is `A` is also `B`.
+/// Reflecting this, any entity kind type that implements `A` should already
+/// implement `B`.
+///
+/// However, as these are not done (and cannot be done) using blanket
+/// implementations, the compiler does not know about this relationship.
+/// Therefore, to assist with category narrowing and broadening, this macro
+/// implements the following additional traits:
+///
+/// 1. `impl B for AnyA` (anything that is `A` is also `B`)
+/// 2. `impl From<AnyA> for AnyB` (infallible conversion to reflect that fact)
+/// 3. `impl TryFrom<AnyB> for AnyA` (fallible conversion, as there are kinds of
+///    entity that are `B` but not `A`, but a useful one due to the overlap)
+macro_rules! impl_subset {
+    ($A:ident < $B:ident) => {
+        paste::paste! {
+            impl $B for [<Any $A>] {}
+
+            impl From<[<Any $A>]> for [<Any $B>] {
+                fn from(entity: [<Any $A>]) -> Self {
+                    Self::new_unchecked(entity.into_inner())
+                }
+            }
+
+            impl TryFrom<[<Any $B>]> for [<Any $A>] {
+                type Error = MolMapError;
+
+                fn try_from(entity: [<Any $B>]) -> Result<Self, Self::Error> {
+                    [<Any $A>]::try_from(entity.as_entity())
+                }
+            }
+        }
+    };
 }
 
-impl From<AnyAtomlike> for AnyBondable {
-    fn from(entity: AnyAtomlike) -> Self {
-        Self::new_unchecked(entity.into_inner())
-    }
-}
+impl_subset!(Atomlike < Fundamental);
+
+impl_subset!(Atomlike < Bondable);
 
 #[cfg(test)]
 mod tests {
@@ -313,12 +434,12 @@ mod tests {
     }
 
     #[test]
-    fn tagged() {
+    fn resolve() {
         // Mostly want to check the ergonomics of getting a tagged representation
-        let tagged: TaggedAtomlike = ATOM.as_tagged_atomlike();
+        let tagged: ResolvedAtomlike = Atomlike::to_resolved(ATOM);
         match tagged {
-            TaggedAtomlike::Atom(_) => (),
-            TaggedAtomlike::Pseudoatom(_) => panic!(),
+            ResolvedAtomlike::Atom(_) => (),
+            ResolvedAtomlike::Pseudoatom(_) => panic!(),
         }
     }
 }

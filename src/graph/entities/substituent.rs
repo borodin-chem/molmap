@@ -38,7 +38,7 @@ impl<'m, M: MolMap> View<'m, M, Substituent> {
     }
 
     /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.
-    pub fn members(&self) -> impl Iterator<Item = impl Fundamental> {
+    pub fn members(&self) -> impl Iterator<Item = AnyFundamental> {
         self.data().members.iter().copied()
     }
 
@@ -65,7 +65,7 @@ impl<'m, M: MolMap> View<'m, M, Substituent> {
 //    // A closure that determines if an atom or pseudoatom has bonds already
 //    let atomlike_has_bonds = |id: Atomlike>| - bool {
 //        let bonds = match id.to_tagged() {
-//            TaggedAtomlike::Atom(id) => {
+//            ResolvedAtomlike::Atom(id) => {
 //                &self
 //                    .map
 //                    .core()
@@ -74,7 +74,7 @@ impl<'m, M: MolMap> View<'m, M, Substituent> {
 //                    .expect("Wouldn't be listed as the centre if it had been removed")
 //                    .bonds
 //            }
-//            TaggedAtomlike::Pseudoatom(id) => {
+//            ResolvedAtomlike::Pseudoatom(id) => {
 //                &self
 //                    .map
 //                    .core()

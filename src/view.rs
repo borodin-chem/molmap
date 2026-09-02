@@ -10,7 +10,7 @@
 
 use std::iter::FusedIterator;
 
-use crate::{MolMap, entities::*, graph::keys::Keyed};
+use crate::{MolMap, entities::*};
 
 // The view structs simply hold an immutable or mutable reference to the parent map,
 // as appropriate, and the corresponding ID. Both have the visibility `pub(crate)`
@@ -50,10 +50,10 @@ impl<'m, M: MolMap, E: Entity> View<'m, M, E> {
     }
 }
 
-impl<'m, M: MolMap, E: Entity + Keyed> View<'m, M, E> {
+impl<'m, M: MolMap, E: Kind> View<'m, M, E> {
     /// Returns a reference to the entity's data struct in the core [`MolGraph`]."
     pub(crate) fn data(&self) -> &E::DATA {
-        self.map.core().data(self.id)
+        self.map.core().data(self.id).unwrap()
     }
 }
 

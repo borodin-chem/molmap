@@ -77,7 +77,7 @@ impl MolMap0 {
         (
             centre,
             self.core()
-                .get_data(centre)
+                .data(centre)
                 .expect("We just created this atom, so ID must be valid")
                 .bonds
                 .as_slice(),
@@ -111,9 +111,9 @@ impl MolMap0 {
         B: Bondable,
     {
         if !self.contains(start) {
-            return Err(MolMapError::Id(start.into_inner()));
+            return Err(MolMapError::Id(start.as_entity()));
         } else if !self.contains(end) {
-            return Err(MolMapError::Id(end.into_inner()));
+            return Err(MolMapError::Id(end.as_entity()));
         };
         Ok(self.core.add_bond(start, end))
     }
@@ -154,7 +154,7 @@ impl MolMap0 {
             sub,
             centre,
             self.core()
-                .get_data(centre)
+                .data(centre)
                 .expect("We just created this atom, so ID must be valid")
                 .bonds
                 .as_slice(),
@@ -224,7 +224,7 @@ impl<'m> ViewMut<'m, MolMap0, Substituent> {
     /// Returns an error if the fundamental is invalid.
     pub fn insert(self, fundamental: impl Fundamental) -> MolMapResult<bool> {
         if !self.map.contains(fundamental) {
-            return Err(MolMapError::Id(fundamental.into_inner()));
+            return Err(MolMapError::Id(fundamental.as_entity()));
         };
         if let Some(parent) = self.map.core().parent_substituent(fundamental) {
             if parent == self.id {
@@ -262,7 +262,7 @@ impl<'m> ViewMut<'m, MolMap0, Substituent> {
         let fundamentals = fundamentals.into_iter();
         for f in fundamentals.clone() {
             if !self.map.contains(f) {
-                return Err(MolMapError::Id(f.into_inner()));
+                return Err(MolMapError::Id(f.as_entity()));
             }
         }
         for f in fundamentals {
@@ -305,7 +305,7 @@ impl<'m> ViewMut<'m, MolMap0, Substituent> {
     /// The substituent and all removed fundamentals continue to exist.
     ///
     /// After this operation, the substituent will be centreless.
-    pub fn drain(self) -> impl Iterator<Item = impl Fundamental> {
+    pub fn drain(self) -> impl Iterator<Item = AnyFundamental> {
         self.map.core_mut().drain_substituent(self.id)
     }
 
@@ -320,7 +320,7 @@ impl<'m> ViewMut<'m, MolMap0, Substituent> {
     /// the former members.
     ///
     /// All removed fundamentals continue to exist.
-    pub fn dissolve(self) -> impl Iterator<Item = impl Fundamental> {
+    pub fn dissolve(self) -> impl Iterator<Item = AnyFundamental> {
         self.map.core_mut().dissolve_substituent(self.id)
     }
 }
@@ -343,7 +343,7 @@ impl<'m> ViewMut<'m, MolMap0, Molecule> {
     /// Returns an error if the fundamental is invalid.
     pub fn insert(self, fundamental: impl Fundamental) -> MolMapResult<bool> {
         if !self.map.contains(fundamental) {
-            return Err(MolMapError::Id(fundamental.into_inner()));
+            return Err(MolMapError::Id(fundamental.as_entity()));
         };
         if let Some(parent) = self.map.core().parent_molecule(fundamental) {
             if parent == self.id {
@@ -381,7 +381,7 @@ impl<'m> ViewMut<'m, MolMap0, Molecule> {
         let fundamentals = fundamentals.into_iter();
         for f in fundamentals.clone() {
             if !self.map.contains(f) {
-                return Err(MolMapError::Id(f.into_inner()));
+                return Err(MolMapError::Id(f.as_entity()));
             }
         }
         for f in fundamentals {
@@ -416,7 +416,7 @@ impl<'m> ViewMut<'m, MolMap0, Molecule> {
     /// over the IDs of the former members.
     ///
     /// The molecule and all removed fundamentals continue to exist.
-    pub fn drain(self) -> impl Iterator<Item = impl Fundamental> {
+    pub fn drain(self) -> impl Iterator<Item = AnyFundamental> {
         self.map.core_mut().drain_molecule(self.id)
     }
 
@@ -431,7 +431,7 @@ impl<'m> ViewMut<'m, MolMap0, Molecule> {
     /// former members.
     ///
     /// All removed fundamentals continue to exist.
-    pub fn dissolve(self) -> impl Iterator<Item = impl Fundamental> {
+    pub fn dissolve(self) -> impl Iterator<Item = AnyFundamental> {
         self.map.core_mut().dissolve_molecule(self.id)
     }
 }

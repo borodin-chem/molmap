@@ -11,14 +11,11 @@
 
 mod molmap;
 mod spatial;
-mod three;
-mod two;
 mod zero;
 
 pub(crate) use molmap::MolMapCore;
 
 pub use molmap::MolMap;
 pub use spatial::SpatialMolMap;
-pub use three::MolMap3;
-pub use two::MolMap2;
+pub use spatial::{MolMap2, MolMap3};
 pub use zero::MolMap0;
