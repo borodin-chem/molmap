@@ -11,8 +11,6 @@
 
 mod molmap;
 mod spatial;
-mod three;
-mod two;
 mod zero;
 
 pub(crate) use molmap::MolMapCore;
