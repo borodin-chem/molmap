@@ -12,6 +12,8 @@ use crate::entities::*;
 use crate::error::{MolMapError, MolMapResult};
 use crate::id::Id;
 
+pub use crate::entities::{AnyEntity, Entity, ResolvedEntity};
+
 /// A dynamic ID type representing any kind of entity that implements the corresponding trait.
 ///
 /// All entity types implement [`Entity`] and one of either [`Kind`] or `Category`,
@@ -275,21 +277,46 @@ define_category! {
 
 // Some additional overlaps
 
-impl Fundamental for AnyAtomlike {}
+/// Implements traits as appropriate for categories `A` and `B`, where `A` is a strict subset of `B`.
+///
+/// Any entity that is `A` is also `B`.
+/// Reflecting this, any entity kind type that implements `A` should already
+/// implement `B`.
+///
+/// However, as these are not done (and cannot be done) using blanket
+/// implementations, the compiler does not know about this relationship.
+/// Therefore, to assist with category narrowing and broadening, this macro
+/// implements the following additional traits:
+///
+/// 1. `impl B for AnyA` (anything that is `A` is also `B`)
+/// 2. `impl From<AnyA> for AnyB` (infallible conversion to reflect that fact)
+/// 3. `impl TryFrom<AnyB> for AnyA` (fallible conversion, as there are kinds of
+///    entity that are `B` but not `A`, but a useful one due to the overlap)
+macro_rules! impl_subset {
+    ($A:ident < $B:ident) => {
+        paste::paste! {
+            impl $B for [<Any $A>] {}
 
-impl From<AnyAtomlike> for AnyFundamental {
-    fn from(entity: AnyAtomlike) -> Self {
-        Self::new_unchecked(entity.into_inner())
-    }
+            impl From<[<Any $A>]> for [<Any $B>] {
+                fn from(entity: [<Any $A>]) -> Self {
+                    Self::new_unchecked(entity.into_inner())
+                }
+            }
+
+            impl TryFrom<[<Any $B>]> for [<Any $A>] {
+                type Error = MolMapError;
+
+                fn try_from(entity: [<Any $B>]) -> Result<Self, Self::Error> {
+                    [<Any $A>]::try_from(entity.as_entity())
+                }
+            }
+        }
+    };
 }
 
-impl Bondable for AnyAtomlike {}
+impl_subset!(Atomlike < Fundamental);
 
-impl From<AnyAtomlike> for AnyBondable {
-    fn from(entity: AnyAtomlike) -> Self {
-        Self::new_unchecked(entity.into_inner())
-    }
-}
+impl_subset!(Atomlike < Bondable);
 
 #[cfg(test)]
 mod tests {

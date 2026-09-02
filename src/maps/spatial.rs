@@ -8,10 +8,11 @@
 
 use std::collections::HashMap;
 
-use nalgebra as na;
 use nalgebra::Point;
+use nalgebra::{self as na, SVector};
 use slotmap::SecondaryMap;
 
+use crate::graph::entities::SubstituentCentre;
 use crate::{
     MolMap,
     categories::*,
@@ -176,24 +177,88 @@ impl<const D: usize> SpatialMolMap<D> {
         self.bond_terminus(bond) - self.bond_origin(bond)
     }
 
-    ///// Calculates the unweighted geometric centre of the collection.
-    /////
-    ///// Only the positions of the constituent atoms and pseudoatoms are taken into
-    ///// consideration, not the bonds, nor any other member fundamentals.
-    //pub(crate) fn collection_centroid<E: Collection>(&self, collection: E) -> Point<f64, D> {
-    //    let members: Vec<AnyFundamental> = match Collection::to_resolved(collection) {
-    //        ResolvedCollection::Substituent(substituent) => self
-    //            .core
-    //            .data(substituent)
-    //            .members
-    //            .iter()
-    //            .filter(|f| f.kind())
-    //                //.map(|f| self.atomlike_position(atomlike)),
-    //        ResolvedCollection::Molecule(molecule) => {
-    //            self.core.data(molecule).members.iter().copied().collect()
-    //        }
-    //    };
-    //}
+    /// Calculates the mean position from a set of positions, or `None` if the iterator is empty.
+    pub(crate) fn mean_point<'a, I>(positions: I) -> Option<Point<f64, D>>
+    where
+        I: IntoIterator<Item = &'a Point<f64, D>>,
+    {
+        let mut count: u32 = 0;
+        let mut sum: SVector<f64, D> = SVector::zeros();
+        for pos in positions {
+            count += 1;
+            sum = sum + pos.coords;
+        }
+        if count == 0 {
+            None
+        } else {
+            let avg = sum / f64::from(count);
+            Some(Point::from(avg))
+        }
+    }
+
+    /// Calculates the unweighted geometric centre of the substituent,
+    /// or `None` if the molecule is empty.
+    ///
+    /// If `centres_only` is `true`, the centroid of the substituent's centre(s) will be
+    /// returned; in the typical case where substituent a only has one centre, this will
+    /// simply be the position of the central atomlike.
+    ///
+    /// Only the positions of the constituent atoms and pseudoatoms are taken into
+    /// consideration, not the bonds, nor any other member fundamentals.
+    pub(crate) fn substituent_centroid(
+        &self,
+        substituent: Substituent,
+        centres_only: bool,
+    ) -> Option<Point<f64, D>> {
+        let data = self.core.data(substituent);
+        if centres_only {
+            match &data.centre {
+                // Early return if substituent is empty/has no centre (should be the same thing)
+                SubstituentCentre::None => return None,
+                // Early return if single centre (no need to take average)
+                SubstituentCentre::Single(centre) => {
+                    return Some(self.atomlike_position(*centre)).copied();
+                }
+                // Only if there are multiple centres do we need to proceed to find the centroid
+                SubstituentCentre::Multiple(centres) => {
+                    let positions = centres.iter().map(|&x| self.atomlike_position(x));
+                    Self::mean_point(positions)
+                }
+            }
+        } else {
+            let positions = data
+                .members
+                .iter()
+                .filter_map(|&x| AnyAtomlike::try_from(x).ok())
+                .map(|x| self.atomlike_position(x));
+            Self::mean_point(positions)
+        }
+    }
+
+    /// Returns an iterator over the positions of the constituent atoms and
+    /// pseudoatoms of a molecule.
+    ///
+    /// Only the positions of the constituent atomlikes are included,
+    /// not the bonds, nor any other member fundamentals.
+    pub(crate) fn molecule_member_positions(
+        &self,
+        molecule: Molecule,
+    ) -> impl Iterator<Item = &Point<f64, D>> {
+        let members = self.core.data(molecule).members.iter();
+        let atomlikes = members.filter_map(|&x| AnyAtomlike::try_from(x).ok());
+        atomlikes.map(|x| self.atomlike_position(x))
+    }
+
+    /// Calculates the unweighted geometric centre of the molecule,
+    /// or `None` if the molecule is empty.
+    ///
+    /// Only the positions of the constituent atoms and pseudoatoms are taken into
+    /// consideration, not the bonds, nor any other member fundamentals.
+    pub(crate) fn molecule_centroid(&self, molecule: Molecule) -> Option<Point<f64, D>> {
+        let positions = self.molecule_member_positions(molecule);
+        // Centroid is unweighted average of all these positions
+        Self::mean_point(positions)
+    }
 }
 
 impl<'m, const D: usize> View<'m, SpatialMolMap<D>, Atom> {
@@ -234,5 +299,31 @@ impl<'m, const D: usize> View<'m, SpatialMolMap<D>, Bond> {
     /// Calculates the distance from the bond's origin to its terminus.
     pub fn length(&self) -> f64 {
         self.vector().magnitude()
+    }
+}
+
+impl<'m, const D: usize> View<'m, SpatialMolMap<D>, Substituent> {
+    /// Calculates the unweighted geometric centre of the substituent,
+    /// or `None` if the molecule is empty.
+    ///
+    /// If `centres_only` is `true`, the centroid of the substituent's centre(s) will be
+    /// returned; in the typical case where substituent a only has one centre, this will
+    /// simply be the position of the central atomlike.
+    ///
+    /// Only the positions of the constituent atoms and pseudoatoms are taken into
+    /// consideration, not the bonds, nor any other member fundamentals.
+    pub fn centroid(&self, centres_only: bool) -> Option<Point<f64, D>> {
+        self.map.substituent_centroid(self.id, centres_only)
+    }
+}
+
+impl<'m, const D: usize> View<'m, SpatialMolMap<D>, Molecule> {
+    /// Calculates the unweighted geometric centre of the molecule,
+    /// or `None` if the molecule is empty.
+    ///
+    /// Only the positions of the constituent atoms and pseudoatoms are taken into
+    /// consideration, not the bonds, nor any other member fundamentals.
+    pub fn centroid(&self) -> Option<Point<f64, D>> {
+        self.map.molecule_centroid(self.id)
     }
 }
