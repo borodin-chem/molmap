@@ -86,34 +86,14 @@ impl MolGraph {
 
     /// Returns a reference to the entity's data struct, or `None` if `entity` is invalid.
     #[inline]
-    pub(crate) fn get_data<E: Kind>(&self, entity: E) -> Option<&E::DATA> {
+    pub(crate) fn data<E: Kind>(&self, entity: E) -> Option<&E::DATA> {
         self.slotmap::<E>().get(entity.to_key())
     }
 
     /// Returns a mutable reference to the entity's data struct, or `None` if `entity` is invalid.
     #[inline]
-    pub(crate) fn get_data_mut<E: Kind>(&mut self, entity: E) -> Option<&mut E::DATA> {
+    pub(crate) fn data_mut<E: Kind>(&mut self, entity: E) -> Option<&mut E::DATA> {
         self.slotmap_mut::<E>().get_mut(entity.to_key())
-    }
-
-    /// Returns a reference to the entity's data struct.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `entity` is invalid.
-    #[inline]
-    pub(crate) fn data<E: Kind>(&self, entity: E) -> &E::DATA {
-        self.get_data(entity).unwrap()
-    }
-
-    /// Returns a mutable reference to the entity's data struct.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `entity` is invalid.
-    #[inline]
-    pub(crate) fn data_mut<E: Kind>(&mut self, entity: E) -> &mut E::DATA {
-        self.get_data_mut(entity).unwrap()
     }
 
     /// Checks if the map currently contains the given entity.
@@ -217,7 +197,7 @@ impl MolGraph {
             return false;
         }
         // Make sure we always remove bonds first
-        let bonds = self.data(atom).bonds.clone();
+        let bonds = self.data(atom).unwrap().bonds.clone();
         for bond in bonds {
             self.delete_bond(bond);
         }
@@ -242,7 +222,7 @@ impl MolGraph {
             return false;
         }
         // Make sure we always remove bonds first
-        let bonds = self.data(pseudoatom).bonds.clone();
+        let bonds = self.data(pseudoatom).unwrap().bonds.clone();
         for bond in bonds {
             self.delete_bond(bond);
         }
@@ -273,7 +253,7 @@ impl MolGraph {
                 match bonding_partner.resolve() {
                     ResolvedBondable::Atom(atom) => {
                         let mut atom_data = self
-                            .get_data_mut(atom)
+                            .data_mut(atom)
                             .expect("Bonds are always removed before their bonding partners");
                         let pos = atom_data.bonds.iter().position(|x| *x == bond).expect(
                             "Bond should be listed in the bonding partner's bonds until deletion",
@@ -282,7 +262,7 @@ impl MolGraph {
                     }
                     ResolvedBondable::Pseudoatom(pseudoatom) => {
                         let mut pseudoatom_data = self
-                            .get_data_mut(pseudoatom)
+                            .data_mut(pseudoatom)
                             .expect("Bonds are always removed before their bonding partners");
                         let pos = pseudoatom_data.bonds.iter().position(|x| *x == bond).expect(
                             "Bond should be listed in the bonding partner's bonds until deletion",
@@ -313,7 +293,7 @@ impl MolGraph {
         if !self.contains(substituent) {
             return false;
         };
-        let members = self.data(substituent).members.clone();
+        let members = self.data(substituent).unwrap().members.clone();
         for member in members {
             match member.resolve() {
                 ResolvedFundamental::Atom(atom) => {
@@ -339,7 +319,7 @@ impl MolGraph {
         if !self.contains(molecule) {
             return false;
         };
-        let members = self.data(molecule).members.clone();
+        let members = self.data(molecule).unwrap().members.clone();
         for member in members {
             match member.resolve() {
                 ResolvedFundamental::Atom(id) => {

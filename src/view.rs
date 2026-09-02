@@ -53,7 +53,7 @@ impl<'m, M: MolMap, E: Entity> View<'m, M, E> {
 impl<'m, M: MolMap, E: Kind> View<'m, M, E> {
     /// Returns a reference to the entity's data struct in the core [`MolGraph`]."
     pub(crate) fn data(&self) -> &E::DATA {
-        self.map.core().data(self.id)
+        self.map.core().data(self.id).unwrap()
     }
 }
 

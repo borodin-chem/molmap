@@ -77,7 +77,7 @@ impl MolMap0 {
         (
             centre,
             self.core()
-                .get_data(centre)
+                .data(centre)
                 .expect("We just created this atom, so ID must be valid")
                 .bonds
                 .as_slice(),
@@ -154,7 +154,7 @@ impl MolMap0 {
             sub,
             centre,
             self.core()
-                .get_data(centre)
+                .data(centre)
                 .expect("We just created this atom, so ID must be valid")
                 .bonds
                 .as_slice(),

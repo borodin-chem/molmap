@@ -137,7 +137,7 @@ impl<const D: usize> SpatialMolMap<D> {
     ///
     /// Panics if the bond is not in the map.
     pub(crate) fn bond_origin(&self, bond: Bond) -> &Point<f64, D> {
-        match self.core().data(bond).start.resolve() {
+        match self.core().data(bond).unwrap().start.resolve() {
             ResolvedBondable::Atom(atom) => self.atom_position(atom),
             ResolvedBondable::Pseudoatom(pseudoatom) => self.pseudoatom_position(pseudoatom),
         }
@@ -149,7 +149,7 @@ impl<const D: usize> SpatialMolMap<D> {
     ///
     /// Panics if the bond is not in the map.
     pub(crate) fn bond_terminus(&self, bond: Bond) -> &Point<f64, D> {
-        match self.core().data(bond).end.resolve() {
+        match self.core().data(bond).unwrap().end.resolve() {
             ResolvedBondable::Atom(atom) => self.atom_position(atom),
             ResolvedBondable::Pseudoatom(pseudoatom) => self.pseudoatom_position(pseudoatom),
         }
@@ -170,10 +170,6 @@ impl<const D: usize> SpatialMolMap<D> {
     ///
     /// Panics if the bond is not in the map.
     pub(crate) fn bond_vector(&self, bond: Bond) -> Vector<f64, D> {
-        //self.positions()
-        //    .bonds
-        //    .get(bond.to_key())
-        //    .expect("Caller is required to ensure that the ID is valid")
         self.bond_terminus(bond) - self.bond_origin(bond)
     }
 
@@ -205,12 +201,19 @@ impl<const D: usize> SpatialMolMap<D> {
     ///
     /// Only the positions of the constituent atoms and pseudoatoms are taken into
     /// consideration, not the bonds, nor any other member fundamentals.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the substituent is not in the map.
     pub(crate) fn substituent_centroid(
         &self,
         substituent: Substituent,
         centres_only: bool,
     ) -> Option<Point<f64, D>> {
-        let data = self.core.data(substituent);
+        let data = self
+            .core
+            .data(substituent)
+            .expect("Caller is required to ensure that the ID is valid");
         if centres_only {
             match &data.centre {
                 // Early return if substituent is empty/has no centre (should be the same thing)
@@ -240,11 +243,20 @@ impl<const D: usize> SpatialMolMap<D> {
     ///
     /// Only the positions of the constituent atomlikes are included,
     /// not the bonds, nor any other member fundamentals.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the molecule is not in the map.
     pub(crate) fn molecule_member_positions(
         &self,
         molecule: Molecule,
     ) -> impl Iterator<Item = &Point<f64, D>> {
-        let members = self.core.data(molecule).members.iter();
+        let members = self
+            .core
+            .data(molecule)
+            .expect("Caller is required to ensure that the ID is valid")
+            .members
+            .iter();
         let atomlikes = members.filter_map(|&x| AnyAtomlike::try_from(x).ok());
         atomlikes.map(|x| self.atomlike_position(x))
     }
@@ -254,6 +266,10 @@ impl<const D: usize> SpatialMolMap<D> {
     ///
     /// Only the positions of the constituent atoms and pseudoatoms are taken into
     /// consideration, not the bonds, nor any other member fundamentals.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the molecule is not in the map.
     pub(crate) fn molecule_centroid(&self, molecule: Molecule) -> Option<Point<f64, D>> {
         let positions = self.molecule_member_positions(molecule);
         // Centroid is unweighted average of all these positions
