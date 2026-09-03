@@ -260,7 +260,7 @@ impl<'m, E: Kind> Iterator for AllEntities<'m, E> {
     type Item = E;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.keys.next().and_then(|k| Some(E::from_key(k)))
+        self.keys.next().map(|k| E::from_key(k))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {

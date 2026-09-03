@@ -500,7 +500,7 @@ impl<const D: usize> SpatialMolMap<D> {
         let mut sum: SVector<f64, D> = SVector::zeros();
         for pos in positions {
             count += 1;
-            sum = sum + pos.coords;
+            sum += pos.coords
         }
         if count == 0 {
             None
@@ -535,11 +535,9 @@ impl<const D: usize> SpatialMolMap<D> {
         if centres_only {
             match &data.centre {
                 // Early return if substituent is empty/has no centre (should be the same thing)
-                SubstituentCentre::None => return None,
+                SubstituentCentre::None => None,
                 // Early return if single centre (no need to take average)
-                SubstituentCentre::Single(centre) => {
-                    return Some(self.atomlike_position(*centre)).copied();
-                }
+                SubstituentCentre::Single(centre) => Some(self.atomlike_position(*centre)).copied(),
                 // Only if there are multiple centres do we need to proceed to find the centroid
                 SubstituentCentre::Multiple(centres) => {
                     let positions = centres.iter().map(|&x| self.atomlike_position(x));
