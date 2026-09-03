@@ -10,7 +10,7 @@
 
 use std::iter::FusedIterator;
 
-use slotmap::{Key, SlotMap, new_key_type};
+use slotmap::{Key, SlotMap, basic::Keys, new_key_type};
 
 use crate::{categories::Category, error::*, graph::keys::Keyed, id::Id};
 
@@ -244,6 +244,33 @@ macro_rules! new_entity_kind {
         }
     };
 }
+
+/// An iterator over all of a given kind of entity in a map.
+pub struct AllEntities<'m, E: Kind> {
+    keys: Keys<'m, E::KEY, E::DATA>,
+}
+
+impl<'m, E: Kind> AllEntities<'m, E> {
+    pub(crate) fn from_keys(keys: Keys<'m, E::KEY, E::DATA>) -> Self {
+        Self { keys }
+    }
+}
+
+impl<'m, E: Kind> Iterator for AllEntities<'m, E> {
+    type Item = E;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.keys.next().map(|k| E::from_key(k))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.keys.size_hint()
+    }
+}
+
+impl<'a, E: Kind> ExactSizeIterator for AllEntities<'a, E> {}
+
+impl<'a, E: Kind> FusedIterator for AllEntities<'a, E> {}
 
 new_entity_kind!(
     /// Smallest particle still characterizing a chemical element.

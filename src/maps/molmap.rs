@@ -6,13 +6,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::{fmt::Debug, iter::FusedIterator};
+use std::fmt::Debug;
 
 use nalgebra::{Point, Point2};
 use slotmap::SecondaryMap;
 use slotmap::SlotMap;
 
 use crate::categories::Collection;
+use crate::error::MolMapError;
+use crate::error::MolMapResult;
 use crate::{entities::*, graph::MolGraph, graph::keys::*, view::*};
 
 /// A trait implemented by all `MolMap` types to provide access to their core
@@ -114,8 +116,8 @@ pub trait MolMap: Sized + MolMapCore {
     }
 
     /// Returns an iterator over all of a given kind of entity in the map.
-    fn iter<E: Kind>(&'_ self) -> impl Iterator<Item = E> + ExactSizeIterator + FusedIterator {
-        self.core().iter::<E>()
+    fn all_entities<E: Kind>(&'_ self) -> AllEntities<'_, E> {
+        AllEntities::from_keys(self.core().keys::<E>())
     }
 
     // Getters
@@ -141,39 +143,48 @@ pub trait MolMap: Sized + MolMapCore {
         })
     }
 
-    /// Returns an iterator over views of all the given entities, returning `None`
+    /// Returns an iterator over views of the given entities, returning an error
     /// if any ID is invalid.
     ///
     /// This method is most useful for situations where it is important to have
     /// ensured all IDs are valid before beginning some operation involving them.
     ///
-    /// As the IDs are validated eagerly using a clone of the iterator, in other
+    /// As the IDs are validated eagerly and then stored on the heap, in other
     /// situations it is probably more sensible to use `map` on the ID iterator
     /// to get an iterator that returns views for each entity in turn, lazily.
-    fn views<E, I>(&'_ mut self, entities: I) -> Option<Views<'_, Self, E, I::IntoIter>>
+    ///
+    /// # Errors
+    ///
+    /// Fails if any ID is invalid, in which case the error includes the first
+    /// invalid ID encountered.
+    fn views<E, I>(&'_ self, entities: I) -> MolMapResult<Views<'_, Self, E>>
     where
-        E: Kind,
+        E: Entity,
         I: IntoIterator<Item = E>,
-        I::IntoIter: Clone,
     {
-        let entities = entities.into_iter();
-        if entities.clone().all(|e| self.contains(e)) {
-            Some(Views {
-                map: self,
-                ids: entities,
+        let validated: Vec<E> = entities
+            .into_iter()
+            .map(|e| {
+                if self.contains(e) {
+                    Ok(e)
+                } else {
+                    Err(MolMapError::Id(e.as_entity()))
+                }
             })
-        } else {
-            None
-        }
+            // An iterator of Result<T, U> can be collected into Result<Vec<T>, U>
+            .collect::<MolMapResult<Vec<E>>>()?;
+        Ok(Views {
+            map: self,
+            ids: validated.into_iter(),
+        })
     }
 
     /// Returns an iterator over views of all of a given kind of entity in the map.
-    fn iter_views<E: Kind>(
-        &'_ self,
-    ) -> Views<'_, Self, E, impl Iterator<Item = E> + ExactSizeIterator> {
+    fn all_views<E: Kind>(&'_ self) -> Views<'_, Self, E> {
+        let all: Vec<E> = self.all_entities().collect();
         Views {
             map: self,
-            ids: self.iter(),
+            ids: all.into_iter(),
         }
     }
 }
