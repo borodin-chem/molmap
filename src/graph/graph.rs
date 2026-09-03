@@ -6,8 +6,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::iter::FusedIterator;
-
 use slotmap::{SlotMap, basic::Keys};
 
 use crate::{
@@ -101,11 +99,9 @@ impl MolGraph {
         self.slotmap::<E>().contains_key(entity.to_key())
     }
 
-    /// Returns an iterator over all of a given kind of entity in the map.
-    pub(crate) fn iter<E: Kind>(
-        &'_ self,
-    ) -> impl Iterator<Item = E> + ExactSizeIterator + FusedIterator {
-        self.slotmap::<E>().keys().map(|k| E::from_key(k))
+    /// Returns an iterator over all the keys of a given kind of entity in the map.
+    pub(crate) fn keys<E: Kind>(&'_ self) -> slotmap::basic::Keys<'_, E::KEY, E::DATA> {
+        self.slotmap::<E>().keys()
     }
 }
 

@@ -54,9 +54,7 @@
 //! non-conflicting) with these IDs.
 
 use std::fmt::{Debug, Formatter};
-use std::iter::FusedIterator;
-use std::marker::PhantomData;
-use std::num::{IntErrorKind, NonZeroU16, NonZeroU32, NonZeroU64};
+use std::num::NonZeroU64;
 
 use slotmap::{Key, KeyData};
 

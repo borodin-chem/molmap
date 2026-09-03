@@ -80,32 +80,29 @@ impl<'m, M: MolMap, E: Entity> ViewMut<'m, M, E> {
 }
 
 /// An iterator that yields an immutable view of each of a set of entities in turn.
-pub struct Views<'m, M, E, I>
+pub struct Views<'m, M, E>
 where
     M: MolMap,
     E: Entity,
-    I: Iterator<Item = E>,
 {
     pub(crate) map: &'m M,
-    pub(crate) ids: I,
+    pub(crate) ids: std::vec::IntoIter<E>,
 }
 
-impl<'m, M, E, I> Views<'m, M, E, I>
+impl<'m, M, E> Views<'m, M, E>
 where
     M: MolMap,
     E: Entity,
-    I: Iterator<Item = E>,
 {
-    pub fn ids(self) -> I {
+    pub fn ids(self) -> std::vec::IntoIter<E> {
         self.ids
     }
 }
 
-impl<'m, M, E, I> Iterator for Views<'m, M, E, I>
+impl<'m, M, E> Iterator for Views<'m, M, E>
 where
     M: MolMap,
     E: Entity,
-    I: Iterator<Item = E>,
 {
     type Item = View<'m, M, E>;
 
@@ -116,23 +113,76 @@ where
             None
         }
     }
-}
 
-impl<'m, M, E, I> ExactSizeIterator for Views<'m, M, E, I>
-where
-    M: MolMap,
-    E: Entity,
-    I: Iterator<Item = E> + ExactSizeIterator,
-{
-    fn len(&self) -> usize {
-        self.ids.len()
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.ids.size_hint()
     }
 }
 
-impl<'m, M, E, I> FusedIterator for Views<'m, M, E, I>
+impl<'m, M, E> ExactSizeIterator for Views<'m, M, E>
 where
     M: MolMap,
     E: Entity,
-    I: Iterator<Item = E> + FusedIterator,
+{
+}
+
+impl<'m, M, E> FusedIterator for Views<'m, M, E>
+where
+    M: MolMap,
+    E: Entity,
+{
+}
+
+/// An iterator that yields an immutable view of every one of a given kind of entity in a map in turn.
+pub struct AllViews<'m, M, E>
+where
+    M: MolMap,
+    E: Kind,
+{
+    pub(crate) map: &'m M,
+    pub(crate) ids: AllEntities<'m, E>,
+}
+
+impl<'m, M, E> AllViews<'m, M, E>
+where
+    M: MolMap,
+    E: Kind,
+{
+    pub fn ids(self) -> AllEntities<'m, E> {
+        self.ids
+    }
+}
+
+impl<'m, M, E> Iterator for AllViews<'m, M, E>
+where
+    M: MolMap,
+    E: Kind,
+{
+    type Item = View<'m, M, E>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(id) = self.ids.next() {
+            Some(View { map: self.map, id })
+        } else {
+            None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.ids.size_hint()
+    }
+}
+
+impl<'m, M, E> ExactSizeIterator for AllViews<'m, M, E>
+where
+    M: MolMap,
+    E: Kind,
+{
+}
+
+impl<'m, M, E> FusedIterator for AllViews<'m, M, E>
+where
+    M: MolMap,
+    E: Kind,
 {
 }
