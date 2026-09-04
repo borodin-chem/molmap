@@ -11,7 +11,7 @@
 
 use slotmap::{Key, SlotMap, new_key_type};
 
-use crate::{entities::*, graph::MolGraph, graph::entities::*, id::Id};
+use crate::{entities::*, graph::MolGraph, graph::data::*, id::Id};
 
 /// A fundamental kind of entity in the graph, with a backing `SlotMap`.
 pub trait Keyed: Entity {

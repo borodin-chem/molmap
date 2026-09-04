@@ -8,9 +8,9 @@
 
 //! Implementation of the core molecular graph.
 
-mod graph;
+mod molgraph;
 
-pub(crate) mod entities;
+pub(crate) mod data;
 pub(crate) mod keys;
 
-pub(crate) use graph::MolGraph;
+pub(crate) use molgraph::MolGraph;
