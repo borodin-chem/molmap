@@ -16,7 +16,7 @@ use crate::{
     categories::*,
     entities::*,
     error::{MolMapError, MolMapResult},
-    graph::{MolGraph, entities::SubstituentCentre, keys::*},
+    graph::{MolGraph, data::SubstituentCentre, keys::*},
     maps::MolMapCore,
     view::*,
     *,

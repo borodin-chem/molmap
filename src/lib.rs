@@ -31,7 +31,7 @@ pub mod view;
 // Top-level items
 // ---------------
 pub use element::Element;
-pub use graph::entities::BondType;
+pub use graph::data::BondType;
 pub use maps::MolMap; // Traits
 pub use maps::MolMap0;
 pub use maps::{MolMap2, MolMap3, SpatialMolMap};

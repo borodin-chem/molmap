@@ -6,13 +6,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+//! Definition of the data structure that holds the core molecular graph.
+
 use slotmap::{SlotMap, basic::Keys};
 
 use crate::{
     Element, Pseudoelement,
     categories::*,
     entities::*,
-    graph::{entities::*, keys::*},
+    graph::{data::*, keys::*},
     id::Id,
 };
 
