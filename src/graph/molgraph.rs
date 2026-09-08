@@ -14,6 +14,7 @@ use crate::{
     Element, Pseudoelement,
     categories::*,
     entities::*,
+    error::{MolMapError, MolMapResult},
     graph::{data::*, keys::*},
     id::Id,
 };
@@ -345,6 +346,119 @@ impl MolGraph {
 /// implemented using macros due to the likelihood that they will need to diverge in
 /// future.
 impl MolGraph {
+    /// Attempts to change the centre of the substituent to the one requested.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the requested centre is not already a member of the substituent,
+    /// or if there are already bonds to the current centre(s).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `substituent` is invalid.
+    pub(crate) fn set_substituent_centre(
+        &mut self,
+        substituent: Substituent,
+        new_centre: impl Atomlike,
+    ) -> MolMapResult<()> {
+        // First confirm that the new centre is actually a member of the substituent
+        let sub_data = self
+            .data(substituent)
+            .expect("Caller is required to ensure that the molecule is valid");
+        if !sub_data
+            .members
+            .contains(&new_centre.as_atomlike().as_fundamental())
+        {
+            return Err(MolMapError::Membership(
+                new_centre.as_atomlike().as_fundamental(),
+            ));
+        }
+        // A closure that determines if an atom or pseudoatom has bonds already
+        let atomlike_has_bonds = |id: AnyAtomlike| -> bool {
+            let bonds = match id.resolve() {
+                ResolvedAtomlike::Atom(atom) => {
+                    &self
+                        .data(atom)
+                        .expect("Wouldn't be listed as the centre if it had been removed")
+                        .bonds
+                }
+                ResolvedAtomlike::Pseudoatom(pseudoatom) => {
+                    &self
+                        .data(pseudoatom)
+                        .expect("Wouldn't be listed as the centre if it had been removed")
+                        .bonds
+                }
+            };
+            !bonds.is_empty()
+        };
+        // Check that there aren't already bonds to the current centre
+        let already_bonded = match &sub_data.centre {
+            SubstituentCentre::None => false,
+            SubstituentCentre::Single(atomlike_id) => atomlike_has_bonds(*atomlike_id),
+            SubstituentCentre::Multiple(atomlike_ids) => {
+                atomlike_ids.iter().copied().any(atomlike_has_bonds)
+            }
+        };
+        if already_bonded {
+            Err(MolMapError::Disallowed(String::from(
+                "Substituent already has at least one bond to its centre(s)",
+            )))
+        } else {
+            self.data_mut(substituent)
+                .expect("Already validated")
+                .centre = SubstituentCentre::Single(new_centre.as_atomlike());
+            Ok(())
+        }
+    }
+
+    /// Makes the requested atomlike a centre of the substituent, in addition to any
+    /// already existing centres.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the requested centre is not already a member of the substituent.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `substituent` is invalid.
+    pub(crate) fn add_substituent_centre(
+        &mut self,
+        substituent: Substituent,
+        new_centre: impl Atomlike,
+    ) -> MolMapResult<()> {
+        // First confirm that the new centre is actually a member of the substituent
+        let sub_data = self
+            .data_mut(substituent)
+            .expect("Caller is required to ensure that the molecule is valid");
+        if !sub_data
+            .members
+            .contains(&new_centre.as_atomlike().as_fundamental())
+        {
+            return Err(MolMapError::Membership(
+                new_centre.as_atomlike().as_fundamental(),
+            ));
+        }
+        match &mut sub_data.centre {
+            SubstituentCentre::None => {
+                self.data_mut(substituent)
+                    .expect("Already validated")
+                    .centre = SubstituentCentre::Single(new_centre.as_atomlike())
+            }
+            SubstituentCentre::Single(existing_centre) => {
+                self.data_mut(substituent)
+                    .expect("Already validated")
+                    .centre = SubstituentCentre::Multiple(Box::new(vec![
+                    *existing_centre,
+                    new_centre.as_atomlike(),
+                ]))
+            }
+            SubstituentCentre::Multiple(existing_centres) => {
+                existing_centres.push(new_centre.as_atomlike())
+            }
+        }
+        Ok(())
+    }
+
     /// Adds an atom, pseudoatom, or bond to a substituent.
     ///
     /// Returns whether the fundamental was newly inserted.
@@ -656,5 +770,69 @@ impl MolGraph {
             }
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn set_substituent_centre() {
+        let mut graph = MolGraph::new();
+        let c = graph.add_atom(Element::C);
+        let n = graph.add_atom(Element::N);
+        assert_ne!(c, n);
+        let sub = graph.add_substituent_with_centre(c);
+        graph.insert_into_substituent(sub, n);
+        // Now we have a CN substituent that bonds at C i.e. cyano
+        // First, sanity checks
+        // Both C and N atom should be members
+        assert_eq!(
+            graph.data(sub).unwrap().members,
+            [c.as_fundamental(), n.as_fundamental()]
+        );
+        // C should be the centre
+        assert_eq!(
+            graph.data(sub).unwrap().centre,
+            SubstituentCentre::Single(c.as_atomlike()),
+        );
+        // Now, convert to isocyano by making the N the centre
+        graph.set_substituent_centre(sub, n);
+        // N should be the centre
+        assert_eq!(
+            graph.data(sub).unwrap().centre,
+            SubstituentCentre::Single(n.as_atomlike()),
+        );
+    }
+
+    #[test]
+    fn add_substituent_centre() {
+        let mut graph = MolGraph::new();
+        let c = graph.add_atom(Element::C);
+        let o1 = graph.add_atom(Element::O); // The double-bonded oxygen (designated arbitrarily)
+        let o2 = graph.add_atom(Element::O);
+        let sub = graph.add_substituent_with_centre(c);
+        graph.insert_into_substituent(sub, o1);
+        graph.insert_into_substituent(sub, o2);
+        // Now we have a COO substituent that bonds at C i.e. carboxyl
+        // First, sanity checks
+        // All atoms should be members
+        assert_eq!(
+            graph.data(sub).unwrap().members,
+            [c.into(), o1.into(), o2.into()]
+        );
+        // C should be the centre
+        assert_eq!(
+            graph.data(sub).unwrap().centre,
+            SubstituentCentre::Single(c.into()),
+        );
+        // Now, let the substituent bond at both carbon and oxygen i.e. as R–COO–R
+        graph.add_substituent_centre(sub, o2);
+        // Both C and the second O should be centres
+        assert_eq!(
+            graph.data(sub).unwrap().centre,
+            SubstituentCentre::Multiple(Box::new(vec![c.into(), o2.into()])),
+        );
     }
 }
