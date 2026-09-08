@@ -130,8 +130,7 @@ impl MolGraph {
         let bond: Bond = self
             .bonds
             .insert(BondData::new(
-                BondType::Covalent,
-                1.0,
+                BondType::Covalent { order: 1.0 },
                 start.as_bondable(),
                 end.as_bondable(),
             ))
