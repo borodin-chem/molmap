@@ -111,7 +111,7 @@ impl<const D: usize> SpatialMolMap<D> {
     /// # Errors
     ///
     /// Fails if either of `start` and `end` are invalid.
-    pub fn add_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    pub fn add_bond<A, B>(&mut self, bond_type: BondType, start: A, end: B) -> MolMapResult<Bond>
     where
         A: Bondable,
         B: Bondable,
@@ -121,7 +121,33 @@ impl<const D: usize> SpatialMolMap<D> {
         } else if !self.contains(end) {
             return Err(MolMapError::Id(end.as_entity()));
         };
-        Ok(self.core.add_bond(start, end))
+        Ok(self.core.add_bond(bond_type, start, end))
+    }
+
+    /// Creates a new single covalent bond between two bondable entities.
+    ///
+    /// # Errors
+    ///
+    /// Fails if either of `start` and `end` are invalid.
+    pub fn add_single_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    where
+        A: Bondable,
+        B: Bondable,
+    {
+        self.add_bond(BondType::Covalent { order: 1.0 }, start, end)
+    }
+
+    /// Creates a new double covalent bond between two bondable entities.
+    ///
+    /// # Errors
+    ///
+    /// Fails if either of `start` and `end` are invalid.
+    pub fn add_double_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    where
+        A: Bondable,
+        B: Bondable,
+    {
+        self.add_bond(BondType::Covalent { order: 2.0 }, start, end)
     }
 
     /// Adds an empty substituent to the map.

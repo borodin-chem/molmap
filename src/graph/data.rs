@@ -167,6 +167,9 @@ pub enum BondType {
     /// the "donation", or as a normal covalent bond with the appropriate formal
     /// charges as a charge-separated structure, or – most commonly – simply as
     /// a normal covalent bond (with apparently incorrect formal charges).
+    ///
+    /// The Lewis-basic bonding partner that provides the bonding electrons should
+    /// be `start`.
     Dipolar { order: f32 },
     /// An attractive interaction due to the electrostatic force between metal
     /// ions and surrounding delocalized electrons.

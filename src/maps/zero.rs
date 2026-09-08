@@ -70,7 +70,8 @@ impl MolMap0 {
         let centre = self.add_atom(element);
         for i in 0..n_hydrogen {
             let new_h = self.add_atom(Element::H);
-            self.core.add_bond(centre, new_h);
+            self.core
+                .add_bond(BondType::Covalent { order: 1.0 }, centre, new_h);
         }
         // Don't waste memory allocating a new Vec to hold the bond IDs, since
         // they are already stored on the new central atom – return a slice instead
@@ -100,12 +101,12 @@ impl MolMap0 {
         self.core.add_pseudoatom(pseudoelement)
     }
 
-    /// Creates a new (single covalent) bond between two bondable entities.
+    /// Creates a new bond between two bondable entities.
     ///
     /// # Errors
     ///
     /// Fails if either of `start` and `end` are invalid.
-    pub fn add_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    pub fn add_bond<A, B>(&mut self, bond_type: BondType, start: A, end: B) -> MolMapResult<Bond>
     where
         A: Bondable,
         B: Bondable,
@@ -115,7 +116,33 @@ impl MolMap0 {
         } else if !self.contains(end) {
             return Err(MolMapError::Id(end.as_entity()));
         };
-        Ok(self.core.add_bond(start, end))
+        Ok(self.core.add_bond(bond_type, start, end))
+    }
+
+    /// Creates a new single covalent bond between two bondable entities.
+    ///
+    /// # Errors
+    ///
+    /// Fails if either of `start` and `end` are invalid.
+    pub fn add_single_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    where
+        A: Bondable,
+        B: Bondable,
+    {
+        self.add_bond(BondType::Covalent { order: 1.0 }, start, end)
+    }
+
+    /// Creates a new double covalent bond between two bondable entities.
+    ///
+    /// # Errors
+    ///
+    /// Fails if either of `start` and `end` are invalid.
+    pub fn add_double_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    where
+        A: Bondable,
+        B: Bondable,
+    {
+        self.add_bond(BondType::Covalent { order: 2.0 }, start, end)
     }
 
     /// Adds an empty substituent to the map.
@@ -146,7 +173,9 @@ impl MolMap0 {
         let (sub, centre) = self.add_substituent_with_atom(element);
         for i in 0..n_hydrogen {
             let new_h = self.add_atom(Element::H);
-            let new_bond = self.core.add_bond(centre, new_h);
+            let new_bond = self
+                .core
+                .add_bond(BondType::Covalent { order: 1.0 }, centre, new_h);
             self.core.insert_into_substituent(sub, new_h);
             self.core.insert_into_substituent(sub, new_bond);
         }
@@ -455,13 +484,13 @@ mod tests {
         let h2 = mm.add_atom(Element::H);
         let h3 = mm.add_atom(Element::H);
         let c1 = mm.add_atom(Element::C);
-        let c1h1 = mm.add_bond(c1, h1).unwrap();
-        let c1h2 = mm.add_bond(c1, h2).unwrap();
-        let c1h3 = mm.add_bond(c1, h3).unwrap();
+        let c1h1 = mm.add_single_bond(c1, h1).unwrap();
+        let c1h2 = mm.add_single_bond(c1, h2).unwrap();
+        let c1h3 = mm.add_single_bond(c1, h3).unwrap();
         let o1 = mm.add_atom(Element::O);
         let h4 = mm.add_atom(Element::H);
-        let o1h4 = mm.add_bond(o1, h4).unwrap();
-        let c1o1 = mm.add_bond(c1, o1).unwrap();
+        let o1h4 = mm.add_single_bond(o1, h4).unwrap();
+        let c1o1 = mm.add_single_bond(c1, o1).unwrap();
         // TODO substituents
         mm
     }
@@ -532,7 +561,7 @@ mod tests {
         assert!(mm.core().slotmap::<Bond>().is_empty());
         let h1 = mm.add_atom(Element::H);
         let h2 = mm.add_atom(Element::H);
-        let b1 = mm.add_bond(h1, h2).unwrap();
+        let b1 = mm.add_single_bond(h1, h2).unwrap();
         assert!(mm.core().slotmap::<Bond>().contains_key(b1.into()));
         assert!(
             mm.core()
@@ -565,7 +594,7 @@ mod tests {
         let mut mm = MolMap0::new();
         let h1 = mm.add_atom(Element::H);
         let h2 = mm.add_atom(Element::H);
-        let b1 = mm.add_bond(h1, h2).unwrap();
+        let b1 = mm.add_single_bond(h1, h2).unwrap();
         assert!(mm.contains(b1));
         for (i, &h) in [h1, h2].iter().enumerate() {
             assert!(mm.view(h).unwrap().bonds().contains(&b1));

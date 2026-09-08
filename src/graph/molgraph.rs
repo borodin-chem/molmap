@@ -121,16 +121,21 @@ impl MolGraph {
             .into()
     }
 
-    /// Creates a new (single covalent) bond between two bondable entities.
+    /// Creates a new bond between two bondable entities.
     ///
     /// # Panics
     ///
     /// Panics if either of `start` and `end` are invalid.
-    pub(crate) fn add_bond(&mut self, start: impl Bondable, end: impl Bondable) -> Bond {
+    pub(crate) fn add_bond(
+        &mut self,
+        bond_type: BondType,
+        start: impl Bondable,
+        end: impl Bondable,
+    ) -> Bond {
         let bond: Bond = self
             .bonds
             .insert(BondData::new(
-                BondType::Covalent { order: 1.0 },
+                bond_type,
                 start.as_bondable(),
                 end.as_bondable(),
             ))
