@@ -32,6 +32,10 @@ pub type Vector<T, const D: usize> = na::Vector<T, na::Const<D>, na::ArrayStorag
 
 /// A [`MolMap`] that also holds the spatial positions (with dimensionality `D`)
 /// of its entities, but no further application-specific information.
+///
+/// Note that the units of the space are arbitrary and no assumptions should be made
+/// as to what a length of 1 represents. Other types that wrap or extend a
+/// `SpatialMolMap` will want to fix a value.
 #[derive(Clone, Debug)]
 pub struct SpatialMolMap<const D: usize> {
     core: MolGraph,

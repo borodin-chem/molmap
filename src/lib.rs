@@ -26,6 +26,7 @@ mod pseudoelement;
 pub mod categories;
 pub mod entities;
 pub mod error;
+pub mod parse;
 pub mod view;
 
 // Top-level items
