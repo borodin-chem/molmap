@@ -32,8 +32,8 @@
 //!
 //! The other good option, and the one currently taken, is to organize the code
 //! into modules by the thing being implemented e.g. the core data, spatial data,
-//! methods on MolGraph, on MolMap, on SpatialMolMap, on the MolGraph views, on
-//! the general MolMap views, on SpatialMolMap views, etc.
+//! methods on MolGraph, on MolMap, on SpatialMolMap, on the general MolMap views,
+//! on SpatialMolMap views, etc.
 //! If desired this approach can be further split up e.g. different modules for
 //! the different kinds of functionality of a SpatialMolMap.
 //!
@@ -62,7 +62,9 @@
 
 use std::collections::HashSet;
 
-use crate::{Element, MolMap, Pseudoelement, categories::*, entities::*, view::*};
+use crate::{
+    Element, MolMap, Pseudoelement, categories::*, entities::*, error::MolMapResult, view::*,
+};
 
 /// The core data of an atom entity.
 #[derive(Clone, Debug)]
@@ -300,7 +302,7 @@ impl<'m, M: MolMap> View<'m, M, Bond> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum SubstituentCentre {
     None,
     Single(AnyAtomlike),
@@ -340,62 +342,31 @@ impl<'m, M: MolMap> View<'m, M, Substituent> {
     }
 }
 
-//impl<'m, M: MolMap> ViewMut<'m, M, Substituent> {
-///// Attempts to change the centre of the substituent to the one requested.
-/////
-///// # Errors
-/////
-///// Fails if the requested centre is not already a member of the substituent,
-///// or if there are already bonds to the current centre(s).
-//pub fn change_centre(mut self, new: Atomlike>) -> MolMapResult<() {
-//    // First confirm that `new` is actually a member of `self`
-//    self.core()
-//        .members
-//        .contains(&new.into())
-//        .then_some(())
-//        .ok_or(MolMapError::Membership(new.into()))?;
-//    // A closure that determines if an atom or pseudoatom has bonds already
-//    let atomlike_has_bonds = |id: Atomlike>| - bool {
-//        let bonds = match id.to_tagged() {
-//            ResolvedAtomlike::Atom(id) => {
-//                &self
-//                    .map
-//                    .core()
-//                    .atoms
-//                    .get(id.try_into().unwrap())
-//                    .expect("Wouldn't be listed as the centre if it had been removed")
-//                    .bonds
-//            }
-//            ResolvedAtomlike::Pseudoatom(id) => {
-//                &self
-//                    .map
-//                    .core()
-//                    .pseudoatoms
-//                    .get(id)
-//                    .expect("Wouldn't be listed as the centre if it had been removed")
-//                    .bonds
-//            }
-//        };
-//        !bonds.is_empty()
-//    };
-//    // Check that there aren't already bonds to the current centre
-//    let already_bonded = match self.as_view().centre().clone() {
-//        SubstituentCentre::None => false,
-//        SubstituentCentre::Single(atomlike_id) => atomlike_has_bonds(atomlike_id),
-//        SubstituentCentre::Multiple(atomlike_ids) => {
-//            atomlike_ids.into_iter().any(atomlike_has_bonds)
-//        }
-//    };
-//    if already_bonded {
-//        Err(MolMapError::Disallowed(String::from(
-//            "Substituent already has at least one bond to its centre(s)",
-//        )))
-//    } else {
-//        self.core().centre = SubstituentCentre::Single(new.into());
-//        Ok(())
-//    }
-//}
-//}
+impl<'m, M: MolMap> ViewMut<'m, M, Substituent> {
+    /// Attempts to change the centre of the substituent to the one requested.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the requested centre is not already a member of the substituent,
+    /// or if there are already bonds to the current centre(s).
+    pub(crate) fn set_centre(self, new_centre: impl Atomlike) -> MolMapResult<()> {
+        self.map
+            .core_mut()
+            .set_substituent_centre(self.id, new_centre)
+    }
+
+    /// Makes the requested atomlike a centre of the substituent, in addition to any
+    /// already existing centres.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the requested centre is not already a member of the substituent.
+    pub(crate) fn add_centre(self, new_centre: impl Atomlike) -> MolMapResult<()> {
+        self.map
+            .core_mut()
+            .add_substituent_centre(self.id, new_centre)
+    }
+}
 
 /// The core data of a molecule entity.
 #[derive(Clone, Debug)]
