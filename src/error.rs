@@ -18,8 +18,8 @@ use crate::{
 #[derive(thiserror::Error, Debug)]
 pub enum MolMapError {
     /// Returned when an ID is invalid.
-    #[error("The ID was not found in the Map")]
-    Id(AnyEntity),
+    #[error("The entity was not found in the map")]
+    InvalidId(AnyEntity),
     /// Returned when a fundamental is not in fact a member of a specific collection.
     #[error("The fundamental is not a member of this collection")]
     Membership(AnyFundamental),
@@ -35,6 +35,11 @@ pub enum MolMapError {
     /// valid for.
     #[error("The entity is not of the correct kind for this conversion")]
     IncorrectEntityKind(EntityKind, AnyEntity),
+    /// Returned when a map is unexpectedly empty.
+    #[error(
+        "The map is either completely empty or is missing any entities of the necessary kind for the requested operation"
+    )]
+    EmptyMap,
 }
 
 /// A `Result` type for situations where the crate's [`MolMapError`] might be returned.

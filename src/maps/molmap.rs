@@ -168,7 +168,7 @@ pub trait MolMap: Sized + MolMapCore {
                 if self.contains(e) {
                     Ok(e)
                 } else {
-                    Err(MolMapError::Id(e.as_entity()))
+                    Err(MolMapError::InvalidId(e.as_entity()))
                 }
             })
             // An iterator of Result<T, U> can be collected into Result<Vec<T>, U>

@@ -121,9 +121,9 @@ impl<const D: usize> SpatialMolMap<D> {
         B: Bondable,
     {
         if !self.contains(start) {
-            return Err(MolMapError::Id(start.as_entity()));
+            return Err(MolMapError::InvalidId(start.as_entity()));
         } else if !self.contains(end) {
-            return Err(MolMapError::Id(end.as_entity()));
+            return Err(MolMapError::InvalidId(end.as_entity()));
         };
         Ok(self.core.add_bond(bond_type, start, end))
     }
@@ -222,7 +222,7 @@ impl<'m, const D: usize> ViewMut<'m, SpatialMolMap<D>, Substituent> {
     /// Returns an error if the fundamental is invalid.
     pub fn insert(self, fundamental: impl Fundamental) -> MolMapResult<bool> {
         if !self.map.contains(fundamental) {
-            return Err(MolMapError::Id(fundamental.as_entity()));
+            return Err(MolMapError::InvalidId(fundamental.as_entity()));
         };
         if let Some(parent) = self.map.core().parent_substituent(fundamental) {
             if parent == self.id {
@@ -260,7 +260,7 @@ impl<'m, const D: usize> ViewMut<'m, SpatialMolMap<D>, Substituent> {
         let fundamentals = fundamentals.into_iter();
         for f in fundamentals.clone() {
             if !self.map.contains(f) {
-                return Err(MolMapError::Id(f.as_entity()));
+                return Err(MolMapError::InvalidId(f.as_entity()));
             }
         }
         for f in fundamentals {
@@ -341,7 +341,7 @@ impl<'m, const D: usize> ViewMut<'m, SpatialMolMap<D>, Molecule> {
     /// Returns an error if the fundamental is invalid.
     pub fn insert(self, fundamental: impl Fundamental) -> MolMapResult<bool> {
         if !self.map.contains(fundamental) {
-            return Err(MolMapError::Id(fundamental.as_entity()));
+            return Err(MolMapError::InvalidId(fundamental.as_entity()));
         };
         if let Some(parent) = self.map.core().parent_molecule(fundamental) {
             if parent == self.id {
@@ -379,7 +379,7 @@ impl<'m, const D: usize> ViewMut<'m, SpatialMolMap<D>, Molecule> {
         let fundamentals = fundamentals.into_iter();
         for f in fundamentals.clone() {
             if !self.map.contains(f) {
-                return Err(MolMapError::Id(f.as_entity()));
+                return Err(MolMapError::InvalidId(f.as_entity()));
             }
         }
         for f in fundamentals {
