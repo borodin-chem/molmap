@@ -8,13 +8,10 @@
 
 //! Methods for molecular graph traversal.
 //!
-//! # Terminology
+//! # Implementation notes
 //!
-//! Graph theory terminology as understood and used here:
-//!
-//! ## Node
-//!
-//! Node is synonymous with vertex.
+//! Only strong bonds (covalent/dipolar, ionic, metallic) are currently treated
+//! as edges.
 //!
 //! Only atomlikes are currently treated as nodes, even though edges/bonds
 //! connect bondables, and those two sets may not be identical. Edges/bonds
@@ -27,36 +24,6 @@
 //! However, the π-system is not a node in the graph. The carbon atoms of the Cp
 //! ring are the nodes, and each is adjacent to the iron atom, even though they
 //! are not directly connected by edges.
-//!
-//! How exactly this will work is not yet certain, and the conceptual framework
-//! may change.
-//!
-//! ### Node state
-//!
-//! - **Discovered**: the node has been seen and handled at least once.
-//! - **Visited**: an edge that led to the node was explored.
-//! - **Explored**: all edges entering and leading out of the node have been
-//!                 explored.
-//!
-//! Thus:
-//! - Any visited node is a discovered node
-//! - Any partially or fully explored node is also a discovered node
-//! - An undiscovered node has been neither explored nor visited
-//! - An unvisited node must be unexplored
-//! - An unexplored node may or may not have been visited
-//!
-//! ## Edge
-//!
-//! Only strong bonds (covalent/dipolar, ionic, metallic) are currently treated
-//! as edges.
-//!
-//! ### Edge state
-//!
-//! - **Discovered**: the edge has been identified as leading out of (or in to)
-//!                   a discovered node, and has been added to a queue of edges
-//!                   to explore.
-//! - **Explored**: the edge has been followed from one node to another and the
-//!                 nodes at both ends have been visited.
 
 use std::{cmp::Ordering, collections::HashSet};
 
@@ -386,20 +353,15 @@ impl<'m> Iterator for DepthFirstSearch<'m> {
             // meantime and it is still technically the "first" visit)
             self.new_visit = false;
 
-            // Finally, deal with scenario (1): if this is the initial step of the
-            // whole traversal, return the user Step::Initial as promised without
-            // actually exploring any edges yet
+            // Finally, deal with the case where this is the initial step of the
+            // whole traversal by returning Step::Initial early, as promised,
+            // without actually exploring any of the just-discovered edges yet
             match self.prev_step {
                 Step::Initial { root: initial } => {
-                    // Checklist:
-                    // - visited_nodes - node was already added for everything that had new_visit = true
-                    // - explored_edges - nothing was explored yet
-                    // - stack - stack item has been added and queue populated
-                    // - current_node - is already set to the root from when the traverser was constructed
-                    // - new_visit - was just set to false
-                    // - prev_step - stays the same
-                    // Nothing else needs to change, we have set up everything
-                    // ready for the next step
+                    // Node was already added to visited_nodes because new_visit was true
+                    // Stack item has been added and the queue populated
+                    // current_node is already set to the root from when the traverser was constructed
+                    // We just set new_visit to false, and prev_step stays the same
                     return Some(Step::Initial { root: initial });
                 }
                 _ => (),
@@ -409,21 +371,22 @@ impl<'m> Iterator for DepthFirstSearch<'m> {
         // Take the next edge from the end of the queue - or at least, try to
         let Some(next) = node_on_stack.queue.pop() else {
             // There _wasn't_ anything in the queue, so the current node is fully
-            // explored - remove its queue from the stack, and we are dealing with
-            // either scenario (2) or (3)
+            // explored - remove its queue from the stack, and we are looking at
+            // either NoPossible or Back
             self.stack.pop();
-            // Distinguish between (2) and (3) - is the stack now empty or can we do a back-track?
+            // Distinguish between the two scenarios - is the stack now empty,
+            // or can we do a back-track?
             let step = if self.stack.is_empty() {
-                // Clearly we're done traversing entirely
-                // Don't bother with checklist, as next iteration will immediately return
-                // None when it sees this was the previous step
+                // Clearly we're done traversing entirely!
+                // Don't bother changing the state, as next iteration will immediately
+                // return None when it sees this was the previous step
                 let step = Step::NoPossible {
                     last: self.current_node,
                 };
                 self.prev_step = step;
                 return Some(step);
             } else {
-                // Back-track up the stack to the last unexhausted node
+                // Back-track along the stack to the last unexhausted node
                 // Since we remove items from the stack once their queue is empty,
                 // there should be no exhausted ones on the stack, so whatever comes
                 // off next should have a non-empty queue
@@ -431,15 +394,9 @@ impl<'m> Iterator for DepthFirstSearch<'m> {
                     .stack
                     .last()
                     .expect("We checked the stack's not empty already");
-                // Checklist:
-                // - visited_nodes - exhausted node would have already been added
-                // - explored_edges - didn't explore any edge, as there were none left in queue
-                // - stack - just removed the empty queue/item for the exhausted node
-                // - current_node - needs updating
                 let left = self.current_node;
                 let entered = revisited.node;
                 self.current_node = entered;
-                // - new_visit - new node was already visited so should be false already
                 assert!(!self.new_visit); // After back-tracking the current node will always be explored
                 let step = Step::Back { left, entered };
                 self.prev_step = step;
@@ -448,20 +405,17 @@ impl<'m> Iterator for DepthFirstSearch<'m> {
         };
 
         // If we have reached here, the current node has at least one edge to explore!
-        // Possible scenarios: (4), (5), or (6)
+        // Possible scenarios: Forward, Pendant, and CycleClosure
         // In all cases we explore the edge we've taken from the queue
         debug_assert!(!self.explored_edges.contains(&next.edge));
         self.explored_edges.insert(next.edge);
 
-        // Scenario (4), cycle closure, is distinguished by the fact that the node led
+        // Cycle closure is distinguished by the fact that the node led
         // to by the edge is one that has already been visited
         if self.visited_nodes.contains(&next.dest) {
             let edge = next.edge;
             let confluence = next.dest;
-            // Checklist:
-            // - visited_nodes - the confluence node was already visited
-            // - explored_edges - added just before this block
-            // - stack - quite a bit to sort out!
+            // Quite a bit to sort out on the stack
             // Look at the current node first (so that node_on_stack can be dropped and
             // we can reborrow it) - does it have remaining edges to explore?
             let current_fully_explored = node_on_stack.queue.is_empty();
@@ -489,8 +443,6 @@ impl<'m> Iterator for DepthFirstSearch<'m> {
                 // were changed to cope with empty queues on the stack (currently it relies
                 // on them all being non-empty)
             }
-            // - current_node - doesn't change, as we don't move to the confluence node
-            // - new_visit - current_node hasn't changed so should be false already
             let step = Step::CycleClosure {
                 current: self.current_node,
                 edge,
@@ -502,19 +454,17 @@ impl<'m> Iterator for DepthFirstSearch<'m> {
             return Some(step);
         }
 
-        // Now we are left with only two scenarios, (5) and (6)
+        // Now we are left with only two scenarios, Pendant and Forward
         // Key question: is the destination node a pendant? Will we continue on
         // from it or will we end up back here?
         // This is distinguished by the degree of the destination node, which,
         // handily, we have stored for each edge in the queue
         if next.degree == 1 {
-            // Checklist:
-            // - visited_nodes - destination node gets visited now!
+            // Destination node is a pendant node - it gets visited now, and it
+            // never becomes the current node!
             self.visited_nodes.insert(next.dest);
-            // - explored_edges - this edge was already added
-            // - stack - don't bother, will get sorted in the next step if it needs to be
-            // - current_node - doesn't change, as we don't move to the pendant node
-            // - new_visit - current_node hasn't changed so should be false already
+            // Don't bother doing anything to the stack, it will get sorted in the
+            // next step if it needs to be
             let step = Step::Pendant {
                 parent: self.current_node,
                 edge: next.edge,
@@ -524,20 +474,18 @@ impl<'m> Iterator for DepthFirstSearch<'m> {
             self.prev_step = step;
             Some(step)
         } else {
+            // Don't need to visit destination node now, it will be visited in next step
             let left = self.current_node;
             let edge = next.edge;
             let entered = next.dest;
-            // Checklist:
-            // - visited_nodes - destination node will be visited in next step
-            // - explored_edges - this edge was already added
-            // - stack - need to remove the node we just left if its queue is now empty
+            // Need to remove the node we just left if its queue is now empty, so
+            // that it doesn't interfere if we back-track further down the branch
             let left_fully_explored = node_on_stack.queue.is_empty();
             if left_fully_explored {
                 self.stack.pop();
             }
-            // - current_node - changes to the destination node
             self.current_node = entered;
-            // - new_visit - needs setting to true, as this is a completely unexplored, unvisited node
+            // We have moved to a completely unexplored, unvisited node
             self.new_visit = true;
             let step = Step::Forward {
                 left,
