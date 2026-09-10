@@ -12,5 +12,6 @@ mod molgraph;
 
 pub(crate) mod data;
 pub(crate) mod keys;
+pub mod traversal;
 
 pub(crate) use molgraph::MolGraph;

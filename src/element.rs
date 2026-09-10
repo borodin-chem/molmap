@@ -11,6 +11,7 @@ use mendeleev::OxidationStateCategory;
 /// The known chemical elements.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 //#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
 pub enum Element {
     H = 1,
     He,
@@ -279,6 +280,10 @@ impl Element {
     /// Returns the element's symbol.
     pub fn symbol(&self) -> &str {
         self.into_mendeleev().symbol()
+    }
+
+    pub const fn atomic_number(&self) -> u8 {
+        *self as u8
     }
 }
 
