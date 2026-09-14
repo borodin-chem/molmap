@@ -29,8 +29,9 @@ use crate::{
 ///
 /// In general, the methods of `MolGraph` should be small in scope and efficient
 /// so that the higher maps can combine them to create a nice public API.
-/// The methods should also do as little checking and validation as possible, with
-/// panicking preferred - the higher maps are then responsible for careful usage.
+/// The methods should do relatively little checking and validation, with the
+/// higher maps responsible for careful usage. In particular, all IDs should be
+/// assumed to be valid.
 #[derive(Clone, Debug, Default)]
 pub struct MolGraph {
     pub(super) atoms: SlotMap<AtomKey, AtomData>,
@@ -463,6 +464,33 @@ impl MolGraph {
     ///
     /// Returns whether the fundamental was newly inserted.
     ///
+    /// If the fundamental is already a member of another substituent, it is removed
+    /// from it before it is inserted into this one.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `substituent` is invalid, but is unaffected if `fundamental` is
+    /// invalid.
+    pub(crate) fn insert_into_substituent(
+        &mut self,
+        substituent: Substituent,
+        fundamental: impl Fundamental,
+    ) -> bool {
+        if let Some(parent) = self.parent_substituent(fundamental) {
+            if parent == substituent {
+                // Already a member of this substituent
+                return false;
+            } else {
+                self.remove_from_substituent(parent, fundamental);
+            }
+        }
+        self.insert_into_substituent_unchecked(substituent, fundamental)
+    }
+
+    /// Adds an atom, pseudoatom, or bond to a substituent.
+    ///
+    /// Returns whether the fundamental was newly inserted.
+    ///
     /// This method should only ever be used with fundamentals that do not already
     /// belong to a substituent.
     ///
@@ -470,7 +498,7 @@ impl MolGraph {
     ///
     /// Panics if `substituent` is invalid, but is unaffected if `fundamental` is
     /// invalid.
-    pub(crate) fn insert_into_substituent(
+    pub(crate) fn insert_into_substituent_unchecked(
         &mut self,
         substituent: Substituent,
         fundamental: impl Fundamental,
@@ -491,8 +519,8 @@ impl MolGraph {
     ///
     /// Returns whether the fundamental was newly inserted.
     ///
-    /// This method should only ever be used with fundamentals that do not already
-    /// belong to a molecule.
+    /// If the fundamental is already a member of another molecule, it is removed
+    /// from it before it is inserted into this one.
     ///
     /// # Panics
     ///
@@ -503,38 +531,69 @@ impl MolGraph {
         molecule: Molecule,
         fundamental: impl Fundamental,
     ) -> bool {
+        if let Some(parent) = self.parent_molecule(fundamental) {
+            if parent == molecule {
+                // Already a member of this molecule
+                return false;
+            } else {
+                self.remove_from_molecule(parent, fundamental);
+            }
+        }
+        self.insert_into_molecule_unchecked(molecule, fundamental)
+    }
+
+    /// Adds an atom, pseudoatom, or bond to a molecule.
+    ///
+    /// Returns whether the fundamental was newly inserted.
+    ///
+    /// This method should only ever be used with fundamentals that do not already
+    /// belong to a molecule.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `molecule` is invalid, but is unaffected if `fundamental` is
+    /// invalid.
+    pub(crate) fn insert_into_molecule_unchecked(
+        &mut self,
+        molecule: Molecule,
+        fundamental: impl Fundamental,
+    ) -> bool {
         let mol = self.molecules.get_mut(molecule.into()).unwrap();
         mol.members.insert(fundamental.as_fundamental())
     }
 
     /// Adds atoms, pseudoatoms, or bonds from an iterator to a substituent.
     ///
+    /// This method should only ever be used with fundamentals that do not already
+    /// belong to a substituent.
+    ///
     /// # Panics
     ///
     /// Panics if `substituent` is invalid, but is unaffected if any of the fundamental
     /// IDs are invalid.
-    pub(crate) fn extend_substituent<I, E>(&mut self, substituent: Substituent, fundamentals: I)
-    where
+    pub(crate) fn extend_substituent_unchecked<I, E>(
+        &mut self,
+        substituent: Substituent,
+        fundamentals: I,
+    ) where
         I: IntoIterator<Item = E>,
         E: Fundamental,
     {
         let sub = self.substituents.get_mut(substituent.into()).unwrap();
-        // Can't just call extend, because we don't allow the IDs to be added twice
-        for fundamental in fundamentals {
-            let fund = fundamental.as_fundamental();
-            if !sub.members.contains(&fund) {
-                sub.members.push(fund);
-            }
-        }
+        sub.members
+            .extend(fundamentals.into_iter().map(|e| e.as_fundamental()))
     }
 
     /// Adds atoms, pseudoatoms, or bonds from an iterator to a molecule.
+    ///
+    /// This method should only ever be used with fundamentals that do not already
+    /// belong to a molecule.
     ///
     /// # Panics
     ///
     /// Panics if `molecule` is invalid, but is unaffected if any of the fundamental
     /// IDs are invalid.
-    pub(crate) fn extend_molecule<I, E>(&mut self, molecule: Molecule, fundamentals: I)
+    pub(crate) fn extend_molecule_unchecked<I, E>(&mut self, molecule: Molecule, fundamentals: I)
     where
         I: IntoIterator<Item = E>,
         E: Fundamental,
