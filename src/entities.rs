@@ -340,6 +340,7 @@ new_entity_kind!(
 
 #[cfg(test)]
 #[allow(unused)]
+#[allow(clippy::unusual_byte_groupings)]
 mod tests {
     use std::num::NonZeroU64;
 

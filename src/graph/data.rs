@@ -230,22 +230,22 @@ impl BondType {
     /// Note that this excludes hydrogen bonds and σ-hole interactions, even though
     /// these can in some cases have considerable strength.
     pub fn is_strong(&self) -> bool {
-        match self {
-            BondType::Covalent { order: _ } => true,
-            BondType::Dipolar { order: _ } => true,
-            BondType::Metallic => true,
-            BondType::Ionic => true,
-            BondType::OtherStrong => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            BondType::Covalent { order: _ }
+                | BondType::Dipolar { order: _ }
+                | BondType::Metallic
+                | BondType::Ionic
+                | BondType::OtherStrong
+        )
     }
 
     /// Returns `true` if the bond type is covalent or dipolar.
     pub fn is_covalent(&self) -> bool {
-        match self {
-            BondType::Covalent { order: _ } | BondType::Dipolar { order: _ } => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            BondType::Covalent { order: _ } | BondType::Dipolar { order: _ }
+        )
     }
 }
 
@@ -307,6 +307,10 @@ impl<'m, M: MolMap> View<'m, M, Bond> {
 pub enum SubstituentCentre {
     None,
     Single(AnyAtomlike),
+    // Use Box around Vec so that SubstituentCentre takes up less space
+    // Clippy doesn't like this but since the vast majority of substituents will
+    // be single centre the extra redirection in the multi-centre case is worth it
+    #[allow(clippy::box_collection)]
     Multiple(Box<Vec<AnyAtomlike>>),
 }
 
