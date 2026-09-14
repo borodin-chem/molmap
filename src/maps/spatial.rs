@@ -6,8 +6,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::collections::HashMap;
-
 use nalgebra::Point;
 use nalgebra::{self as na, SVector};
 use slotmap::SecondaryMap;
@@ -435,6 +433,7 @@ impl<const D: usize> SpatialMolMap<D> {
     /// # Panics
     ///
     /// Panics if either atomlike is not in the map.
+    #[allow(unused)]
     pub(crate) fn interatomlike_line(&self, a: impl Atomlike, b: impl Atomlike) -> Vector<f64, D> {
         self.atomlike_position(b) - self.atomlike_position(a)
     }

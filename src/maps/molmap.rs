@@ -6,13 +6,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::fmt::Debug;
-
-use nalgebra::{Point, Point2};
-use slotmap::SecondaryMap;
-use slotmap::SlotMap;
-
-use crate::categories::Collection;
 use crate::error::MolMapError;
 use crate::error::MolMapResult;
 use crate::{entities::*, graph::MolGraph, graph::keys::*, view::*};

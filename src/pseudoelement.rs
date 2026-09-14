@@ -6,8 +6,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::definition::Definition;
-
 /// The "element" of a pseudoatom, represented in a chemical formula by a symbol
 /// like a real element, but representing a group of atoms.
 ///
@@ -33,7 +31,7 @@ pub enum Pseudoelement {
     Ms,  // mesyl
     Ts,  // tosyl
     Cp,  // cyclopentadienyl
-    Defined(Definition),
+         //Defined(Definition),
 }
 
 impl Pseudoelement {
@@ -53,7 +51,7 @@ impl Pseudoelement {
             Pseudoelement::Ms => "Ms",
             Pseudoelement::Ts => "Ts",
             Pseudoelement::Cp => "Cp",
-            Pseudoelement::Defined(definition_id) => todo!(),
+            //Pseudoelement::Defined(definition_id) => todo!(),
         }
     }
 }

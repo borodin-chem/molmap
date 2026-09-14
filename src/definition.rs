@@ -10,6 +10,7 @@ use crate::categories::*;
 
 /// A reusable definition of a group of fundamentals.
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[allow(unused)]
 pub(crate) struct Definition {
     pub(crate) symbol: String,
     pub(crate) members: Vec<AnyFundamental>,

@@ -99,6 +99,7 @@ impl<'m, M: MolMap> View<'m, M, Atom> {
 /// The core data of a pseudoatom entity.
 #[derive(Clone, Debug)]
 pub struct PseudoatomData {
+    #[allow(unused)]
     pub(crate) pseudoelement: Pseudoelement,
     pub(crate) bonds: Vec<Bond>,
 }
@@ -230,8 +231,8 @@ impl BondType {
     /// these can in some cases have considerable strength.
     pub fn is_strong(&self) -> bool {
         match self {
-            BondType::Covalent { order } => true,
-            BondType::Dipolar { order } => true,
+            BondType::Covalent { order: _ } => true,
+            BondType::Dipolar { order: _ } => true,
             BondType::Metallic => true,
             BondType::Ionic => true,
             BondType::OtherStrong => true,
@@ -242,7 +243,7 @@ impl BondType {
     /// Returns `true` if the bond type is covalent or dipolar.
     pub fn is_covalent(&self) -> bool {
         match self {
-            BondType::Covalent { order } | BondType::Dipolar { order } => true,
+            BondType::Covalent { order: _ } | BondType::Dipolar { order: _ } => true,
             _ => false,
         }
     }
@@ -349,7 +350,7 @@ impl<'m, M: MolMap> ViewMut<'m, M, Substituent> {
     ///
     /// Fails if the requested centre is not already a member of the substituent,
     /// or if there are already bonds to the current centre(s).
-    pub(crate) fn set_centre(self, new_centre: impl Atomlike) -> MolMapResult<()> {
+    pub fn set_centre(self, new_centre: impl Atomlike) -> MolMapResult<()> {
         self.map
             .core_mut()
             .set_substituent_centre(self.id, new_centre)
@@ -361,7 +362,7 @@ impl<'m, M: MolMap> ViewMut<'m, M, Substituent> {
     /// # Errors
     ///
     /// Fails if the requested centre is not already a member of the substituent.
-    pub(crate) fn add_centre(self, new_centre: impl Atomlike) -> MolMapResult<()> {
+    pub fn add_centre(self, new_centre: impl Atomlike) -> MolMapResult<()> {
         self.map
             .core_mut()
             .add_substituent_centre(self.id, new_centre)
