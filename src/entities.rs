@@ -10,7 +10,7 @@
 
 use std::iter::FusedIterator;
 
-use slotmap::{Key, SlotMap, basic::Keys, new_key_type};
+use slotmap::basic::Keys;
 
 use crate::{categories::Category, error::*, graph::keys::Keyed, id::Id};
 
@@ -339,10 +339,11 @@ new_entity_kind!(
 );
 
 #[cfg(test)]
+#[allow(unused)]
 mod tests {
     use std::num::NonZeroU64;
 
-    use slotmap::{DefaultKey, KeyData, SlotMap, new_key_type};
+    use slotmap::SlotMap;
 
     use crate::graph::keys::BondKey;
 

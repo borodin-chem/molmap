@@ -8,7 +8,7 @@
 
 //! Definition of the data structure that holds the core molecular graph.
 
-use slotmap::{SlotMap, basic::Keys};
+use slotmap::SlotMap;
 
 use crate::{
     Element, Pseudoelement,
@@ -16,7 +16,6 @@ use crate::{
     entities::*,
     error::{MolMapError, MolMapResult},
     graph::{data::*, keys::*},
-    id::Id,
 };
 
 /// An arena-like data structure to represent a set of chemical entities,
@@ -256,7 +255,7 @@ impl MolGraph {
             for bonding_partner in [bond_data.start, bond_data.end] {
                 match bonding_partner.resolve() {
                     ResolvedBondable::Atom(atom) => {
-                        let mut atom_data = self
+                        let atom_data = self
                             .data_mut(atom)
                             .expect("Bonds are always removed before their bonding partners");
                         let pos = atom_data.bonds.iter().position(|x| *x == bond).expect(
@@ -265,7 +264,7 @@ impl MolGraph {
                         atom_data.bonds.remove(pos);
                     }
                     ResolvedBondable::Pseudoatom(pseudoatom) => {
-                        let mut pseudoatom_data = self
+                        let pseudoatom_data = self
                             .data_mut(pseudoatom)
                             .expect("Bonds are always removed before their bonding partners");
                         let pos = pseudoatom_data.bonds.iter().position(|x| *x == bond).expect(
@@ -571,6 +570,7 @@ impl MolGraph {
     ///
     /// Panics if `substituent` is invalid, but is unaffected if any of the fundamental
     /// IDs are invalid.
+    #[allow(unused)]
     pub(crate) fn extend_substituent_unchecked<I, E>(
         &mut self,
         substituent: Substituent,
@@ -593,6 +593,7 @@ impl MolGraph {
     ///
     /// Panics if `molecule` is invalid, but is unaffected if any of the fundamental
     /// IDs are invalid.
+    #[allow(unused)]
     pub(crate) fn extend_molecule_unchecked<I, E>(&mut self, molecule: Molecule, fundamentals: I)
     where
         I: IntoIterator<Item = E>,
@@ -710,7 +711,7 @@ impl MolGraph {
         &mut self,
         molecule: Molecule,
     ) -> impl Iterator<Item = AnyFundamental> {
-        let mut mol = self
+        let mol = self
             .molecules
             .get_mut(molecule.into())
             .expect("Caller is required to ensure that the molecule is valid");
@@ -752,7 +753,7 @@ impl MolGraph {
     ///
     /// Panics if the molecule is not in the map.
     pub(crate) fn clear_molecule(&mut self, molecule: Molecule) {
-        let mut mol = self
+        let mol = self
             .molecules
             .get_mut(molecule.into())
             .expect("Caller is required to ensure that the Molecule is valid");
@@ -857,7 +858,7 @@ mod tests {
             SubstituentCentre::Single(c.as_atomlike()),
         );
         // Now, convert to isocyano by making the N the centre
-        graph.set_substituent_centre(sub, n);
+        graph.set_substituent_centre(sub, n).unwrap();
         // N should be the centre
         assert_eq!(
             graph.data(sub).unwrap().centre,
@@ -887,7 +888,7 @@ mod tests {
             SubstituentCentre::Single(c.into()),
         );
         // Now, let the substituent bond at both carbon and oxygen i.e. as R–COO–R
-        graph.add_substituent_centre(sub, o2);
+        graph.add_substituent_centre(sub, o2).unwrap();
         // Both C and the second O should be centres
         assert_eq!(
             graph.data(sub).unwrap().centre,

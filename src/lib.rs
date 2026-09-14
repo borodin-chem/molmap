@@ -6,13 +6,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#![allow(unused)]
-
 // Private modules
 // ---------------
 mod definition;
 mod element;
-mod graph;
 mod id;
 mod maps;
 mod pseudoelement;
@@ -26,6 +23,7 @@ mod pseudoelement;
 pub mod categories;
 pub mod entities;
 pub mod error;
+pub mod graph;
 pub mod parse;
 pub mod view;
 

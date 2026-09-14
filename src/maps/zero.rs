@@ -7,13 +7,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{
-    categories::*,
-    entities::Entity,
-    error::*,
-    graph::MolGraph,
-    maps::MolMapCore,
-    view::{View, ViewMut},
-    *,
+    categories::*, entities::Entity, error::*, graph::MolGraph, maps::MolMapCore, view::ViewMut, *,
 };
 
 /// A pure molecular graph, without spatial positions.
@@ -68,7 +62,7 @@ impl MolMap0 {
     /// of the new bonds.
     pub fn add_atom_with_hydrogen(&mut self, element: Element, n_hydrogen: u8) -> (Atom, &[Bond]) {
         let centre = self.add_atom(element);
-        for i in 0..n_hydrogen {
+        for _ in 0..n_hydrogen {
             let new_h = self.add_atom(Element::H);
             self.core
                 .add_bond(BondType::Covalent { order: 1.0 }, centre, new_h);
@@ -171,7 +165,7 @@ impl MolMap0 {
         n_hydrogen: u8,
     ) -> (Substituent, Atom, &[Bond]) {
         let (sub, centre) = self.add_substituent_with_atom(element);
-        for i in 0..n_hydrogen {
+        for _ in 0..n_hydrogen {
             let new_h = self.add_atom(Element::H);
             let new_bond = self
                 .core
@@ -426,6 +420,7 @@ impl<'m> ViewMut<'m, MolMap0, Molecule> {
 }
 
 #[cfg(test)]
+#[allow(unused)]
 mod tests {
     use crate::Element;
 

@@ -319,6 +319,7 @@ impl_subset!(Atomlike < Fundamental);
 impl_subset!(Atomlike < Bondable);
 
 #[cfg(test)]
+#[allow(unused)]
 mod tests {
     use std::num::NonZeroU64;
 

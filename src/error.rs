@@ -10,8 +10,7 @@
 
 use crate::{
     categories::AnyFundamental,
-    entities::{AnyEntity, Entity, EntityKind},
-    id::Id,
+    entities::{AnyEntity, EntityKind},
 };
 
 /// An `Error` type for errors specific to the crate.

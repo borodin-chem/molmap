@@ -25,15 +25,9 @@
 //! ring are the nodes, and each is adjacent to the iron atom, even though they
 //! are not directly connected by edges.
 
-use std::{cmp::Ordering, collections::HashSet};
+use std::collections::HashSet;
 
-use crate::{
-    Element,
-    categories::*,
-    entities::*,
-    error::*,
-    graph::{MolGraph, keys::Keyed},
-};
+use crate::{categories::*, entities::*, error::*, graph::MolGraph};
 
 /// The result of a traversal step.
 #[derive(Copy, Clone, Debug)]
@@ -366,7 +360,7 @@ impl<'m> DepthFirstSearch<'m> {
         let current_fully_explored = current_queue.is_empty();
         // We have just explored one of the edges that the confluence had in its queue,
         // so we should find its item in the stack and remove the edge from its queue
-        let (stack_pos, confluence_on_stack) = self
+        let (_stack_pos, confluence_on_stack) = self
             .stack
             .iter_mut()
             .enumerate()

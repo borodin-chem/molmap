@@ -56,7 +56,7 @@
 use std::fmt::{Debug, Formatter};
 use std::num::NonZeroU64;
 
-use slotmap::{Key, KeyData};
+use slotmap::KeyData;
 
 use crate::entities::*;
 
@@ -100,6 +100,7 @@ impl Id {
     ///
     /// Returns `None` if `n` is zero or if the discriminant is an invalid value.
     #[inline]
+    #[allow(unused)]
     pub(crate) const fn from_raw(n: u64) -> Option<Self> {
         if let Some(non_zero) = NonZeroU64::new(n) {
             let id = Self(non_zero);
@@ -115,6 +116,7 @@ impl Id {
 
     /// Returns the inner value with the discriminant as a normal `u64`.
     #[inline]
+    #[allow(unused)]
     pub(crate) const fn to_raw(self) -> u64 {
         self.0.get()
     }
@@ -169,6 +171,7 @@ impl Id {
     ///
     /// Following `slotmap`, the null key is the one with the maximum index.
     #[inline]
+    #[allow(unused)]
     const fn is_null(&self) -> bool {
         self.index() == Self::MAX_IDX
     }
@@ -193,10 +196,11 @@ impl Debug for Id {
 }
 
 #[cfg(test)]
+#[allow(unused)]
 mod tests {
     use std::num::NonZeroU64;
 
-    use slotmap::{DefaultKey, KeyData, SlotMap, new_key_type};
+    use slotmap::{DefaultKey, Key, KeyData, SlotMap, new_key_type};
 
     use super::*;
 
