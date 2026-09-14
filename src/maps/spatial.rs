@@ -224,17 +224,6 @@ impl<'m, const D: usize> ViewMut<'m, SpatialMolMap<D>, Substituent> {
         if !self.map.contains(fundamental) {
             return Err(MolMapError::InvalidId(fundamental.as_entity()));
         };
-        if let Some(parent) = self.map.core().parent_substituent(fundamental) {
-            if parent == self.id {
-                return Ok(false);
-            } else {
-                self.map
-                    .core_mut()
-                    .remove_from_substituent(parent, fundamental);
-            }
-        }
-        // All clear to add it to this substituent now
-        // Note this will always return Ok(true)
         Ok(self
             .map
             .core_mut()
@@ -264,17 +253,9 @@ impl<'m, const D: usize> ViewMut<'m, SpatialMolMap<D>, Substituent> {
             }
         }
         for f in fundamentals {
-            let f: AnyFundamental = f.into();
-            if let Some(parent) = self.map.core().parent_substituent(f) {
-                if parent == self.id {
-                    // Already a member, so skip it
-                    continue;
-                } else {
-                    self.map.core_mut().remove_from_substituent(parent, f);
-                }
-            }
-            // All clear to add it to this substituent now
-            self.map.core_mut().insert_into_substituent(self.id, f);
+            self.map
+                .core_mut()
+                .insert_into_substituent(self.id, f.into());
         }
         Ok(())
     }
@@ -343,17 +324,6 @@ impl<'m, const D: usize> ViewMut<'m, SpatialMolMap<D>, Molecule> {
         if !self.map.contains(fundamental) {
             return Err(MolMapError::InvalidId(fundamental.as_entity()));
         };
-        if let Some(parent) = self.map.core().parent_molecule(fundamental) {
-            if parent == self.id {
-                return Ok(false);
-            } else {
-                self.map
-                    .core_mut()
-                    .remove_from_molecule(parent, fundamental);
-            }
-        }
-        // All clear to add it to this molecule now
-        // Note this will always return Ok(true)
         Ok(self
             .map
             .core_mut()
@@ -383,17 +353,7 @@ impl<'m, const D: usize> ViewMut<'m, SpatialMolMap<D>, Molecule> {
             }
         }
         for f in fundamentals {
-            let f: AnyFundamental = f.into();
-            if let Some(parent) = self.map.core().parent_molecule(f) {
-                if parent == self.id {
-                    // Already a member, so skip it
-                    continue;
-                } else {
-                    self.map.core_mut().remove_from_molecule(parent, f);
-                }
-            }
-            // All clear to add it to this substituent now
-            self.map.core_mut().insert_into_molecule(self.id, f);
+            self.map.core_mut().insert_into_molecule(self.id, f.into());
         }
         Ok(())
     }
