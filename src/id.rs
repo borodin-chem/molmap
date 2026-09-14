@@ -197,6 +197,7 @@ impl Debug for Id {
 
 #[cfg(test)]
 #[allow(unused)]
+#[allow(clippy::unusual_byte_groupings)]
 mod tests {
     use std::num::NonZeroU64;
 
