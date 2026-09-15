@@ -30,14 +30,13 @@ jobs:
       - run: rustup component add clippy
       - run: cargo clippy --all-targets --all-features --keep-going
 
-  build_test:
+  test:
     needs: clippy
     runs-on: ubuntu-latest
     strategy:
       matrix:
         toolchain:
           - stable
-          - beta
           - nightly
     steps:
       - uses: actions/checkout@v7
