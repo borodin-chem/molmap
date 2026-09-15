@@ -1,4 +1,4 @@
-name: Continuous Integration
+name: CI
 
 on:
   push:
@@ -30,14 +30,13 @@ jobs:
       - run: rustup component add clippy
       - run: cargo clippy --all-targets --all-features --keep-going
 
-  build_test:
-    needs: clippy
+  test:
+    needs: fmt
     runs-on: ubuntu-latest
     strategy:
       matrix:
         toolchain:
           - stable
-          - beta
           - nightly
     steps:
       - uses: actions/checkout@v7

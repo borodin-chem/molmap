@@ -280,7 +280,7 @@ impl<'m> DepthFirstSearch<'m> {
         // Sort queue by priority in descending numerical order, which means sorting by
         // ascending priority. That we can get the next edge in the queue - the one with
         // the next-highest priority - by popping off the back of the queue
-        queue.sort_by(|a, b| b.priority.cmp(&a.priority));
+        queue.sort_by_key(|a| std::cmp::Reverse(a.priority));
         self.stack.push(StackItem { node, queue });
     }
 
