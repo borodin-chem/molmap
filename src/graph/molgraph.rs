@@ -731,7 +731,7 @@ impl MolGraph {
             .get_mut(substituent.into())
             .expect("Caller is required to ensure that the substituent is valid");
         sub.centre = SubstituentCentre::None;
-        let former_members: Vec<AnyFundamental> = sub.members.drain(..).collect();
+        let former_members: Vec<AnyFundamental> = std::mem::take(&mut sub.members);
         // It's fine to delete in any order as if something isn't in the map any more
         // (e.g. because it's a bond and one of its bonding partners was already deleted
         // and thus it too was already deleted) then nothing changes when the deletion
