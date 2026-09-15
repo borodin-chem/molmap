@@ -6,9 +6,18 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::error::MolMapError;
-use crate::error::MolMapResult;
-use crate::{entities::*, graph::MolGraph, graph::keys::*, view::*};
+//! The traits implemented by all forms of `MolMap`.
+//!
+//! The Entity and Kind traits allow methods of MolGraph and the MolMap types to
+//! be generic over all kinds of entity.
+//! However, the number of generic methods on MolMap types in the _public_ API
+//! (either as trait methods or methods on the concrete types) is limited, as:
+//! - methods that involve existing entities should go via the respective View
+//!   or ViewMut
+//! - methods that are different for each entity type (e.g. entity addition)
+//!   should generally not be generic
+
+use crate::{entities::*, error::*, graph::MolGraph, graph::keys::*, view::*};
 
 /// A trait implemented by all `MolMap` types to provide access to their core
 /// `MolGraph` without exposing a public interface to it.
@@ -26,14 +35,6 @@ pub trait MolMapCore {
     /// Returns the core molecular graph in mutable form.
     fn core_mut(&mut self) -> &mut MolGraph;
 }
-
-// The Stored trait allows methods of MolGraph and the MolMap types to be
-// generic over all kinds of entity *when the same thing is done for each kind*.
-// However, the number of methods in the public API this applies to is limited:
-// - Methods that involve existing entities should go via the respective View
-//   (which delegate to methods on the map, which are unlikely to be generic)
-// - Methods that are different for each entity type (e.g. entity addition)
-//   should not be generic (as they would require a new trait anyway)
 
 /// An arena-like data structure to represent a set of chemical entities, their
 /// properties, and the relationships between them, with or without spatial positions.

@@ -6,9 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{
-    categories::*, entities::Entity, error::*, graph::MolGraph, maps::MolMapCore, view::ViewMut, *,
-};
+use crate::{entities::*, error::*, graph::MolGraph, molmap::MolMapCore, view::*, *};
 
 /// A pure molecular graph, without spatial positions.
 #[derive(Clone, Debug, Default)]

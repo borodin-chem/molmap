@@ -58,7 +58,7 @@ use std::num::NonZeroU64;
 
 use slotmap::KeyData;
 
-use crate::entities::*;
+use crate::entities::kinds::EntityKind;
 
 /// The ID of one of any kind of entity, where the kind of entity is encoded by
 /// an 8-bit discriminant.

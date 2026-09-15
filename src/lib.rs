@@ -8,10 +8,8 @@
 
 // Private modules
 // ---------------
-mod definition;
 mod element;
-mod id;
-mod maps;
+mod molmap;
 mod pseudoelement;
 
 // ----------
@@ -20,25 +18,21 @@ mod pseudoelement;
 
 // Publicly accessible modules
 // ---------------------------
-pub mod categories;
 pub mod entities;
 pub mod error;
 pub mod graph;
 pub mod parse;
+pub mod spatial;
 pub mod view;
 
 // Top-level items
 // ---------------
 pub use element::Element;
+pub use graph::MolMap0;
 pub use graph::data::BondType;
-pub use maps::MolMap; // Traits
-pub use maps::MolMap0;
-pub use maps::{MolMap2, MolMap3, SpatialMolMap};
+pub use molmap::MolMap;
 pub use pseudoelement::Pseudoelement;
-
-// Selected re-exports from public modules
-// ---------------------------------------
-pub use entities::{Atom, Bond, Molecule, Pseudoatom, Substituent}; // All the basic kinds of entity
+pub use spatial::{MolMap2, MolMap3};
 
 // Foreign re-exports
 // ------------------

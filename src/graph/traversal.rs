@@ -27,7 +27,7 @@
 
 use std::collections::HashSet;
 
-use crate::{categories::*, entities::*, error::*, graph::MolGraph};
+use crate::{entities::*, error::*, graph::MolGraph};
 
 /// The result of a traversal step.
 #[derive(Copy, Clone, Debug)]
