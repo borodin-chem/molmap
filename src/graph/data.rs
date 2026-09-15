@@ -62,9 +62,7 @@
 
 use std::collections::HashSet;
 
-use crate::{
-    Element, MolMap, Pseudoelement, categories::*, entities::*, error::MolMapResult, view::*,
-};
+use crate::{Element, MolMap, Pseudoelement, entities::*, error::MolMapResult, view::*};
 
 /// The core data of an atom entity.
 #[derive(Clone, Debug)]

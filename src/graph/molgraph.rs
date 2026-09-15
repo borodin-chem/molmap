@@ -12,7 +12,6 @@ use slotmap::SlotMap;
 
 use crate::{
     Element, Pseudoelement,
-    categories::*,
     entities::*,
     error::{MolMapError, MolMapResult},
     graph::{data::*, keys::*},

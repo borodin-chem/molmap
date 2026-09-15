@@ -8,11 +8,7 @@
 
 //! Definitions and implementations of the entity category traits.
 
-use crate::entities::*;
-use crate::error::{MolMapError, MolMapResult};
-use crate::id::Id;
-
-pub use crate::entities::{AnyEntity, Entity, ResolvedEntity};
+use crate::{entities::id::Id, entities::kinds::*, error::*};
 
 /// A dynamic ID type representing any kind of entity that implements the corresponding trait.
 ///
@@ -324,7 +320,7 @@ impl_subset!(Atomlike < Bondable);
 mod tests {
     use std::num::NonZeroU64;
 
-    use crate::id::Id;
+    use crate::entities::id::Id;
 
     use super::*;
 

@@ -8,10 +8,7 @@
 
 //! Errors specific to the crate.
 
-use crate::{
-    categories::AnyFundamental,
-    entities::{AnyEntity, EntityKind},
-};
+use crate::entities::*;
 
 /// An `Error` type for errors specific to the crate.
 #[derive(thiserror::Error, Debug)]
