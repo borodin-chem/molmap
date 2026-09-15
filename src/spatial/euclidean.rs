@@ -17,7 +17,6 @@ use crate::{
     molmap::MolMapCore,
     spatial::{SpatialMolMap, Vector},
     view::*,
-    *,
 };
 
 impl<const D: usize> SpatialMolMap<D> {

@@ -13,12 +13,12 @@ use nalgebra::Point;
 use slotmap::SecondaryMap;
 
 use crate::{
+    BondType, Element, Pseudoelement,
     entities::*,
-    error::{MolMapError, MolMapResult},
+    error::*,
     graph::{MolGraph, keys::*},
-    molmap::MolMapCore,
+    molmap::{MolMap, MolMapCore},
     view::*,
-    *,
 };
 
 /// A matrix with one column and D rows.
