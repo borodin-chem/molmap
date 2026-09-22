@@ -22,9 +22,14 @@ use crate::{
 impl<const D: usize> SpatialMolMap<D> {
     /// Returns the position of the given atom.
     ///
+    /// A stale (i.e. invalid) ID may return a position, as spatial data is not
+    /// automatically cleaned up. The caller is responsible for not making such a
+    /// request.
+    ///
     /// # Panics
     ///
-    /// Panics if the atom is not in the map.
+    /// Panics if the atom has no stored position (usually meaning that it is not in the
+    /// map).
     pub(crate) fn atom_position(&self, atom: Atom) -> &Point<f64, D> {
         self.atom_positions
             .get(atom.to_key())
@@ -33,9 +38,14 @@ impl<const D: usize> SpatialMolMap<D> {
 
     /// Returns the position of the given pseudoatom.
     ///
+    /// A stale (i.e. invalid) ID may return a position, as spatial data is not
+    /// automatically cleaned up. The caller is responsible for not making such a
+    /// request.
+    ///
     /// # Panics
     ///
-    /// Panics if the pseudoatom is not in the map.
+    /// Panics if the pseudoatom has no stored position (usually meaning that it is not
+    /// in the map).
     pub(crate) fn pseudoatom_position(&self, pseudoatom: Pseudoatom) -> &Point<f64, D> {
         self.pseudoatom_positions
             .get(pseudoatom.to_key())
@@ -44,9 +54,14 @@ impl<const D: usize> SpatialMolMap<D> {
 
     /// Returns the position of the given atom or pseudoatom.
     ///
+    /// A stale (i.e. invalid) ID may return a position, as spatial data is not
+    /// automatically cleaned up. The caller is responsible for not making such a
+    /// request.
+    ///
     /// # Panics
     ///
-    /// Panics if the atomlike is not in the map.
+    /// Panics if the atomlike has no stored position (usually meaning that it is not
+    /// in the map).
     pub(crate) fn atomlike_position(&self, atomlike: impl Atomlike) -> &Point<f64, D> {
         match Atomlike::to_resolved(atomlike) {
             ResolvedAtomlike::Atom(atom) => self.atom_position(atom),
@@ -56,9 +71,14 @@ impl<const D: usize> SpatialMolMap<D> {
 
     /// Calculates the vector of the line between two atomlikes, from `a` to `b`.
     ///
+    /// Stale (i.e. invalid) IDs may return positions, as spatial data is not
+    /// automatically cleaned up. The caller is responsible for not making such a
+    /// request.
+    ///
     /// # Panics
     ///
-    /// Panics if either atomlike is not in the map.
+    /// Panics if either atomlike has no stored position (usually meaning that it is not
+    /// in the map).
     #[allow(unused)]
     pub(crate) fn interatomlike_line(&self, a: impl Atomlike, b: impl Atomlike) -> Vector<f64, D> {
         self.atomlike_position(b) - self.atomlike_position(a)

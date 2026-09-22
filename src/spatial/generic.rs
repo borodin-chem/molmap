@@ -44,6 +44,23 @@ pub struct SpatialMolMap<const D: usize> {
     //bonds: SecondaryMap<BondKey, Vector<f64, D>>,
 }
 
+// When an entity is removed from the map, any spatial data is not deleted.
+// Thus, in theory, when working internally, it is possible to obtain a stale
+// position that does not correspond to any existing entity.
+//
+// As the entity will have been removed from the underlying slotmap in the core
+// MolGraph, the position of the entity will be inaccessible to the user, as
+// obtaining a view is impossible once the entity is not in the slotmap.
+//
+// Stale data should not in reality be a problem internally either, as there
+// should never be a situation where a request for it is made.
+// For example, when calculating the centroid of a molecule, the set of member
+// IDs will never contain any stale IDs anyway.
+// Essentially, retaining the stale position shouldn't be an issue because no
+// "references" to it should persist.
+// It should however not be forgotten that the whole set of spatial data may
+// contain stale items.
+
 impl<const D: usize> MolMapCore for SpatialMolMap<D> {
     #[inline]
     fn core(&self) -> &MolGraph {
@@ -381,5 +398,39 @@ impl<'m, const D: usize> ViewMut<'m, SpatialMolMap<D>, Molecule> {
     /// All removed fundamentals continue to exist.
     pub fn dissolve(self) -> impl Iterator<Item = AnyFundamental> {
         self.map.core_mut().dissolve_molecule(self.id)
+    }
+}
+
+#[cfg(test)]
+#[allow(unused)]
+pub(crate) mod tests {
+    use super::*;
+
+    #[test]
+    fn add_atom() {
+        let mut mm = SpatialMolMap::<2>::new();
+        assert_eq!(mm.all::<Atom>().count(), 0);
+        let h1 = mm.add_atom(Element::H, na::Point2::new(1.0, 2.0));
+        assert_eq!(mm.all::<Atom>().count(), 1);
+        // Confirm that the atom positions also have data for a single atom
+        assert_eq!(mm.atom_positions.len(), 1);
+        // Confirm that the atom position can be accessed
+        assert_eq!(
+            mm.atom_positions.get(h1.to_key()).unwrap().clone(),
+            na::Point2::new(1.0, 2.0)
+        );
+    }
+
+    #[test]
+    fn delete_atom() {
+        let mut mm = SpatialMolMap::<2>::new();
+        let h1 = mm.add_atom(Element::H, na::Point2::new(1.0, 2.0));
+        assert_eq!(mm.all::<Atom>().count(), 1);
+        assert_eq!(mm.atom_positions.len(), 1);
+        mm.view_mut(h1).unwrap().delete();
+        assert_eq!(mm.all::<Atom>().count(), 0);
+        // Note that stale position is still present, but can't be accessed
+        assert!(mm.atom_positions.contains_key(h1.to_key()));
+        assert!(mm.view(h1).is_none());
     }
 }

@@ -72,7 +72,7 @@ pub struct ViewMut<'m, M: MolMap, E: Entity> {
 impl<'m, M: MolMap, E: Entity> ViewMut<'m, M, E> {
     /// Returns an immutable view of the same entity.
     #[allow(unused)]
-    fn as_view(&'m self) -> View<'m, M, E> {
+    pub(crate) fn as_view(&'m self) -> View<'m, M, E> {
         View {
             map: &*self.map,
             id: self.id,
