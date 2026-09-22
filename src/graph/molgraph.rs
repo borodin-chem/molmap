@@ -1242,39 +1242,45 @@ pub(crate) mod tests {
     #[test]
     fn set_substituent_centre() {
         let mut g = MolGraph::new();
-        let c = g.add_atom(Element::C);
-        let n = g.add_atom(Element::N);
-        assert_ne!(c, n);
-        let sub = g.add_substituent_with_centre(c);
-        g.insert_into_substituent(sub, n);
-        // Now we have a CN substituent that bonds at C i.e. cyano
+        let c1 = g.add_atom(Element::C);
+        let n1 = g.add_atom(Element::N);
+        assert_ne!(c1, n1);
+        let sub = g.add_substituent_with_centre(c1);
+        g.insert_into_substituent(sub, n1);
+        // Now we have a CN substituent that bonds at C i.e. a nitrile/cyano group
         // First, sanity checks
         // Both C and N atom should be members
         assert_eq!(
             g.data(sub).unwrap().members,
-            [c.as_fundamental(), n.as_fundamental()]
+            [c1.as_fundamental(), n1.as_fundamental()]
         );
         // C should be the centre
         assert_eq!(
             g.data(sub).unwrap().centre,
-            SubstituentCentre::Single(c.as_atomlike()),
+            SubstituentCentre::Single(c1.as_atomlike()),
         );
-        // Now, convert to isocyano by making the N the centre
-        g.set_substituent_centre(sub, n).unwrap();
+        // Now, convert to isonitrile by making the N the centre
+        g.set_substituent_centre(sub, n1).unwrap();
         // N should be the centre
         assert_eq!(
             g.data(sub).unwrap().centre,
-            SubstituentCentre::Single(n.as_atomlike()),
+            SubstituentCentre::Single(n1.as_atomlike()),
         );
+        // Should fail if the requested centre isn't a member
+        let c2 = g.add_atom(Element::C);
+        assert!(g.set_substituent_centre(sub, c2).is_err());
+        // Should fail if the current centre has a bond
+        let c2n1 = g.add_bond(BondType::Covalent { order: 1.0 }, c2, n1);
+        assert!(g.set_substituent_centre(sub, c1).is_err());
     }
 
     #[test]
     fn add_substituent_centre() {
         let mut g = MolGraph::new();
-        let c = g.add_atom(Element::C);
+        let c1 = g.add_atom(Element::C);
         let o1 = g.add_atom(Element::O); // The double-bonded oxygen (designated arbitrarily)
         let o2 = g.add_atom(Element::O);
-        let sub = g.add_substituent_with_centre(c);
+        let sub = g.add_substituent_with_centre(c1);
         g.insert_into_substituent(sub, o1);
         g.insert_into_substituent(sub, o2);
         // Now we have a COO substituent that bonds at C i.e. carboxyl
@@ -1282,19 +1288,22 @@ pub(crate) mod tests {
         // All atoms should be members
         assert_eq!(
             g.data(sub).unwrap().members,
-            [c.into(), o1.into(), o2.into()]
+            [c1.into(), o1.into(), o2.into()]
         );
         // C should be the centre
         assert_eq!(
             g.data(sub).unwrap().centre,
-            SubstituentCentre::Single(c.into()),
+            SubstituentCentre::Single(c1.into()),
         );
         // Now, let the substituent bond at both carbon and oxygen i.e. as R–COO–R
         g.add_substituent_centre(sub, o2).unwrap();
         // Both C and the second O should be centres
         assert_eq!(
             g.data(sub).unwrap().centre,
-            SubstituentCentre::Multiple(Box::new(vec![c.into(), o2.into()])),
+            SubstituentCentre::Multiple(Box::new(vec![c1.into(), o2.into()])),
         );
+        // Should fail if the requested centre isn't a member
+        let c2 = g.add_atom(Element::C);
+        assert!(g.set_substituent_centre(sub, c2).is_err());
     }
 }
