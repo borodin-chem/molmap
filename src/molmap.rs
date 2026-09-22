@@ -110,7 +110,7 @@ pub trait MolMap: Sized + MolMapCore {
     }
 
     /// Returns an iterator over all of a given kind of entity in the map.
-    fn all_entities<E: Kind>(&'_ self) -> AllEntities<'_, E> {
+    fn all<E: Kind>(&'_ self) -> AllEntities<'_, E> {
         AllEntities::from_keys(self.core().keys::<E>())
     }
 
@@ -175,7 +175,7 @@ pub trait MolMap: Sized + MolMapCore {
 
     /// Returns an iterator over views of all of a given kind of entity in the map.
     fn all_views<E: Kind>(&'_ self) -> Views<'_, Self, E> {
-        let all: Vec<E> = self.all_entities().collect();
+        let all: Vec<E> = self.all().collect();
         Views {
             map: self,
             ids: all.into_iter(),
