@@ -30,7 +30,7 @@ use std::collections::HashSet;
 use crate::{entities::*, error::*, graph::MolGraph};
 
 /// The result of a traversal step.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Step {
     /// A previously unexplored edge has been explored and followed to a previously
     /// unexplored node that is _not_ a pendant node.
@@ -459,5 +459,266 @@ impl<'m> Iterator for DepthFirstSearch<'m> {
                 Some(step)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{BondType, Element};
+
+    use super::*;
+
+    #[test]
+    fn invalid_root() {
+        let mut g = MolGraph::new();
+        let h1 = g.add_atom(Element::H);
+        g.delete_atom(h1);
+        let h2 = g.add_atom(Element::H);
+        let h3 = g.add_atom(Element::H);
+        g.add_bond(BondType::Covalent { order: 1.0 }, h2, h3);
+        assert!(DepthFirstSearch::new(&g, h1).is_err());
+    }
+
+    #[test]
+    fn linear() {
+        // Traverse ethane, starting at one of the hydrogen atoms
+        let mut g = MolGraph::new();
+        let c1 = g.add_atom(Element::C);
+        let h1 = g.add_atom(Element::H);
+        let h2 = g.add_atom(Element::H);
+        let h3 = g.add_atom(Element::H);
+        let c1h1 = g.add_bond(BondType::Covalent { order: 1.0 }, c1, h1);
+        let c1h2 = g.add_bond(BondType::Covalent { order: 1.0 }, c1, h2);
+        let c1h3 = g.add_bond(BondType::Covalent { order: 1.0 }, c1, h3);
+        let c2 = g.add_atom(Element::C);
+        let h4 = g.add_atom(Element::H);
+        let h5 = g.add_atom(Element::H);
+        let h6 = g.add_atom(Element::H);
+        let c2h4 = g.add_bond(BondType::Covalent { order: 1.0 }, c2, h4);
+        let c2h5 = g.add_bond(BondType::Covalent { order: 1.0 }, c2, h5);
+        let c2h6 = g.add_bond(BondType::Covalent { order: 1.0 }, c2, h6);
+        let c1c2 = g.add_bond(BondType::Covalent { order: 1.0 }, c1, c2);
+        let mut traversal = DepthFirstSearch::new(&g, h1).unwrap();
+        assert_eq!(
+            traversal.next(),
+            Some(Step::Forward {
+                left: h1.into(),
+                edge: c1h1,
+                entered: c1.into(),
+                left_fully_explored: true
+            })
+        );
+        // Pendant Hs should be explored first, in insertion order
+        assert_eq!(
+            traversal.next(),
+            Some(Step::Pendant {
+                parent: c1.into(),
+                edge: c1h2,
+                pendant: h2.into(),
+                parent_fully_explored: false
+            })
+        );
+        assert_eq!(
+            traversal.next(),
+            Some(Step::Pendant {
+                parent: c1.into(),
+                edge: c1h3,
+                pendant: h3.into(),
+                parent_fully_explored: false
+            })
+        );
+        // Then we move to the next carbon in the chain
+        assert_eq!(
+            traversal.next(),
+            Some(Step::Forward {
+                left: c1.into(),
+                edge: c1c2,
+                entered: c2.into(),
+                left_fully_explored: true
+            })
+        );
+        // Then the other H atoms, again in insertion order
+        assert_eq!(
+            traversal.next(),
+            Some(Step::Pendant {
+                parent: c2.into(),
+                edge: c2h4,
+                pendant: h4.into(),
+                parent_fully_explored: false
+            })
+        );
+        assert_eq!(
+            traversal.next(),
+            Some(Step::Pendant {
+                parent: c2.into(),
+                edge: c2h5,
+                pendant: h5.into(),
+                parent_fully_explored: false
+            })
+        );
+        assert_eq!(
+            traversal.next(),
+            Some(Step::Pendant {
+                parent: c2.into(),
+                edge: c2h6,
+                pendant: h6.into(),
+                parent_fully_explored: true
+            })
+        );
+        // Nothing left to traverse
+        assert!(traversal.next().is_none());
+    }
+
+    #[test]
+    fn branched() {
+        // Traverse propane, starting at the carbon in the middle of the chain
+        let mut g = MolGraph::new();
+        let c1 = g.add_atom(Element::C);
+        for _ in 0..3 {
+            let h = g.add_atom(Element::H);
+            g.add_bond(BondType::Covalent { order: 1.0 }, c1, h);
+        }
+        let c2 = g.add_atom(Element::C);
+        for _ in 0..2 {
+            let h = g.add_atom(Element::H);
+            g.add_bond(BondType::Covalent { order: 1.0 }, c2, h);
+        }
+        let c3 = g.add_atom(Element::C);
+        for _ in 0..3 {
+            let h = g.add_atom(Element::H);
+            g.add_bond(BondType::Covalent { order: 1.0 }, c3, h);
+        }
+        g.add_bond(BondType::Covalent { order: 1.0 }, c1, c2);
+        g.add_bond(BondType::Covalent { order: 1.0 }, c2, c3);
+        let traversal = DepthFirstSearch::new(&g, c2).unwrap();
+        let mut explored_edges: Vec<Bond> = Vec::new();
+        let mut visited_nodes: Vec<AnyAtomlike> = vec![c2.as_atomlike()];
+        let mut backtracks: Vec<usize> = Vec::new();
+        let mut cycle_closures: Vec<usize> = Vec::new();
+        for (i, step) in traversal.enumerate() {
+            match step {
+                Step::Forward { edge, entered, .. } => {
+                    explored_edges.push(edge);
+                    visited_nodes.push(entered);
+                }
+                Step::Pendant { edge, pendant, .. } => {
+                    explored_edges.push(edge);
+                    visited_nodes.push(pendant);
+                }
+                Step::CycleClosure { edge, .. } => {
+                    explored_edges.push(edge);
+                    cycle_closures.push(i);
+                }
+                Step::Back { .. } => backtracks.push(i),
+            }
+        }
+        assert_eq!(explored_edges.len(), 10);
+        assert_eq!(visited_nodes.len(), 11);
+        // Should visit the two pendant Hs on C2 first, then move forwards to C1,
+        // then explore C1 and its three Hs, then backtrack to C2 => 7th step is the backtrack
+        assert_eq!(backtracks, [6]);
+        assert!(cycle_closures.is_empty());
+        // Confirm that we did indeed visit C1 before C3
+        assert!(
+            visited_nodes
+                .iter()
+                .position(|&x| x == c1.as_atomlike())
+                .unwrap()
+                < visited_nodes
+                    .iter()
+                    .position(|&x| x == c3.as_atomlike())
+                    .unwrap()
+        );
+    }
+
+    #[test]
+    fn cyclic() {
+        // Traverse cyclohexane
+        let mut g = MolGraph::new();
+        let mut carbons: Vec<AnyAtomlike> = Vec::new();
+        for n in 0..6 {
+            let c = g.add_atom(Element::C);
+            for _ in 0..2 {
+                let h = g.add_atom(Element::H);
+                g.add_bond(BondType::Covalent { order: 1.0 }, c, h);
+            }
+            if n != 0 {
+                g.add_bond(BondType::Covalent { order: 1.0 }, c, carbons[n - 1]);
+            }
+            carbons.push(c.into());
+        }
+        g.add_bond(BondType::Covalent { order: 1.0 }, carbons[0], carbons[5]);
+        let traversal = DepthFirstSearch::new(&g, carbons[0]).unwrap();
+        let mut explored_edges: Vec<Bond> = Vec::new();
+        let mut visited_nodes: Vec<AnyAtomlike> = vec![carbons[0]];
+        let mut backtracks: Vec<usize> = Vec::new();
+        let mut cycle_closures: Vec<usize> = Vec::new();
+        for (i, step) in traversal.enumerate() {
+            match step {
+                Step::Forward { edge, entered, .. } => {
+                    explored_edges.push(edge);
+                    visited_nodes.push(entered);
+                }
+                Step::Pendant { edge, pendant, .. } => {
+                    explored_edges.push(edge);
+                    visited_nodes.push(pendant);
+                }
+                Step::CycleClosure { edge, .. } => {
+                    explored_edges.push(edge);
+                    cycle_closures.push(i);
+                }
+                Step::Back { .. } => backtracks.push(i),
+            }
+        }
+        assert_eq!(explored_edges.len(), 18);
+        assert_eq!(visited_nodes.len(), 18);
+        // As search is depth-first and pendant H is explored before the carbon chain,
+        // the ring should only have been closed in the very last step
+        // No backtracking occurs so total steps = 5 forward + (6 * 2 pendant) + 1 cycle-closing
+        assert_eq!(cycle_closures, [17])
+    }
+
+    #[test]
+    fn disconnected() {
+        // Ensure that only the connected network is traversed
+        let mut g = MolGraph::new();
+        // Two water molecules
+        let o1 = g.add_atom(Element::O);
+        let o2 = g.add_atom(Element::O);
+        for o in [o1, o2] {
+            for _ in 0..2 {
+                let h = g.add_atom(Element::H);
+                g.add_bond(BondType::Covalent { order: 1.0 }, o, h);
+            }
+        }
+        let mut traversal = DepthFirstSearch::new(&g, o1).unwrap();
+        for _ in &mut traversal {}
+        // Check that O of second water molecule was never visited
+        assert!(!traversal.visited_nodes.contains(&o2.as_atomlike()));
+    }
+
+    #[test]
+    fn h_bond_doesnt_connect() {
+        let mut g = MolGraph::new();
+        // Two water molecules
+        let o1 = g.add_atom(Element::O);
+        let o2 = g.add_atom(Element::O);
+        let mut h1: Option<Atom> = None;
+        for o in [o1, o2] {
+            for _ in 0..2 {
+                let h = g.add_atom(Element::H);
+                if h1.is_none() {
+                    h1 = Some(h);
+                }
+                g.add_bond(BondType::Covalent { order: 1.0 }, o, h);
+            }
+        }
+        // Connect via a hydrogen bond
+        let h1 = h1.unwrap();
+        g.add_bond(BondType::Hydrogen, o2, h1);
+        let mut traversal = DepthFirstSearch::new(&g, o1).unwrap();
+        for _ in &mut traversal {}
+        // Check that O of second water molecule was never visited
+        assert!(!traversal.visited_nodes.contains(&o2.as_atomlike()));
     }
 }

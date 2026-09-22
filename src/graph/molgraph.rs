@@ -856,12 +856,8 @@ pub(crate) mod tests {
         let c1h2 = g.add_bond(BondType::Covalent { order: 1.0 }, c1, h2);
         let c1h3 = g.add_bond(BondType::Covalent { order: 1.0 }, c1, h3);
         let methyl = g.add_substituent_with_centre(c1);
-        g.insert_into_substituent_unchecked(methyl, h1);
-        g.insert_into_substituent_unchecked(methyl, h2);
-        g.insert_into_substituent_unchecked(methyl, h3);
-        g.insert_into_substituent_unchecked(methyl, c1h1);
-        g.insert_into_substituent_unchecked(methyl, c1h2);
-        g.insert_into_substituent_unchecked(methyl, c1h3);
+        g.extend_substituent_unchecked(methyl, [h1, h2, h3]);
+        g.extend_substituent_unchecked(methyl, [c1h1, c1h2, c1h3]);
         let o1 = g.add_atom(Element::O);
         let h4 = g.add_atom(Element::H);
         let o1h4 = g.add_bond(BondType::Covalent { order: 1.0 }, o1, h4);
