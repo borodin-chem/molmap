@@ -10,7 +10,7 @@
 
 use std::iter::FusedIterator;
 
-use crate::{entities::*, traits::Stores};
+use crate::{Map, entities::*, traits::Stores};
 
 // The view structs simply hold an immutable or mutable reference to the parent map,
 // as appropriate, and the corresponding ID. Both have the visibility `pub(crate)`
@@ -51,17 +51,6 @@ where
 {
     pub fn id(&self) -> E {
         self.id
-    }
-}
-
-impl<'m, M, E> View<'m, M, E>
-where
-    E: Kind,
-    M: Stores<E>,
-{
-    /// Returns a reference to the entity's data struct in the core graph.
-    pub(crate) fn data(&self) -> &E::Data {
-        self.map.data(self.id).unwrap()
     }
 }
 

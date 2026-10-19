@@ -18,11 +18,11 @@ use crate::{
     ViewMut,
     entities::*,
     geometry,
-    traits::{CoreGraph, Graph, Stores, StoresPosition},
+    traits::{Core, Graph, Stores, StoresPosition},
     units::Unit,
 };
 
-use super::AtomGraph;
+use super::{AtomCore, AtomGraph, AtomMap};
 
 /// A map holding only fundamental entities and their positions in `D`-dimensional space.
 #[derive(Clone, Debug, Default)]
@@ -48,7 +48,7 @@ impl<const D: usize, U> SpatialAtomMap<D, U> {
     }
 }
 
-impl<const D: usize, U> CoreGraph for SpatialAtomMap<D, U> {
+impl<const D: usize, U> Core for SpatialAtomMap<D, U> {
     type Graph = AtomGraph;
 
     fn graph(&self) -> &Self::Graph {
@@ -65,6 +65,18 @@ impl<const D: usize, U> Map for SpatialAtomMap<D, U> {
         self.contains(entity)
     }
 }
+
+impl<const D: usize, U> AtomCore for SpatialAtomMap<D, U> {
+    fn atom_graph(&self) -> &AtomGraph {
+        &self.graph
+    }
+
+    fn atom_graph_mut(&mut self) -> &mut AtomGraph {
+        &mut self.graph
+    }
+}
+
+impl<const D: usize, U> AtomMap for SpatialAtomMap<D, U> {}
 
 impl<const D: usize, U: Unit> Spatial for SpatialAtomMap<D, U> {
     type Unit = U;

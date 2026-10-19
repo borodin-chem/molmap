@@ -7,6 +7,14 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 //! Definition of the data structure that holds the core graph of atoms and bonds.
+//!
+//! For an `AtomMap` type, the following invariants are promised and must be made
+//! sure to hold:
+//!
+//! 1. Bonds only exist as long as both bonding partners continue to exist.
+//! 2. The two bonding partners of a bond are always different.
+//! 3. Only one `Bond` can connect a given pair of bonding partners (though
+//!    that bond may be a double/triple/etc. bond).
 
 use slotmap::SlotMap;
 

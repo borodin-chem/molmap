@@ -16,6 +16,7 @@ mod zero;
 pub(crate) mod entities;
 
 pub(crate) use graph::AtomGraph;
+pub(crate) use map::AtomCore;
 
 pub use map::AtomMap;
 pub use three::AtomMap3;

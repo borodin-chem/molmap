@@ -60,7 +60,7 @@
 //! core structs e.g. [`BondType`] and [`SubstituentCentre`], but these may well
 //! be moved in the future.
 
-use crate::{Element, Pseudoelement, View, entities::*, traits::Stores};
+use crate::{Element, Pseudoelement, View, atomic::AtomMap, entities::*, traits::Stores};
 
 /// The core data of an atom entity.
 #[derive(Clone, Debug)]
@@ -84,8 +84,13 @@ impl Stored for Atom {
 
 impl<'m, M> View<'m, M, Atom>
 where
-    M: Stores<Atom>,
+    M: AtomMap,
 {
+    /// Returns a reference to the data struct in the core graph.
+    fn data(&self) -> &AtomData {
+        self.map.atom_graph().data(self.id).unwrap()
+    }
+
     pub fn element(&self) -> Element {
         self.data().element
     }
@@ -122,8 +127,13 @@ impl Stored for Pseudoatom {
 
 impl<'m, M> View<'m, M, Pseudoatom>
 where
-    M: Stores<Pseudoatom>,
+    M: AtomMap,
 {
+    /// Returns a reference to the data struct in the core graph.
+    fn data(&self) -> &PseudoatomData {
+        self.map.atom_graph().data(self.id).unwrap()
+    }
+
     pub fn bonds(&self) -> &[Bond] {
         &self.data().bonds
     }
@@ -283,8 +293,13 @@ impl Stored for Bond {
 
 impl<'m, M> View<'m, M, Bond>
 where
-    M: Stores<Bond>,
+    M: AtomMap,
 {
+    /// Returns a reference to the data struct in the core graph.
+    fn data(&self) -> &BondData {
+        self.map.atom_graph().data(self.id).unwrap()
+    }
+
     pub fn bond_type(&self) -> BondType {
         self.data().bond_type
     }
@@ -315,7 +330,7 @@ where
     }
 
     pub fn partners(&self) -> [AnyBondable; 2] {
-        let inner = self.data();
-        [inner.start, inner.end]
+        let data = self.data();
+        [data.start, data.end]
     }
 }

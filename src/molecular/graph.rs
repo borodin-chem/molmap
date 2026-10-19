@@ -7,31 +7,59 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 //! Definition of the data structure that holds the core molecular graph.
+//!
+//! For a `MolMap` type, the following invariants are promised and must be made
+//! sure to hold (additionally to those promised by an `AtomMap`):
+//!
+//! 1. No collection is ever empty.
+//!     - Collections are only ever created using methods that add at least one
+//!       initial member (this would imply that "splitting off" methods are
+//!       necessary to move fundamentals into a different, new collection).
+//!     - Collections are cleaned up automatically when emptied.
+//! 2. All atomlikes are members of a substituent.
+//! 3. All substituents are members of a molecule.
+//! 4. Any atomlikes connected by a covalent (or dipolar) bond are members of the
+//!    same molecule.
+//!     - Joining two atomlikes that are *not* members of the same molecule causes
+//!       the parent molecules to be merged.
+//! 5. All atomlikes of a substituent are connected by strong bonds.
+//!     - Bond deletion errors if it would cause fragmentation of a substituent.
+//! 6. All substituents (and therefore atomlikes) in a molecule are connected by
+//!    strong bonds.
+//!     - If bond deletion causes a molecule to fragment into two disconnected
+//!       parts, the fragments become separate molecules.
 
-use slotmap::SlotMap;
+use slotmap::{SecondaryMap, SlotMap};
 
-use crate::{atomic::AtomGraph, entities::*, traits::Stores};
+use crate::{
+    BondType, Element, Pseudoelement,
+    atomic::AtomGraph,
+    entities::*,
+    traits::{Graph, Stores},
+};
 
 use super::entities::*;
 
-/// An arena-like data structure to represent a set of chemical entities,
-/// their properties, and the relationships between them, as a molecular graph.
-///
-/// A `MolGraph` forms the core of all `MolMap` types, but the type is not meant
-/// for external use. Its `pub` visibility is necessary to match [`MolMapCore`].
-///
-/// [`MolMap0`] is the `MolMap` type that provides a molecular graph for users.
-///
-/// In general, the methods of `MolGraph` should be small in scope and efficient
-/// so that the higher maps can combine them to create a nice public API.
-/// The methods should do relatively little checking and validation, with the
-/// higher maps responsible for careful usage. In particular, all IDs should be
-/// assumed to be valid.
+/// The internal core of a [`MolMap`] type.
 #[derive(Clone, Debug, Default)]
 pub struct MolGraph {
     inner: AtomGraph,
     substituents: SlotMap<SubstituentKey, SubstituentData>,
     molecules: SlotMap<MoleculeKey, MoleculeData>,
+    atom_parents: SecondaryMap<AtomKey, Substituent>,
+    pseudoatom_parents: SecondaryMap<PseudoatomKey, Substituent>,
+    bond_parents: SecondaryMap<BondKey, Option<AnyCollection>>,
+    substituent_parents: SecondaryMap<SubstituentKey, Molecule>,
+}
+
+impl MolGraph {
+    pub(crate) fn atom_graph(&self) -> &AtomGraph {
+        &self.inner
+    }
+
+    pub(crate) fn atom_graph_mut(&mut self) -> &mut AtomGraph {
+        &mut self.inner
+    }
 }
 
 impl<E> Stores<E> for MolGraph
@@ -66,6 +94,24 @@ macro_rules! impl_stores {
 impl_stores!(Substituent, substituents);
 impl_stores!(Molecule, molecules);
 
+impl Graph for MolGraph {
+    fn contains<E: Entity>(&self, entity: E) -> bool {
+        match entity.to_resolved() {
+            ResolvedEntity::Atom(atom) => self.inner.contains(atom),
+            ResolvedEntity::Bond(bond) => self.inner.contains(bond),
+            ResolvedEntity::Pseudoatom(pseudoatom) => self.inner.contains(pseudoatom),
+            ResolvedEntity::Substituent(substituent) => {
+                <MolGraph as Stores<Substituent>>::slotmap(self).contains_key(substituent.to_key())
+            }
+            ResolvedEntity::Molecule(molecule) => {
+                <MolGraph as Stores<Molecule>>::slotmap(self).contains_key(molecule.to_key())
+            }
+            #[expect(unreachable_patterns)] // Unreachable for now but will be needed later
+            _ => false,
+        }
+    }
+}
+
 /// Constructor methods.
 impl MolGraph {
     /// Creates a new, empty `MolGraph`.
@@ -75,6 +121,10 @@ impl MolGraph {
             inner: AtomGraph::new(),
             substituents: SlotMap::with_key(),
             molecules: SlotMap::with_key(),
+            atom_parents: SecondaryMap::new(),
+            pseudoatom_parents: SecondaryMap::new(),
+            bond_parents: SecondaryMap::new(),
+            substituent_parents: SecondaryMap::new(),
         }
     }
 
@@ -91,127 +141,85 @@ impl MolGraph {
             inner: AtomGraph::with_capacities(atoms, pseudoatoms, bonds),
             substituents: SlotMap::with_capacity_and_key(substituents),
             molecules: SlotMap::with_capacity_and_key(molecules),
+            atom_parents: SecondaryMap::with_capacity(atoms),
+            pseudoatom_parents: SecondaryMap::with_capacity(pseudoatoms),
+            bond_parents: SecondaryMap::with_capacity(bonds),
+            substituent_parents: SecondaryMap::with_capacity(substituents),
         }
     }
 }
 
-///// Methods generic over all stored kinds of entity, that do the same regardless of kind.
-//impl MolGraph {
-//    /// Returns a reference to the `SlotMap` that holds the entity.
-//    #[inline]
-//    pub(crate) fn slotmap<E: Kind>(&self) -> &SlotMap<E::KEY, E::DATA> {
-//        E::get_slotmap(self)
-//    }
-//
-//    /// Returns a mutable reference to the `SlotMap` that holds the entity.
-//    #[inline]
-//    pub(crate) fn slotmap_mut<E: Kind>(&mut self) -> &mut SlotMap<E::KEY, E::DATA> {
-//        E::get_slotmap_mut(self)
-//    }
-//
-//    /// Returns a reference to the entity's data struct, or `None` if `entity` is invalid.
-//    #[inline]
-//    pub(crate) fn data<E: Kind>(&self, entity: E) -> Option<&E::DATA> {
-//        self.slotmap::<E>().get(entity.to_key())
-//    }
-//
-//    /// Returns a mutable reference to the entity's data struct, or `None` if `entity` is invalid.
-//    #[inline]
-//    pub(crate) fn data_mut<E: Kind>(&mut self, entity: E) -> Option<&mut E::DATA> {
-//        self.slotmap_mut::<E>().get_mut(entity.to_key())
-//    }
-//
-//    /// Checks if the map currently contains the given entity.
-//    pub(crate) fn contains<E: Kind>(&self, entity: E) -> bool {
-//        self.slotmap::<E>().contains_key(entity.to_key())
-//    }
-//
-//    /// Returns an iterator over all the keys of a given kind of entity in the map.
-//    pub(crate) fn keys<E: Kind>(&'_ self) -> slotmap::basic::Keys<'_, E::KEY, E::DATA> {
-//        self.slotmap::<E>().keys()
-//    }
-//}
+/// Methods for entity addition.
+impl MolGraph {
+    /// Adds a substituent to the given molecule with the given atomlike as its centre.
+    ///
+    /// Note that this method will not fail, even if `centre` is an invalid ID.
+    fn add_substituent_with_centre(&mut self, centre: impl Atomlike) -> Substituent {
+        self.substituents
+            .insert(SubstituentData::with_centre(centre.as_atomlike()))
+            .into()
+    }
 
-///// Methods for entity addition.
-//impl MolGraph {
-//    /// Adds an atom to the map.
-//    pub(crate) fn add_atom(&mut self, element: Element) -> Atom {
-//        self.atoms.insert(AtomData::new(element)).into()
-//    }
-//
-//    /// Adds a pseudoatom to the map.
-//    pub(crate) fn add_pseudoatom(&mut self, pseudoelement: Pseudoelement) -> Pseudoatom {
-//        self.pseudoatoms
-//            .insert(PseudoatomData::new(pseudoelement))
-//            .into()
-//    }
-//
-//    /// Creates a new bond between two bondable entities.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if either of `start` and `end` are invalid.
-//    pub(crate) fn add_bond(
-//        &mut self,
-//        bond_type: BondType,
-//        start: impl Bondable,
-//        end: impl Bondable,
-//    ) -> Bond {
-//        let bond: Bond = self
-//            .bonds
-//            .insert(BondData::new(
-//                bond_type,
-//                start.as_bondable(),
-//                end.as_bondable(),
-//            ))
-//            .into();
-//        for partner in [start.as_bondable(), end.as_bondable()] {
-//            match partner.resolve() {
-//                ResolvedBondable::Atom(id) => {
-//                    self.atoms.get_mut(id.into()).unwrap().bonds.push(bond)
-//                }
-//                ResolvedBondable::Pseudoatom(id) => self
-//                    .pseudoatoms
-//                    .get_mut(id.into())
-//                    .unwrap()
-//                    .bonds
-//                    .push(bond),
-//            }
-//        }
-//        bond
-//    }
-//
-//    /// Adds an empty substituent to the map.
-//    ///
-//    /// If the atomlike that is going to be the substituent's centre already
-//    /// exists, prefer `add_substituent_with_centre`.
-//    pub(crate) fn add_substituent(&mut self) -> Substituent {
-//        self.substituents
-//            .insert(SubstituentData {
-//                centre: SubstituentCentre::None,
-//                members: Vec::new(),
-//            })
-//            .into()
-//    }
-//
-//    /// Adds a substituent to the map with the given atomlike as its centre.
-//    ///
-//    /// Note that this method will not fail, even if `centre` is an invalid ID.
-//    pub(crate) fn add_substituent_with_centre(&mut self, centre: impl Atomlike) -> Substituent {
-//        self.substituents
-//            .insert(SubstituentData::new(
-//                centre.as_atomlike(),
-//                &[centre.as_atomlike().into()],
-//            ))
-//            .into()
-//    }
-//
-//    /// Adds an empty molecule to the map.
-//    pub(crate) fn add_molecule(&mut self) -> Molecule {
-//        self.molecules.insert(MoleculeData::new()).into()
-//    }
-//}
-//
+    /// Adds a molecule to the map with the substituent as its child and the
+    /// substituent's members as its own members.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the substituent does not exist.
+    fn add_molecule_with_substituent(&mut self, substituent: Substituent) -> Molecule {
+        let mut mol_data = MoleculeData::new();
+        mol_data.substituents.insert(substituent);
+        self.molecules.insert(MoleculeData::new()).into()
+    }
+
+    /// Adds a new molecule to the map containing a single atom.
+    ///
+    /// Returns the new atom, its parent substituent, and its parent molecule.
+    pub(crate) fn add_atomic(&mut self, element: Element) -> (Atom, Substituent, Molecule) {
+        // First add everything
+        let atom = self.inner.add_atom(element);
+        let sub = self.add_substituent_with_centre(atom);
+        let mol = self.add_molecule_with_substituent(sub);
+        // Using the above methods ensures that children are stored on the data structs
+        // appropriately, but we still need to sort out the parents at the graph level
+        self.atom_parents.insert(atom.into(), sub);
+        self.substituent_parents.insert(sub.into(), mol);
+        (atom, sub, mol)
+    }
+
+    /// Adds a new molecule to the map containing a single pseudoatom.
+    ///
+    /// Returns the new pseudoatom, its parent substituent, and its parent molecule.
+    pub(crate) fn add_pseudoatomic(
+        &mut self,
+        pseudoelement: Pseudoelement,
+    ) -> (Pseudoatom, Substituent, Molecule) {
+        // First add everything
+        let pseudoatom = self.inner.add_pseudoatom(pseudoelement);
+        let sub = self.add_substituent_with_centre(pseudoatom);
+        let mol = self.add_molecule_with_substituent(sub);
+        // Using the above methods ensures that children are stored on the data structs
+        // appropriately, but we still need to sort out the parents at the graph level
+        self.pseudoatom_parents.insert(pseudoatom.into(), sub);
+        self.substituent_parents.insert(sub.into(), mol);
+        (pseudoatom, sub, mol)
+    }
+
+    /// Creates a new bond between two bondable entities.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either of `start` and `end` are invalid.
+    pub(crate) fn add_bond(
+        &mut self,
+        bond_type: BondType,
+        start: impl Bondable,
+        end: impl Bondable,
+    ) -> Bond {
+        todo!()
+    }
+}
+
 ///// Methods for entity removal.
 //impl MolGraph {
 //    /// Removes an atom from the map, as well as any bonds to it.

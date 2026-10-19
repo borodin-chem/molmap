@@ -22,7 +22,7 @@ use crate::{
 mod internal {
     use super::*;
 
-    /// Implemented by graphs and maps to indicate that they store the specific
+    /// Implemented by graphs to indicate that they store the specific
     /// kind of entity and provide access to its underlying data struct.
     pub trait Stores<E: Kind> {
         /// Returns a reference to the `SlotMap` that holds the entity.
@@ -47,22 +47,22 @@ mod internal {
         }
     }
 
-    impl<E, M> Stores<E> for M
-    where
-        E: Kind,
-        M: Map,
-        M::Graph: Stores<E>,
-    {
-        fn slotmap(&self) -> &SlotMap<<E>::Key, <E>::Data> {
-            self.graph().slotmap()
-        }
+    //impl<E, M> Stores<E> for M
+    //where
+    //    E: Kind,
+    //    M: Map,
+    //    M::Graph: Stores<E>,
+    //{
+    //    fn slotmap(&self) -> &SlotMap<<E>::Key, <E>::Data> {
+    //        self.graph().slotmap()
+    //    }
 
-        fn slotmap_mut(&mut self) -> &mut SlotMap<<E>::Key, <E>::Data> {
-            self.graph_mut().slotmap_mut()
-        }
-    }
+    //    fn slotmap_mut(&mut self) -> &mut SlotMap<<E>::Key, <E>::Data> {
+    //        self.graph_mut().slotmap_mut()
+    //    }
+    //}
 
-    /// Implemented by graphs and maps to indicate that they store positions for
+    /// Implemented by graphs to indicate that they store positions for
     /// a specific kind of entity and provide access to the data point.
     pub trait StoresPosition<E: Kind>: Spatial {
         /// Returns a reference to the position of the entity, or `None` if `entity` is invalid.
@@ -102,7 +102,7 @@ mod internal {
 
     /// A trait required of all implementors of [`Map`] in order to provide access
     /// (internally) to their core graph.
-    pub trait CoreGraph {
+    pub trait Core {
         type Graph: Graph;
 
         /// Provides access to the core graph.
@@ -118,18 +118,23 @@ pub(crate) use internal::*;
 /// An arena-like data structure to represent a set of chemical entities, their
 /// properties, and the relationships between them, with or without spatial positions.
 ///
-/// This trait provides methods for:
+/// Most interaction with the crate's map types is through entity IDs and views of
+/// the entities. This trait provides methods for:
 /// 1. obtaining an immutable or mutable view of an entity from its ID
 /// 2. verifying an ID
 /// 3. iterating over views of all of a given kind of entity
 /// 4. iterating over all IDs of a given kind of entity
 ///
-/// All implementors of `Map` should also always provide methods for adding new
-/// entities, but the signature for these will vary according to the needs of the
-/// concrete map type.
+/// Other map-level methods are provided as inherent implementations on the map
+/// itself, as methods of the layer traits (`AtomMap`, `MolMap`, `RxnMap`), or
+/// via the `Spatial` trait for maps with spatial positions.
+///
+/// All implementors of `Map` provide methods for adding new entities; these are
+/// not trait methods because the signature for these will vary according to the
+/// needs of the concrete map type.
 ///
 /// This trait is sealed and is not intended for implementation outside of `molmap`.
-pub trait Map: CoreGraph + Sized {
+pub trait Map: Core + Sized {
     // Constructors
     // ------------
 
@@ -175,9 +180,9 @@ pub trait Map: CoreGraph + Sized {
     fn entities<E>(&'_ self) -> Entities<'_, E>
     where
         E: Kind,
-        Self: Stores<E>,
+        Self::Graph: Stores<E>,
     {
-        Entities::from_keys(self.keys())
+        Entities::from_keys(self.graph().keys())
     }
 
     // Getters
@@ -226,7 +231,7 @@ pub trait Map: CoreGraph + Sized {
     ) -> MolMapResult<Views<'m, Self, E>>
     where
         E: Kind,
-        Self: Stores<E>,
+        Self::Graph: Stores<E>,
     {
         let ids: Entities<'m, E> = match selection.into() {
             Selection::All => self.entities(),

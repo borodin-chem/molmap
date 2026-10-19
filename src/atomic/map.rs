@@ -10,5 +10,19 @@ use crate::Map;
 
 use super::AtomGraph;
 
-/// A map holding only fundamental entities.
-pub trait AtomMap: Map<Graph = AtomGraph> {}
+#[allow(unreachable_pub)]
+mod internal {
+    use super::*;
+
+    pub trait AtomCore {
+        /// Provides access to the core graph.
+        fn atom_graph(&self) -> &AtomGraph;
+
+        /// Provides mutable access to the core graph.
+        fn atom_graph_mut(&mut self) -> &mut AtomGraph;
+    }
+}
+pub(crate) use internal::AtomCore;
+
+/// A map holding fundamental atomic entities, and a network of bonds between them.
+pub trait AtomMap: Map + AtomCore {}

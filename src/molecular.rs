@@ -8,15 +8,17 @@
 
 mod graph;
 mod map;
-//mod three;
-//mod two;
-//mod zero;
+mod spatial;
+mod three;
+mod two;
+mod zero;
 
 pub(crate) mod entities;
 
 pub(crate) use graph::MolGraph;
+pub(crate) use map::MolCore;
 
 pub use map::MolMap;
-//pub use three::MolMap3;
-//pub use two::MolMap2;
-//pub use zero::MolMap0;
+pub use three::MolMap3;
+pub use two::MolMap2;
+pub use zero::MolMap0;

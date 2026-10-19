@@ -10,5 +10,5 @@ use crate::units::Angstrom;
 
 use super::spatial::SpatialAtomMap;
 
-/// A map holding only fundamental entities and their two-dimensional positions.
+/// A map holding only fundamental entities and their three-dimensional positions.
 pub type AtomMap3 = SpatialAtomMap<3, Angstrom>;

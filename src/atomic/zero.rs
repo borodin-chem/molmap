@@ -9,15 +9,15 @@
 use crate::{
     BondType, Element, Map, MolMapError, MolMapResult, Pseudoelement, ViewMut,
     entities::*,
-    traits::{CoreGraph, Graph, Stores},
+    traits::{Core, Graph, Stores},
 };
 
-use super::{AtomGraph, AtomMap};
+use super::{AtomCore, AtomGraph, AtomMap};
 
 /// A map holding only fundamental entities in a pure-graph representation.
 #[derive(Clone, Debug, Default)]
 pub struct AtomMap0 {
-    pub(crate) graph: AtomGraph,
+    graph: AtomGraph,
 }
 
 impl AtomMap0 {
@@ -32,7 +32,7 @@ impl AtomMap0 {
     }
 }
 
-impl CoreGraph for AtomMap0 {
+impl Core for AtomMap0 {
     type Graph = AtomGraph;
 
     fn graph(&self) -> &AtomGraph {
@@ -47,6 +47,16 @@ impl CoreGraph for AtomMap0 {
 impl Map for AtomMap0 {
     fn contains<E: Entity>(&self, entity: E) -> bool {
         self.contains(entity)
+    }
+}
+
+impl AtomCore for AtomMap0 {
+    fn atom_graph(&self) -> &AtomGraph {
+        &self.graph
+    }
+
+    fn atom_graph_mut(&mut self) -> &mut AtomGraph {
+        &mut self.graph
     }
 }
 
@@ -75,7 +85,8 @@ impl AtomMap0 {
         // they are already stored on the new central atom – return a slice instead
         (
             centre,
-            self.data(centre)
+            self.graph
+                .data(centre)
                 .expect("We just created this atom, so ID must be valid")
                 .bonds
                 .as_slice(),
