@@ -31,19 +31,24 @@ mod internal {
         /// Returns a mutable reference to the `SlotMap` that holds the entity.
         fn slotmap_mut(&mut self) -> &mut SlotMap<E::Key, E::Data>;
 
-        /// Returns a reference to the entity's data struct, or `None` if `entity` is invalid.
+        /// Returns a reference to the entity's data struct, or `None` if the entity is invalid.
         fn data(&self, entity: E) -> Option<&E::Data> {
             self.slotmap().get(entity.to_key())
         }
 
-        /// Returns a mutable reference to the entity's data struct, or `None` if `entity` is invalid.
+        /// Returns a mutable reference to the entity's data struct, or `None` if the entity is invalid.
         fn data_mut(&mut self, entity: E) -> Option<&mut E::Data> {
             self.slotmap_mut().get_mut(entity.to_key())
         }
 
-        /// Returns an iterator over all the keys of a given kind of entity in the map.
+        /// Returns an iterator over all the keys of this kind of entity in the map.
         fn keys(&'_ self) -> slotmap::basic::Keys<'_, E::Key, E::Data> {
             self.slotmap().keys()
+        }
+
+        /// Returns the number of entities of this kind present in the map.
+        fn count(&self) -> usize {
+            self.slotmap().len()
         }
     }
 
