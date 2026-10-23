@@ -27,7 +27,12 @@
 
 use std::collections::HashSet;
 
-use crate::{entities::*, error::*, graph::MolGraph};
+use crate::{
+    atomic::AtomGraph,
+    entities::*,
+    error::*,
+    traits::{Graph, Stores},
+};
 
 /// The result of a traversal step.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -149,7 +154,7 @@ struct StackItem {
 /// all the strong bonds (covalent/dipolar, ionic, metallic).
 ///
 /// The graph is traversed from the root until all connected nodes and edges
-/// have been explored. As such, if the `MolGraph` contains multiple disconnected
+/// have been explored. As such, if the graph contains multiple disconnected
 /// networks, only a subset will be traversed.
 ///
 /// Each iteration returns an instance of [`Step`]. Not every step explores a
@@ -160,7 +165,7 @@ struct StackItem {
 /// then pseudoatoms.
 #[derive(Debug)]
 pub struct DepthFirstSearch<'m> {
-    graph: &'m MolGraph,
+    graph: &'m AtomGraph,
     /// All visited nodes, whether partially or fully explored.
     visited_nodes: HashSet<AnyAtomlike>,
     explored_edges: HashSet<Bond>,
@@ -175,7 +180,7 @@ impl<'m> DepthFirstSearch<'m> {
     ///
     /// Fails if the graph does not contain any atoms or pseudoatoms at all, or if
     /// the root is not a member of the graph.
-    pub fn new(graph: &'m MolGraph, root: impl Atomlike) -> MolMapResult<Self> {
+    pub fn new(graph: &'m AtomGraph, root: impl Atomlike) -> MolMapResult<Self> {
         let root = root.as_atomlike();
         if !(match root.resolve() {
             ResolvedAtomlike::Atom(atom) => graph.contains(atom),
@@ -185,9 +190,12 @@ impl<'m> DepthFirstSearch<'m> {
         }
         let mut traversal = Self {
             graph,
-            visited_nodes: HashSet::with_capacity(graph.atoms.len() + graph.pseudoatoms.len()),
-            explored_edges: HashSet::with_capacity(graph.bonds.len()),
-            stack: Vec::with_capacity(graph.atoms.len() / 2), // Be generous but assume at least half of nodes/atoms are pendant
+            visited_nodes: HashSet::with_capacity(
+                <AtomGraph as Stores<Atom>>::count(graph)
+                    + <AtomGraph as Stores<Pseudoatom>>::count(graph),
+            ),
+            explored_edges: HashSet::with_capacity(<AtomGraph as Stores<Bond>>::count(graph)),
+            stack: Vec::with_capacity(<AtomGraph as Stores<Atom>>::count(graph) / 2), // Be generous but assume at least half of nodes/atoms are pendant
             current_node: root,
         };
         // Visit root, populate its queue so that we're ready to go
@@ -470,7 +478,7 @@ mod tests {
 
     #[test]
     fn invalid_root() {
-        let mut g = MolGraph::new();
+        let mut g = AtomGraph::new();
         let h1 = g.add_atom(Element::H);
         g.delete_atom(h1);
         let h2 = g.add_atom(Element::H);
@@ -482,7 +490,7 @@ mod tests {
     #[test]
     fn linear() {
         // Traverse ethane, starting at one of the hydrogen atoms
-        let mut g = MolGraph::new();
+        let mut g = AtomGraph::new();
         let c1 = g.add_atom(Element::C);
         let h1 = g.add_atom(Element::H);
         let h2 = g.add_atom(Element::H);
@@ -572,7 +580,7 @@ mod tests {
     #[test]
     fn branched() {
         // Traverse propane, starting at the carbon in the middle of the chain
-        let mut g = MolGraph::new();
+        let mut g = AtomGraph::new();
         let c1 = g.add_atom(Element::C);
         for _ in 0..3 {
             let h = g.add_atom(Element::H);
@@ -634,7 +642,7 @@ mod tests {
     #[test]
     fn cyclic() {
         // Traverse cyclohexane
-        let mut g = MolGraph::new();
+        let mut g = AtomGraph::new();
         let mut carbons: Vec<AnyAtomlike> = Vec::new();
         for n in 0..6 {
             let c = g.add_atom(Element::C);
@@ -681,7 +689,7 @@ mod tests {
     #[test]
     fn disconnected() {
         // Ensure that only the connected network is traversed
-        let mut g = MolGraph::new();
+        let mut g = AtomGraph::new();
         // Two water molecules
         let o1 = g.add_atom(Element::O);
         let o2 = g.add_atom(Element::O);
@@ -699,7 +707,7 @@ mod tests {
 
     #[test]
     fn h_bond_doesnt_connect() {
-        let mut g = MolGraph::new();
+        let mut g = AtomGraph::new();
         // Two water molecules
         let o1 = g.add_atom(Element::O);
         let o2 = g.add_atom(Element::O);

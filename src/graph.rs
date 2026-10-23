@@ -8,4 +8,4 @@
 
 //! Functions and methods for working on the graph structures.
 
-//pub mod traversal;
+pub mod traversal;
