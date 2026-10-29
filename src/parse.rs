@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{MolMap, error::MolMapError};
+use crate::MolMapError;
 
 /// A parser between a chemical notation or file format and at least one kind of
 /// `MolMap`.
@@ -51,7 +51,7 @@ pub trait Parser: Default {
 /// that parses to a [`MolMap3`] does not, as the parser would have to apply some
 /// algorithm for 3D structure generation from the molecular graph.
 pub trait Read: Parser {
-    type Output: MolMap;
+    type Output;
 
     /// Parses the format from a `std::io` reader.
     ///
@@ -71,7 +71,7 @@ pub trait Read: Parser {
 ///
 /// See the main [`Read`] trait for implementation guidelines.
 pub trait MultiRead: Parser {
-    type Output: MolMap;
+    type Output;
     type Iter: Iterator<Item = Self::Output>;
 
     /// Parses the format from a `std::io` reader.
@@ -99,10 +99,7 @@ pub trait MultiRead: Parser {
 /// necessary for SMILES generation, but one that writes an XYZ file from a
 /// [`MolMap0`] does not, as the parser would have to apply some algorithm for 3D
 /// structure generation from the molecular graph.
-pub trait Write<M>: Parser
-where
-    M: MolMap,
-{
+pub trait Write<M>: Parser {
     /// Parses the format to a `std::io` writer.
     fn write<W: std::io::Write>(&self, writer: W, map: M) -> Result<(), Self::Error>;
 }
@@ -116,7 +113,6 @@ where
 /// See the main [`Write`] trait for implementation guidelines.
 pub trait MultiWrite<M, I>: Parser
 where
-    M: MolMap,
     I: Iterator<Item = M>,
 {
     /// Parses the format to a `std::io` writer.

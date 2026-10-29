@@ -36,6 +36,11 @@ pub enum MolMapError {
         "The map is either completely empty or is missing any entities of the necessary kind for the requested operation"
     )]
     EmptyMap,
+    /// Returned when an iterator (usually taken as an argument) is unexpectedly empty.
+    #[error(
+        "The iterator is either completely empty or is missing any entities of the necessary kind for the requested operation"
+    )]
+    EmptyIterator,
 }
 
 /// A `Result` type for situations where the crate's [`MolMapError`] might be returned.

@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! The data held for the entities in the core molecular graph and the view
+//! The data held by an `AtomGraph` for the fundamental entities, and the view
 //! methods to access it.
 //!
 //! # A note on crate organization
@@ -60,9 +60,7 @@
 //! core structs e.g. [`BondType`] and [`SubstituentCentre`], but these may well
 //! be moved in the future.
 
-use std::collections::HashSet;
-
-use crate::{Element, MolMap, Pseudoelement, entities::*, error::MolMapResult, view::*};
+use crate::{Element, Pseudoelement, View, atomic::AtomMap, entities::*, traits::Stores};
 
 /// The core data of an atom entity.
 #[derive(Clone, Debug)]
@@ -80,7 +78,19 @@ impl AtomData {
     }
 }
 
-impl<'m, M: MolMap> View<'m, M, Atom> {
+impl Stored for Atom {
+    type Data = AtomData;
+}
+
+impl<'m, M> View<'m, M, Atom>
+where
+    M: AtomMap,
+{
+    /// Returns a reference to the data struct in the core graph.
+    fn data(&self) -> &AtomData {
+        self.map.atom_graph().data(self.id).unwrap()
+    }
+
     pub fn element(&self) -> Element {
         self.data().element
     }
@@ -111,7 +121,19 @@ impl PseudoatomData {
     }
 }
 
-impl<'m, M: MolMap> View<'m, M, Pseudoatom> {
+impl Stored for Pseudoatom {
+    type Data = PseudoatomData;
+}
+
+impl<'m, M> View<'m, M, Pseudoatom>
+where
+    M: AtomMap,
+{
+    /// Returns a reference to the data struct in the core graph.
+    fn data(&self) -> &PseudoatomData {
+        self.map.atom_graph().data(self.id).unwrap()
+    }
+
     pub fn bonds(&self) -> &[Bond] {
         &self.data().bonds
     }
@@ -265,7 +287,19 @@ impl BondData {
     }
 }
 
-impl<'m, M: MolMap> View<'m, M, Bond> {
+impl Stored for Bond {
+    type Data = BondData;
+}
+
+impl<'m, M> View<'m, M, Bond>
+where
+    M: AtomMap,
+{
+    /// Returns a reference to the data struct in the core graph.
+    fn data(&self) -> &BondData {
+        self.map.atom_graph().data(self.id).unwrap()
+    }
+
     pub fn bond_type(&self) -> BondType {
         self.data().bond_type
     }
@@ -296,103 +330,7 @@ impl<'m, M: MolMap> View<'m, M, Bond> {
     }
 
     pub fn partners(&self) -> [AnyBondable; 2] {
-        let inner = self.data();
-        [inner.start, inner.end]
-    }
-}
-
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub enum SubstituentCentre {
-    None,
-    Single(AnyAtomlike),
-    // Use Box around Vec so that SubstituentCentre takes up less space
-    // Clippy doesn't like this but since the vast majority of substituents will
-    // be single centre the extra redirection in the multi-centre case is worth it
-    #[allow(clippy::box_collection)]
-    Multiple(Box<Vec<AnyAtomlike>>),
-}
-
-/// The core data of a substituent entity.
-#[derive(Clone, Debug)]
-pub struct SubstituentData {
-    pub(crate) centre: SubstituentCentre,
-    pub(crate) members: Vec<AnyFundamental>,
-}
-
-impl SubstituentData {
-    pub(crate) fn new(centre: AnyAtomlike, members: &[AnyFundamental]) -> Self {
-        Self {
-            centre: SubstituentCentre::Single(centre),
-            members: members.to_vec(),
-        }
-    }
-}
-
-impl<'m, M: MolMap> View<'m, M, Substituent> {
-    /// Returns details of the centre(s) of the substituent.
-    pub fn centre(&self) -> &SubstituentCentre {
-        &self.data().centre
-    }
-
-    /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.
-    pub fn members(&self) -> impl Iterator<Item = AnyFundamental> {
-        self.data().members.iter().copied()
-    }
-
-    /// Checks if the substituent contains the given atom, pseudoatom, or bond.
-    pub fn contains(&self, fundamental: impl Fundamental) -> bool {
-        self.data().members.contains(&fundamental.as_fundamental())
-    }
-}
-
-impl<'m, M: MolMap> ViewMut<'m, M, Substituent> {
-    /// Attempts to change the centre of the substituent to the one requested.
-    ///
-    /// # Errors
-    ///
-    /// Fails if the requested centre is not already a member of the substituent,
-    /// or if there are already bonds to the current centre(s).
-    pub fn set_centre(self, new_centre: impl Atomlike) -> MolMapResult<()> {
-        self.map
-            .core_mut()
-            .set_substituent_centre(self.id, new_centre)
-    }
-
-    /// Makes the requested atomlike a centre of the substituent, in addition to any
-    /// already existing centres.
-    ///
-    /// # Errors
-    ///
-    /// Fails if the requested centre is not already a member of the substituent.
-    pub fn add_centre(self, new_centre: impl Atomlike) -> MolMapResult<()> {
-        self.map
-            .core_mut()
-            .add_substituent_centre(self.id, new_centre)
-    }
-}
-
-/// The core data of a molecule entity.
-#[derive(Clone, Debug)]
-pub struct MoleculeData {
-    pub(crate) members: HashSet<AnyFundamental>,
-}
-
-impl MoleculeData {
-    pub(crate) fn new() -> Self {
-        Self {
-            members: HashSet::new(),
-        }
-    }
-}
-
-impl<'m, M: MolMap> View<'m, M, Molecule> {
-    /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.
-    pub fn members(&self) -> impl Iterator<Item = AnyFundamental> {
-        self.data().members.iter().copied()
-    }
-
-    /// Checks if the molecule contains the given atom, pseudoatom, or bond.
-    pub fn contains(&self, fundamental: impl Fundamental) -> bool {
-        self.data().members.contains(&fundamental.as_fundamental())
+        let data = self.data();
+        [data.start, data.end]
     }
 }

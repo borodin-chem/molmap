@@ -58,14 +58,14 @@ use std::num::NonZeroU64;
 
 use slotmap::KeyData;
 
-use crate::entities::kinds::EntityKind;
+use super::EntityKind;
 
 /// The ID of one of any kind of entity, where the kind of entity is encoded by
 /// an 8-bit discriminant.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 // It is crucial that this module remains private and that Id is not re-exported
-// as pub, as its unnamability is what ensures that Entity is a sealed trait!
-pub struct Id(pub(crate) NonZeroU64);
+// as pub, as its unnameability is what ensures that Entity is a sealed trait!
+pub struct Id(NonZeroU64);
 
 // Layout:
 // - Bits 63–32 = version (`version` field of `KeyData`)
@@ -76,7 +76,7 @@ impl Id {
     const DISC_OFFSET: u64 = 24;
     const DISC_MASK: u64 = 0xFF << Id::DISC_OFFSET;
     // Like for KeyData, the maximum index is reserved for use as the null value
-    const MAX_IDX: u32 = 0x0FFFFFFF;
+    const MAX_IDX: u32 = 0x00FFFFFF;
 
     /// Extracts the discriminant field.
     #[inline]
@@ -99,8 +99,8 @@ impl Id {
     /// Wraps a (non-zero) integer to create an ID.
     ///
     /// Returns `None` if `n` is zero or if the discriminant is an invalid value.
+    #[cfg(test)]
     #[inline]
-    #[allow(unused)]
     pub(crate) const fn from_raw(n: u64) -> Option<Self> {
         if let Some(non_zero) = NonZeroU64::new(n) {
             let id = Self(non_zero);
@@ -115,8 +115,8 @@ impl Id {
     }
 
     /// Returns the inner value with the discriminant as a normal `u64`.
+    #[cfg(test)]
     #[inline]
-    #[allow(unused)]
     pub(crate) const fn to_raw(self) -> u64 {
         self.0.get()
     }

@@ -6,11 +6,17 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+#![warn(unreachable_pub)]
+
 // Private modules
 // ---------------
 mod element;
-mod molmap;
+mod error;
 mod pseudoelement;
+mod view;
+
+pub(crate) mod geometry;
+pub(crate) mod traits;
 
 // ----------
 // Public API
@@ -18,25 +24,33 @@ mod pseudoelement;
 
 // Publicly accessible modules
 // ---------------------------
+
+// General
 pub mod entities;
-pub mod error;
 pub mod graph;
 pub mod parse;
-pub mod spatial;
-pub mod view;
+pub mod units;
+
+// Layers
+pub mod atomic;
+//pub mod crystalline;
+pub mod molecular;
+//pub mod reaction;
 
 // Top-level items
 // ---------------
+pub use atomic::entities::BondType;
 pub use element::Element;
-pub use graph::MolMap0;
-pub use graph::data::BondType;
-pub use molmap::MolMap;
+pub use entities::{Atom, Bond, Molecule, Pseudoatom, Substituent};
+//pub use molecular::{MolMap, MolMap0, MolMap2, MolMap3};
+pub use error::{MolMapError, MolMapResult};
+pub use geometry::{Point, Point2, Point3, Vector, Vector2, Vector3};
 pub use pseudoelement::Pseudoelement;
-pub use spatial::{MolMap2, MolMap3};
+pub use traits::{Map, Spatial, ThreeDimensional, TwoDimensional};
+pub use view::{View, ViewMut, Views};
 
 // Foreign re-exports
 // ------------------
 // Foreign crates or things from them
 // Re-exporting nalgebra makes it easier for others to use
 pub use nalgebra;
-pub use nalgebra::{Point2, Point3, Vector2, Vector3};
