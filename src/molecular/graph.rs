@@ -35,7 +35,7 @@ use crate::{
     BondType, Element, Pseudoelement,
     atomic::AtomGraph,
     entities::*,
-    traits::{Graph, Stores},
+    traits::{Graph, Stores, StoresMut},
 };
 
 use super::entities::*;
@@ -71,7 +71,13 @@ where
     fn slotmap(&self) -> &SlotMap<<E>::Key, <E>::Data> {
         self.inner.slotmap()
     }
+}
 
+impl<E> StoresMut<E> for MolGraph
+where
+    E: Kind,
+    AtomGraph: StoresMut<E>,
+{
     fn slotmap_mut(&mut self) -> &mut SlotMap<<E>::Key, <E>::Data> {
         self.inner.slotmap_mut()
     }
@@ -83,7 +89,9 @@ macro_rules! impl_stores {
             fn slotmap(&self) -> &SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {
                 &self.$attr
             }
+        }
 
+        impl StoresMut<$kind> for MolGraph {
             fn slotmap_mut(
                 &mut self,
             ) -> &mut SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {

@@ -22,23 +22,15 @@ use crate::{
 mod internal {
     use super::*;
 
-    /// Implemented by graphs to indicate that they store the specific
+    /// Implemented by maps to indicate that they store the specific
     /// kind of entity and provide access to its underlying data struct.
     pub trait Stores<E: Kind> {
         /// Returns a reference to the `SlotMap` that holds the entity.
         fn slotmap(&self) -> &SlotMap<E::Key, E::Data>;
 
-        /// Returns a mutable reference to the `SlotMap` that holds the entity.
-        fn slotmap_mut(&mut self) -> &mut SlotMap<E::Key, E::Data>;
-
         /// Returns a reference to the entity's data struct, or `None` if the entity is invalid.
         fn data(&self, entity: E) -> Option<&E::Data> {
             self.slotmap().get(entity.to_key())
-        }
-
-        /// Returns a mutable reference to the entity's data struct, or `None` if the entity is invalid.
-        fn data_mut(&mut self, entity: E) -> Option<&mut E::Data> {
-            self.slotmap_mut().get_mut(entity.to_key())
         }
 
         /// Returns an iterator over all the keys of this kind of entity in the map.
@@ -52,22 +44,19 @@ mod internal {
         }
     }
 
-    //impl<E, M> Stores<E> for M
-    //where
-    //    E: Kind,
-    //    M: Map,
-    //    M::Graph: Stores<E>,
-    //{
-    //    fn slotmap(&self) -> &SlotMap<<E>::Key, <E>::Data> {
-    //        self.graph().slotmap()
-    //    }
+    /// Implemented by maps to provide themselves with convenient mutable access
+    /// to an entity's underlying data struct.
+    pub(crate) trait StoresMut<E: Kind>: Stores<E> {
+        /// Returns a mutable reference to the `SlotMap` that holds the entity.
+        fn slotmap_mut(&mut self) -> &mut SlotMap<E::Key, E::Data>;
 
-    //    fn slotmap_mut(&mut self) -> &mut SlotMap<<E>::Key, <E>::Data> {
-    //        self.graph_mut().slotmap_mut()
-    //    }
-    //}
+        /// Returns a mutable reference to the entity's data struct, or `None` if the entity is invalid.
+        fn data_mut(&mut self, entity: E) -> Option<&mut E::Data> {
+            self.slotmap_mut().get_mut(entity.to_key())
+        }
+    }
 
-    /// Implemented by graphs to indicate that they store positions for
+    /// Implemented by maps to indicate that they store positions for
     /// a specific kind of entity and provide access to the data point.
     pub trait StoresPosition<E: Kind>: Spatial {
         /// Returns a reference to the position of the entity, or `None` if `entity` is invalid.

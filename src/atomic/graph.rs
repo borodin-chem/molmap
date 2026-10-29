@@ -21,7 +21,7 @@ use slotmap::SlotMap;
 use crate::{
     Element, Pseudoelement,
     entities::*,
-    traits::{Graph, Stores},
+    traits::{Graph, Stores, StoresMut},
 };
 
 use super::entities::*;
@@ -40,7 +40,9 @@ macro_rules! impl_stores {
             fn slotmap(&self) -> &SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {
                 &self.$attr
             }
+        }
 
+        impl StoresMut<$kind> for AtomGraph {
             fn slotmap_mut(
                 &mut self,
             ) -> &mut SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {
