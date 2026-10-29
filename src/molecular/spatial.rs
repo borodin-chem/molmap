@@ -14,12 +14,10 @@ use nalgebra as na;
 use slotmap::SecondaryMap;
 
 use crate::{
-    BondType, Element, Map, MolMapError, MolMapResult, Point, Pseudoelement, Spatial, Vector, View,
-    ViewMut,
+    Map, Point, Spatial, Vector,
     atomic::{AtomCore, AtomGraph, AtomMap},
     entities::*,
-    geometry,
-    traits::{Core, Graph, Stores, StoresPosition},
+    traits::{Core, Graph},
     units::Unit,
 };
 
@@ -28,6 +26,7 @@ use super::{MolCore, MolGraph, MolMap};
 /// A map in which the atomic entities and bonds are organized into substituents
 /// and molecules, with positions in `D`-dimensional space.
 #[derive(Clone, Debug, Default)]
+#[allow(dead_code)]
 pub struct SpatialMolMap<const D: usize, U> {
     graph: MolGraph,
     atom_positions: SecondaryMap<AtomKey, Point<D>>,

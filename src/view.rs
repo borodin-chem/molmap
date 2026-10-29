@@ -10,7 +10,7 @@
 
 use std::iter::FusedIterator;
 
-use crate::{Map, entities::*, traits::Stores};
+use crate::entities::*;
 
 // The view structs simply hold an immutable or mutable reference to the parent map,
 // as appropriate, and the corresponding ID. Both have the visibility `pub(crate)`

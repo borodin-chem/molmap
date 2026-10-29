@@ -11,7 +11,7 @@
 
 use std::collections::HashSet;
 
-use crate::{Map, MolMapResult, View, ViewMut, entities::*, molecular::MolMap, traits::Stores};
+use crate::{View, ViewMut, entities::*, molecular::MolMap, traits::Stores};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum SubstituentCentre<'a> {
@@ -33,6 +33,7 @@ pub struct SubstituentData {
     pub(crate) bonds: Vec<Bond>,
 }
 
+#[expect(dead_code)]
 impl SubstituentData {
     /// Creates the data for an empty substituent.
     pub(crate) fn new() -> Self {
@@ -47,7 +48,7 @@ impl SubstituentData {
     pub(crate) fn with_centre(centre: AnyAtomlike) -> Self {
         Self {
             centres: 1,
-            atomlikes: vec![centre.into()],
+            atomlikes: vec![centre],
             bonds: Vec::new(),
         }
     }
@@ -67,7 +68,7 @@ where
     }
 
     /// Returns details of the centre(s) of the substituent.
-    pub fn centres(&self) -> SubstituentCentre {
+    pub fn centres(&self) -> SubstituentCentre<'_> {
         match self.data().centres {
             0 => SubstituentCentre::None,
             1 => SubstituentCentre::Single(self.data().atomlikes.first().unwrap().to_owned()),

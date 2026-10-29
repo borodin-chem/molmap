@@ -42,6 +42,7 @@ use super::entities::*;
 
 /// The internal core of a [`MolMap`] type.
 #[derive(Clone, Debug, Default)]
+#[allow(dead_code)]
 pub struct MolGraph {
     inner: AtomGraph,
     substituents: SlotMap<SubstituentKey, SubstituentData>,
@@ -115,7 +116,6 @@ impl Graph for MolGraph {
 /// Constructor methods.
 impl MolGraph {
     /// Creates a new, empty `MolGraph`.
-    #[expect(dead_code)]
     pub(crate) fn new() -> Self {
         Self {
             inner: AtomGraph::new(),
@@ -150,6 +150,7 @@ impl MolGraph {
 }
 
 /// Methods for entity addition.
+#[allow(dead_code)]
 impl MolGraph {
     /// Adds a substituent to the given molecule with the given atomlike as its centre.
     ///
@@ -212,9 +213,9 @@ impl MolGraph {
     /// Panics if either of `start` and `end` are invalid.
     pub(crate) fn add_bond(
         &mut self,
-        bond_type: BondType,
-        start: impl Bondable,
-        end: impl Bondable,
+        _bond_type: BondType,
+        _start: impl Bondable,
+        _end: impl Bondable,
     ) -> Bond {
         todo!()
     }

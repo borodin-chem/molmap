@@ -7,10 +7,10 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::{
-    BondType, Element, Map, MolMapError, MolMapResult, Pseudoelement, ViewMut,
+    Map,
     atomic::{AtomCore, AtomGraph, AtomMap},
     entities::*,
-    traits::{Core, Graph, Stores},
+    traits::{Core, Graph},
 };
 
 use super::{MolCore, MolGraph, MolMap};
