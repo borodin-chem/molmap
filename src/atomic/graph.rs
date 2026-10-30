@@ -56,22 +56,7 @@ impl_stores!(Atom, atoms);
 impl_stores!(Bond, bonds);
 impl_stores!(Pseudoatom, pseudoatoms);
 
-impl Graph for AtomMap {
-    fn contains_entity<E: Entity>(&self, entity: E) -> bool {
-        match entity.to_resolved() {
-            ResolvedEntity::Atom(atom) => {
-                <AtomMap as Stores<Atom>>::slotmap(self).contains_key(atom.to_key())
-            }
-            ResolvedEntity::Bond(bond) => {
-                <AtomMap as Stores<Bond>>::slotmap(self).contains_key(bond.to_key())
-            }
-            ResolvedEntity::Pseudoatom(pseudoatom) => {
-                <AtomMap as Stores<Pseudoatom>>::slotmap(self).contains_key(pseudoatom.to_key())
-            }
-            _ => false,
-        }
-    }
-}
+impl Graph for AtomMap {}
 
 impl Map for AtomMap {
     type Graph = Self;
@@ -90,6 +75,21 @@ impl Map for AtomMap {
 
     fn as_atomic(&self) -> &AtomMap {
         self
+    }
+
+    fn contains<E: Entity>(&self, entity: E) -> bool {
+        match entity.to_resolved() {
+            ResolvedEntity::Atom(atom) => {
+                <AtomMap as Stores<Atom>>::slotmap(self).contains_key(atom.to_key())
+            }
+            ResolvedEntity::Bond(bond) => {
+                <AtomMap as Stores<Bond>>::slotmap(self).contains_key(bond.to_key())
+            }
+            ResolvedEntity::Pseudoatom(pseudoatom) => {
+                <AtomMap as Stores<Pseudoatom>>::slotmap(self).contains_key(pseudoatom.to_key())
+            }
+            _ => false,
+        }
     }
 }
 

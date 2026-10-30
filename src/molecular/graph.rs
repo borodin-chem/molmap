@@ -95,23 +95,7 @@ macro_rules! impl_stores {
 impl_stores!(Substituent, substituents);
 impl_stores!(Molecule, molecules);
 
-impl Graph for MolMap {
-    fn contains_entity<E: Entity>(&self, entity: E) -> bool {
-        match entity.to_resolved() {
-            ResolvedEntity::Atom(atom) => self.inner.contains(atom),
-            ResolvedEntity::Bond(bond) => self.inner.contains(bond),
-            ResolvedEntity::Pseudoatom(pseudoatom) => self.inner.contains(pseudoatom),
-            ResolvedEntity::Substituent(substituent) => {
-                <MolMap as Stores<Substituent>>::slotmap(self).contains_key(substituent.to_key())
-            }
-            ResolvedEntity::Molecule(molecule) => {
-                <MolMap as Stores<Molecule>>::slotmap(self).contains_key(molecule.to_key())
-            }
-            #[expect(unreachable_patterns)] // Unreachable for now but will be needed later
-            _ => false,
-        }
-    }
-}
+impl Graph for MolMap {}
 
 impl Map for MolMap {
     type Graph = Self;
@@ -130,6 +114,22 @@ impl Map for MolMap {
 
     fn as_atomic(&self) -> &AtomMap {
         &self.inner
+    }
+
+    fn contains<E: Entity>(&self, entity: E) -> bool {
+        match entity.to_resolved() {
+            ResolvedEntity::Atom(atom) => self.inner.contains(atom),
+            ResolvedEntity::Bond(bond) => self.inner.contains(bond),
+            ResolvedEntity::Pseudoatom(pseudoatom) => self.inner.contains(pseudoatom),
+            ResolvedEntity::Substituent(substituent) => {
+                <MolMap as Stores<Substituent>>::slotmap(self).contains_key(substituent.to_key())
+            }
+            ResolvedEntity::Molecule(molecule) => {
+                <MolMap as Stores<Molecule>>::slotmap(self).contains_key(molecule.to_key())
+            }
+            #[expect(unreachable_patterns)] // Unreachable for now but will be needed later
+            _ => false,
+        }
     }
 }
 

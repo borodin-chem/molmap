@@ -165,9 +165,7 @@ pub trait Map: Sized {
     ///
     /// This method must be flexible and able to do the check for any [`Entity`] type,
     /// not just ones actually in the map, and including category types.
-    fn contains<E: Entity>(&self, entity: E) -> bool {
-        self.as_graph().contains_entity(entity)
-    }
+    fn contains<E: Entity>(&self, entity: E) -> bool;
 
     /// Returns an iterator over all of a given kind of entity in the map.
     fn entities<E>(&'_ self) -> Entities<'_, E>
@@ -249,13 +247,7 @@ pub trait Map: Sized {
 
 /// A [`Map`] type that represents a collection of molecular entities only in
 /// the form of a graph, without any spatial information.
-pub trait Graph: Map {
-    /// Checks if the map currently contains the given entity.
-    ///
-    /// This method must be flexible and able to do the check for any Entity type,
-    /// not just ones actually in the map, and including category types.
-    fn contains_entity<E: Entity>(&self, entity: E) -> bool;
-}
+pub trait Graph: Map {}
 
 pub trait Spatial: Map {
     /// The dimensionality of the map, as a type.

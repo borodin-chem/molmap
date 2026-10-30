@@ -31,7 +31,7 @@ use crate::{
     atomic::AtomMap,
     entities::*,
     error::*,
-    traits::{Graph, Stores},
+    traits::{Map, Stores},
 };
 
 /// The result of a traversal step.
@@ -183,8 +183,8 @@ impl<'m> DepthFirstSearch<'m> {
     pub fn new(graph: &'m AtomMap, root: impl Atomlike) -> MolMapResult<Self> {
         let root = root.as_atomlike();
         if !(match root.resolve() {
-            ResolvedAtomlike::Atom(atom) => graph.contains_entity(atom),
-            ResolvedAtomlike::Pseudoatom(pseudoatom) => graph.contains_entity(pseudoatom),
+            ResolvedAtomlike::Atom(atom) => graph.contains(atom),
+            ResolvedAtomlike::Pseudoatom(pseudoatom) => graph.contains(pseudoatom),
         }) {
             return Err(MolMapError::InvalidId(root.into()));
         }

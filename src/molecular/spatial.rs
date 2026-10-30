@@ -62,6 +62,10 @@ impl<const D: usize, U> Map for SpatialMolMap<D, U> {
     fn as_atomic(&self) -> &AtomMap {
         self.graph.as_atomic()
     }
+
+    fn contains<E: Entity>(&self, entity: E) -> bool {
+        self.as_graph().contains(entity)
+    }
 }
 
 impl<const D: usize, U> Molecular for SpatialMolMap<D, U> {

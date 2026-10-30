@@ -62,6 +62,10 @@ impl<const D: usize, U> Map for SpatialAtomMap<D, U> {
     fn as_atomic(&self) -> &AtomMap {
         &self.graph
     }
+
+    fn contains<E: Entity>(&self, entity: E) -> bool {
+        self.as_graph().contains(entity)
+    }
 }
 
 impl<const D: usize, U: Unit> Spatial for SpatialAtomMap<D, U> {
