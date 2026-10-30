@@ -7,18 +7,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 mod graph;
-mod map;
 mod spatial;
-mod three;
-mod two;
-mod zero;
 
 pub(crate) mod entities;
 
-pub(crate) use graph::AtomGraph;
-pub(crate) use map::AtomCore;
-
-pub use map::AtomMap;
-pub use three::AtomMap3;
-pub use two::AtomMap2;
-pub use zero::AtomMap0;
+pub use graph::AtomMap;
+pub use spatial::{AtomMap2, AtomMap3};

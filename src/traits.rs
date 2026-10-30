@@ -14,7 +14,8 @@ use nalgebra as na;
 use slotmap::SlotMap;
 
 use crate::{
-    Point2, Point3, Vector2, Vector3, View, ViewMut, Views, entities::*, error::*, units::Unit,
+    Point2, Point3, Vector2, Vector3, View, ViewMut, Views, atomic::AtomMap, entities::*, error::*,
+    units::Unit,
 };
 
 /// Traits that must remain unnameable from outside the crate.
@@ -71,64 +72,60 @@ mod internal {
         fn set_position(&mut self, entity: E, new: Self::Point) -> Option<Self::Point>;
     }
 
-    /// The internal core of a [`Map`] type that holds the data and core graph
-    /// and exposes an API suitable for use only within the crate.
-    ///
-    /// Each `Map` type holds a corresponding core `Graph` type, but they are not
-    /// meant for downstream use. However, a zero-dimensional variant is provided
-    /// at each layer that provides a pure-graph form for users e.g. [`AtomMap0`],
-    /// [`MolMap0`].
-    ///
-    /// In general, the methods of each `Graph` type should be small in scope and
-    /// efficient so that the higher maps can combine them to create a nice public API.
-    /// In particular, IDs given as arguments are not checked before carrying out
-    /// operations, and are assumed to be valid, and the map types are responsible
-    /// for careful usage. Other things are generally still checked, but in some
-    /// appropriate cases `unchecked_*` versions of methods are available where
-    /// efficiency gains are possible in exchange for decreased caution.
-    pub trait Graph {
-        /// Checks if the graph currently contains the given entity.
-        ///
-        /// This method must be flexible and able to do the check for any Entity type,
-        /// not just ones actually in the map, and including category types.
-        fn contains<E: Entity>(&self, entity: E) -> bool;
-    }
+    ///// A trait required of all implementors of [`Map`] in order to provide access
+    ///// (internally) to their core graph.
+    //pub trait Core {
+    //    type Graph: Graph;
 
-    /// A trait required of all implementors of [`Map`] in order to provide access
-    /// (internally) to their core graph.
-    pub trait Core {
-        type Graph: Graph;
+    //    /// Provides access to the core graph.
+    //    fn graph(&self) -> &Self::Graph;
 
-        /// Provides access to the core graph.
-        fn graph(&self) -> &Self::Graph;
-
-        /// Provides mutable access to the core graph.
-        fn graph_mut(&mut self) -> &mut Self::Graph;
-    }
+    //    /// Provides mutable access to the core graph.
+    //    fn graph_mut(&mut self) -> &mut Self::Graph;
+    //}
 }
 // Re-export for **crate-internal** use
 pub(crate) use internal::*;
 
 /// An arena-like data structure to represent a set of chemical entities, their
 /// properties, and the relationships between them, with or without spatial positions.
-///
-/// Most interaction with the crate's map types is through entity IDs and views of
-/// the entities. This trait provides methods for:
-/// 1. obtaining an immutable or mutable view of an entity from its ID
-/// 2. verifying an ID
-/// 3. iterating over views of all of a given kind of entity
-/// 4. iterating over all IDs of a given kind of entity
-///
-/// Other map-level methods are provided as inherent implementations on the map
-/// itself, as methods of the layer traits (`AtomMap`, `MolMap`, `RxnMap`), or
-/// via the `Spatial` trait for maps with spatial positions.
-///
-/// All implementors of `Map` provide methods for adding new entities; these are
-/// not trait methods because the signature for these will vary according to the
-/// needs of the concrete map type.
-///
-/// This trait is sealed and is not intended for implementation outside of `molmap`.
-pub trait Map: Core + Sized {
+pub trait Map: Sized {
+    // Most interaction with the crate's map types is through entity IDs and views of
+    // the entities. This trait provides methods for:
+    // 1. obtaining an immutable or mutable view of an entity from its ID
+    // 2. verifying an ID
+    // 3. iterating over views of all of a given kind of entity
+    // 4. iterating over all IDs of a given kind of entity
+    //
+    // Other map-level methods are provided as inherent implementations on the map
+    // itself, as methods of the layer traits, or via the `Spatial` trait for maps
+    // with spatial positions.
+    //
+    // All implementors of `Map` provide methods for adding new entities; these are
+    // not trait methods because the signature for these will vary according to the
+    // needs of the concrete map type.
+    //
+    // This trait is sealed and is not intended for implementation outside of `molmap`.
+
+    /// The corresponding map type that has no spatial positions.
+    ///
+    /// For pure-graph maps, this is simply `Self`.
+    type Graph: Graph;
+
+    /// Returns the map without any spatial positions.
+    ///
+    /// For pure-graph maps, this simply returns `self`.
+    fn into_graph(self) -> Self::Graph;
+
+    /// Provides read-only access to the graph in a generic fashion.
+    fn as_graph(&self) -> &Self::Graph;
+
+    /// Returns the the core network of atoms and bonds without any spatial positions.
+    fn into_atomic(self) -> AtomMap;
+
+    /// Provides read-only access to the core network of atoms and bonds.
+    fn as_atomic(&self) -> &AtomMap;
+
     // Constructors
     // ------------
 
@@ -168,7 +165,9 @@ pub trait Map: Core + Sized {
     ///
     /// This method must be flexible and able to do the check for any [`Entity`] type,
     /// not just ones actually in the map, and including category types.
-    fn contains<E: Entity>(&self, entity: E) -> bool;
+    fn contains<E: Entity>(&self, entity: E) -> bool {
+        self.as_graph().contains(entity)
+    }
 
     /// Returns an iterator over all of a given kind of entity in the map.
     fn entities<E>(&'_ self) -> Entities<'_, E>
@@ -176,7 +175,7 @@ pub trait Map: Core + Sized {
         E: Kind,
         Self::Graph: Stores<E>,
     {
-        Entities::from_keys(self.graph().keys())
+        Entities::from_keys(self.as_graph().keys())
     }
 
     // Getters
@@ -248,7 +247,17 @@ pub trait Map: Core + Sized {
     }
 }
 
-pub trait Spatial {
+/// A [`Map`] type that represents a collection of molecular entities only in
+/// the form of a graph, without any spatial information.
+pub trait Graph: Map {
+    /// Checks if the map currently contains the given entity.
+    ///
+    /// This method must be flexible and able to do the check for any Entity type,
+    /// not just ones actually in the map, and including category types.
+    fn contains_entity<E: Entity>(&self, entity: E) -> bool;
+}
+
+pub trait Spatial: Map {
     /// The dimensionality of the map, as a type.
     type DimName: na::DimName;
 

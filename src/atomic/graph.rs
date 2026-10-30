@@ -7,28 +7,29 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 //! Definition of the data structure that holds the core graph of atoms and bonds.
-//!
-//! For an `AtomMap` type, the following invariants are promised and must be made
-//! sure to hold:
-//!
-//! 1. Bonds only exist as long as both bonding partners continue to exist.
-//! 2. The two bonding partners of a bond are always different.
-//! 3. Only one `Bond` can connect a given pair of bonding partners (though
-//!    that bond may be a double/triple/etc. bond).
 
 use slotmap::SlotMap;
 
 use crate::{
-    Element, Pseudoelement,
+    Element, Map, MolMapError, MolMapResult, Pseudoelement, ViewMut,
     entities::*,
     traits::{Graph, Stores, StoresMut},
 };
 
 use super::entities::*;
 
-/// The internal core of an [`AtomMap`] type.
+/// A map holding fundamental atomic entities, and a network of bonds between them.
+///
+/// This is the basic graph at the core of all other [`Map`] types.
+///
+/// The following invariants are promised to hold:
+///
+/// 1. Bonds only exist as long as both bonding partners continue to exist.
+/// 2. The two bonding partners of a bond are always different.
+/// 3. Only one `Bond` entity can connect a given pair of bonding partners
+///    (though that bond may be a double bond/triple bond/etc.).
 #[derive(Clone, Debug, Default)]
-pub struct AtomGraph {
+pub struct AtomMap {
     atoms: SlotMap<AtomKey, AtomData>,
     pseudoatoms: SlotMap<PseudoatomKey, PseudoatomData>,
     bonds: SlotMap<BondKey, BondData>,
@@ -36,13 +37,13 @@ pub struct AtomGraph {
 
 macro_rules! impl_stores {
     ($kind: ident, $attr: ident) => {
-        impl Stores<$kind> for AtomGraph {
+        impl Stores<$kind> for AtomMap {
             fn slotmap(&self) -> &SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {
                 &self.$attr
             }
         }
 
-        impl StoresMut<$kind> for AtomGraph {
+        impl StoresMut<$kind> for AtomMap {
             fn slotmap_mut(
                 &mut self,
             ) -> &mut SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {
@@ -55,27 +56,47 @@ impl_stores!(Atom, atoms);
 impl_stores!(Bond, bonds);
 impl_stores!(Pseudoatom, pseudoatoms);
 
-impl Graph for AtomGraph {
-    fn contains<E: Entity>(&self, entity: E) -> bool {
+impl Graph for AtomMap {
+    fn contains_entity<E: Entity>(&self, entity: E) -> bool {
         match entity.to_resolved() {
             ResolvedEntity::Atom(atom) => {
-                <AtomGraph as Stores<Atom>>::slotmap(self).contains_key(atom.to_key())
+                <AtomMap as Stores<Atom>>::slotmap(self).contains_key(atom.to_key())
             }
             ResolvedEntity::Bond(bond) => {
-                <AtomGraph as Stores<Bond>>::slotmap(self).contains_key(bond.to_key())
+                <AtomMap as Stores<Bond>>::slotmap(self).contains_key(bond.to_key())
             }
             ResolvedEntity::Pseudoatom(pseudoatom) => {
-                <AtomGraph as Stores<Pseudoatom>>::slotmap(self).contains_key(pseudoatom.to_key())
+                <AtomMap as Stores<Pseudoatom>>::slotmap(self).contains_key(pseudoatom.to_key())
             }
             _ => false,
         }
     }
 }
 
+impl Map for AtomMap {
+    type Graph = Self;
+
+    fn into_graph(self) -> Self::Graph {
+        self
+    }
+
+    fn as_graph(&self) -> &Self {
+        self
+    }
+
+    fn into_atomic(self) -> AtomMap {
+        self
+    }
+
+    fn as_atomic(&self) -> &AtomMap {
+        self
+    }
+}
+
 /// Constructor methods.
-impl AtomGraph {
+impl AtomMap {
     /// Creates a new, empty `AtomGraph`.
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             atoms: SlotMap::with_key(),
             pseudoatoms: SlotMap::with_key(),
@@ -84,8 +105,7 @@ impl AtomGraph {
     }
 
     /// Creates a new `AtomGraph` with the specified capacities for each kind of entity.
-    #[expect(dead_code)]
-    pub(crate) fn with_capacities(atoms: usize, pseudoatoms: usize, bonds: usize) -> Self {
+    pub fn with_capacities(atoms: usize, pseudoatoms: usize, bonds: usize) -> Self {
         Self {
             atoms: SlotMap::with_capacity_and_key(atoms),
             pseudoatoms: SlotMap::with_capacity_and_key(pseudoatoms),
@@ -95,30 +115,62 @@ impl AtomGraph {
 }
 
 /// Methods for entity addition.
-impl AtomGraph {
+impl AtomMap {
     /// Adds an atom to the map.
-    pub(crate) fn add_atom(&mut self, element: Element) -> Atom {
+    pub fn add_atom(&mut self, element: Element) -> Atom {
         self.atoms.insert(AtomData::new(element)).into()
     }
 
+    /// Adds an atom to the map along with the requested number of hydrogen atoms
+    /// (and single covalent bonds from the central atom to them).
+    ///
+    /// Returns the ID of the added central atom as well as a slice over the IDs
+    /// of the new bonds.
+    pub fn add_atom_with_hydrogen(&mut self, element: Element, n_hydrogen: u8) -> (Atom, &[Bond]) {
+        let centre = self.add_atom(element);
+        for _ in 0..n_hydrogen {
+            let new_h = self.add_atom(Element::H);
+            self.add_bond_unchecked(BondType::Covalent { order: 1.0 }, centre, new_h);
+        }
+        // Don't waste memory allocating a new Vec to hold the bond IDs, since
+        // they are already stored on the new central atom – return a slice instead
+        (
+            centre,
+            self.data(centre)
+                .expect("We just created this atom, so ID must be valid")
+                .bonds
+                .as_slice(),
+        )
+    }
+
+    /// Adds an atom to the map along with the number of additional hydrogen atoms
+    /// required to satisfy the most common valency for the central atom (and single
+    /// covalent bonds from the central atom to them).
+    ///
+    /// Returns the ID of the added central atom as well as a slice over the IDs
+    /// of the new bonds.
+    pub fn add_atom_and_saturate(&mut self, element: Element) -> (Atom, &[Bond]) {
+        let n_hydrogen = element.default_valency();
+        self.add_atom_with_hydrogen(element, n_hydrogen)
+    }
+
     /// Adds a pseudoatom to the map.
-    pub(crate) fn add_pseudoatom(&mut self, pseudoelement: Pseudoelement) -> Pseudoatom {
+    pub fn add_pseudoatom(&mut self, pseudoelement: Pseudoelement) -> Pseudoatom {
         self.pseudoatoms
             .insert(PseudoatomData::new(pseudoelement))
             .into()
     }
 
-    /// Creates a new bond between two bondable entities.
+    /// Creates a new bond between two bondable entities without validating them first.
     ///
     /// # Panics
     ///
     /// Panics if either of `start` and `end` are invalid.
-    pub(crate) fn add_bond(
-        &mut self,
-        bond_type: BondType,
-        start: impl Bondable,
-        end: impl Bondable,
-    ) -> Bond {
+    pub fn add_bond_unchecked<A, B>(&mut self, bond_type: BondType, start: A, end: B) -> Bond
+    where
+        A: Bondable,
+        B: Bondable,
+    {
         let bond: Bond = self
             .bonds
             .insert(BondData::new(
@@ -142,10 +194,54 @@ impl AtomGraph {
         }
         bond
     }
+
+    /// Creates a new bond between two bondable entities.
+    ///
+    /// # Errors
+    ///
+    /// Fails if either of `start` and `end` are invalid.
+    pub fn add_bond<A, B>(&mut self, bond_type: BondType, start: A, end: B) -> MolMapResult<Bond>
+    where
+        A: Bondable,
+        B: Bondable,
+    {
+        if !self.contains(start) {
+            return Err(MolMapError::InvalidId(start.as_entity()));
+        } else if !self.contains(end) {
+            return Err(MolMapError::InvalidId(end.as_entity()));
+        };
+        Ok(self.add_bond_unchecked(bond_type, start, end))
+    }
+
+    /// Creates a new single covalent bond between two bondable entities.
+    ///
+    /// # Errors
+    ///
+    /// Fails if either of `start` and `end` are invalid.
+    pub fn add_single_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    where
+        A: Bondable,
+        B: Bondable,
+    {
+        self.add_bond(BondType::Covalent { order: 1.0 }, start, end)
+    }
+
+    /// Creates a new double covalent bond between two bondable entities.
+    ///
+    /// # Errors
+    ///
+    /// Fails if either of `start` and `end` are invalid.
+    pub fn add_double_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    where
+        A: Bondable,
+        B: Bondable,
+    {
+        self.add_bond(BondType::Covalent { order: 2.0 }, start, end)
+    }
 }
 
 /// Methods for entity removal.
-impl AtomGraph {
+impl AtomMap {
     /// Removes an atom from the map, as well as any bonds to it.
     ///
     /// Returns whether the atom was present in the map.
@@ -223,49 +319,72 @@ impl AtomGraph {
     }
 }
 
+// Public API for deleting entities via mutable views
+
+impl<'m> ViewMut<'m, AtomMap, Atom> {
+    /// Removes the atom from the map, as well as any bonds to it.
+    pub fn delete(self) {
+        self.map.delete_atom(self.id);
+    }
+}
+
+impl<'m> ViewMut<'m, AtomMap, Pseudoatom> {
+    /// Removes the pseudoatom from the map, as well as any bonds to it.
+    pub fn delete(self) {
+        self.map.delete_pseudoatom(self.id);
+    }
+}
+
+impl<'m> ViewMut<'m, AtomMap, Bond> {
+    /// Removes the bond from the map (but not its bonding partners).
+    pub fn delete(self) {
+        self.map.delete_bond(self.id);
+    }
+}
+
 #[cfg(test)]
 #[allow(unused)]
 pub(crate) mod tests {
     use super::*;
 
     /// Creates a basic graph to use as the basis for various tests.
-    pub(crate) fn meoh_graph() -> AtomGraph {
-        let mut g = AtomGraph::new();
+    pub(crate) fn meoh_graph() -> AtomMap {
+        let mut g = AtomMap::new();
         let h1 = g.add_atom(Element::H);
         let h2 = g.add_atom(Element::H);
         let h3 = g.add_atom(Element::H);
         let c1 = g.add_atom(Element::C);
-        let c1h1 = g.add_bond(BondType::Covalent { order: 1.0 }, c1, h1);
-        let c1h2 = g.add_bond(BondType::Covalent { order: 1.0 }, c1, h2);
-        let c1h3 = g.add_bond(BondType::Covalent { order: 1.0 }, c1, h3);
+        let c1h1 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h1);
+        let c1h2 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h2);
+        let c1h3 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h3);
         let o1 = g.add_atom(Element::O);
         let h4 = g.add_atom(Element::H);
-        let o1h4 = g.add_bond(BondType::Covalent { order: 1.0 }, o1, h4);
-        let c1o1 = g.add_bond(BondType::Covalent { order: 1.0 }, c1, o1);
+        let o1h4 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, o1, h4);
+        let c1o1 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, o1);
         g
     }
 
     #[test]
     fn slotmap() {
-        let g = AtomGraph::new();
+        let g = AtomMap::new();
         // Make sure that the generic slotmap method returns a reference to the appropriate slotmap
         assert!(std::ptr::eq(
-            <AtomGraph as Stores<Atom>>::slotmap(&g),
+            <AtomMap as Stores<Atom>>::slotmap(&g),
             &g.atoms
         ));
         assert!(std::ptr::eq(
-            <AtomGraph as Stores<Bond>>::slotmap(&g),
+            <AtomMap as Stores<Bond>>::slotmap(&g),
             &g.bonds
         ));
         assert!(std::ptr::eq(
-            <AtomGraph as Stores<Pseudoatom>>::slotmap(&g),
+            <AtomMap as Stores<Pseudoatom>>::slotmap(&g),
             &g.pseudoatoms
         ));
     }
 
     #[test]
     fn data() {
-        let mut g = AtomGraph::new();
+        let mut g = AtomMap::new();
         let h1 = g.add_atom(Element::H);
         let ph = g.add_pseudoatom(Pseudoelement::Ph);
         // Make sure that the generic data method returns a reference to the appropriate entity data struct
@@ -281,7 +400,7 @@ pub(crate) mod tests {
 
     #[test]
     fn contains() {
-        let mut g = AtomGraph::new();
+        let mut g = AtomMap::new();
         let h1 = g.add_atom(Element::H);
         assert!(g.contains(h1));
         let ph = g.add_pseudoatom(Pseudoelement::Ph);
@@ -295,7 +414,7 @@ pub(crate) mod tests {
 
     #[test]
     fn add_atom() {
-        let mut g = AtomGraph::new();
+        let mut g = AtomMap::new();
         assert!(g.atoms.is_empty());
         let h1 = g.add_atom(Element::H);
         assert_eq!(g.atoms.len(), 1);
@@ -310,7 +429,7 @@ pub(crate) mod tests {
 
     #[test]
     fn add_pseudoatom() {
-        let mut g = AtomGraph::new();
+        let mut g = AtomMap::new();
         assert!(g.pseudoatoms.is_empty());
         let ph = g.add_pseudoatom(Pseudoelement::Ph);
         assert_eq!(g.pseudoatoms.len(), 1);
@@ -318,7 +437,7 @@ pub(crate) mod tests {
 
     #[test]
     fn delete_atom() {
-        let mut g = AtomGraph::new();
+        let mut g = AtomMap::new();
         let h1 = g.add_atom(Element::H);
         let c1 = g.add_atom(Element::C);
         assert_eq!(g.atoms.len(), 2);
@@ -332,7 +451,7 @@ pub(crate) mod tests {
 
     #[test]
     fn delete_pseudoatom() {
-        let mut g = AtomGraph::new();
+        let mut g = AtomMap::new();
         let et = g.add_pseudoatom(Pseudoelement::Et);
         assert_eq!(g.pseudoatoms.len(), 1);
         g.delete_pseudoatom(et);
@@ -341,11 +460,11 @@ pub(crate) mod tests {
 
     #[test]
     fn add_bond_between_atoms() {
-        let mut g = AtomGraph::new();
+        let mut g = AtomMap::new();
         assert!(g.bonds.is_empty());
         let h1 = g.add_atom(Element::H);
         let h2 = g.add_atom(Element::H);
-        let b1 = g.add_bond(BondType::Covalent { order: 1.0 }, h1, h2);
+        let b1 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, h1, h2);
         assert_eq!(g.bonds.len(), 1);
         assert!(g.contains(b1));
         assert!(g.atoms.get(h1.into()).unwrap().bonds.contains(&b1));
@@ -356,10 +475,10 @@ pub(crate) mod tests {
 
     #[test]
     fn delete_bond_between_atoms() {
-        let mut g = AtomGraph::new();
+        let mut g = AtomMap::new();
         let h1 = g.add_atom(Element::H);
         let h2 = g.add_atom(Element::H);
-        let b1 = g.add_bond(BondType::Covalent { order: 1.0 }, h1, h2);
+        let b1 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, h1, h2);
         for h in [h1, h2] {
             assert!(g.atoms.get(h.into()).unwrap().bonds.contains(&b1));
         }
@@ -379,10 +498,10 @@ pub(crate) mod tests {
 
     #[test]
     fn deleting_bonding_partner_deletes_bond() {
-        let mut g = AtomGraph::new();
+        let mut g = AtomMap::new();
         let h1 = g.add_atom(Element::H);
         let h2 = g.add_atom(Element::H);
-        let b1 = g.add_bond(BondType::Covalent { order: 1.0 }, h1, h2);
+        let b1 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, h1, h2);
         // Delete one of the bonding atoms and check the effects
         g.delete_atom(h1);
         // Atom should obviously be gone
