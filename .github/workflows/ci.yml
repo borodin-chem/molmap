@@ -42,4 +42,12 @@ jobs:
       - uses: actions/checkout@v7
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: cargo build --verbose
-      - run: cargo test --verbose
+      - run: cargo test --verbose --test-threads=1
+
+      - name: Backtrace on overflow
+        if: failure()
+        run: |
+          sudo apt-get install -y gdb jq
+          BIN=$(cargo test --no-run --message-format=json \
+                | jq -r 'select(.profile.test == true) | .executable' | head -n1)
+          gdb -batch -ex run -ex "bt 40" --args "$BIN" add_bond_between_atoms --test-threads=1
