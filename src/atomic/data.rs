@@ -6,61 +6,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! The data held by an `AtomGraph` for the fundamental entities, and the view
-//! methods to access it.
-//!
-//! # A note on crate organization
-//!
-//! By the very nature of the MolMap types, the data and functionality pertaining
-//! to a particular kind of entity is implemented across many different types.
-//! Some data is contained in the MolGraph, in the structs defined below, while
-//! some (e.g. positional information) is held by higher map types.
-//! Some of the internal functions that handle the entities are defined on
-//! MolGraph, some in the MolMap trait, some on the higher maps such as MolMap0
-//! or SpatialMolMap, some on the entities, and a very small number of them on
-//! the data structs themselves.
-//! Because Rust is compiled by crate, we are presented with two good options for
-//! organizing the code.
-//!
-//! Firstly, it would actually be possible to collect *everything* related to a
-//! single entity type together, e.g. put all code for atoms in a single `atom`
-//! module, and do likewise for each of the entity types. This would put the
-//! definition of the corresponding Entity type, the core data struct, any
-//! additional data, the methods on the different maps, the methods on the
-//! different views, etc. all in a single file. General things, such as the
-//! Entity trait or the macro to define a new Kind, would remain at the top level.
-//!
-//! The other good option, and the one currently taken, is to organize the code
-//! into modules by the thing being implemented e.g. the core data, spatial data,
-//! methods on MolGraph, on MolMap, on SpatialMolMap, on the general MolMap views,
-//! on SpatialMolMap views, etc.
-//! If desired this approach can be further split up e.g. different modules for
-//! the different kinds of functionality of a SpatialMolMap.
-//!
-//! The first approach would make it easier to see and change the behaviour of a
-//! single kind of entity all at once, and to have a better overview of what is
-//! implemented for it at each level.
-//! However, it makes parallel implementation of the same or similar things for
-//! multiple kinds of entity much harder.
-//! It also creates a lot of circular dependencies, which while not technically a
-//! problem due to the crate-level compilation do still feel kind of bad.
-//! The second option also fits better the way the crate is actually used - you
-//! are more likely to want to work with (and thus import) the Entity types for
-//! all kinds of entity at once, or all spatial stuff for all kinds at once.
-//!
-//! As such, this module contains the **core data structs** for *all* entity
-//! kinds in a single file, as well as any **methods on completely generic views**
-//! for access and manipulation **of the core data**.
-//! As the maps are generally expected to want side-effects to occur when the
-//! core data is changed, the methods implemented completely generically are
-//! on the whole (currently, exclusively) confined to *access* via the immutable
-//! views.
-//!
-//! It also currently contains many types necessary for the definitions of the
-//! core structs e.g. [`BondType`] and [`SubstituentCentre`], but these may well
-//! be moved in the future.
+//! The data held by an `AtomGraph` for the fundamental entities.
 
-use crate::{Element, Map, Pseudoelement, View, entities::*, traits::Stores};
+use crate::{Element, Pseudoelement, entities::*};
 
 /// The core data of an atom entity.
 #[derive(Clone, Debug)]
@@ -82,28 +30,6 @@ impl Stored for Atom {
     type Data = AtomData;
 }
 
-impl<'m, M> View<'m, M, Atom>
-where
-    M: Map,
-{
-    /// Returns a reference to the data struct in the core graph.
-    fn data(&self) -> &AtomData {
-        self.map.as_atomic().data(self.id).unwrap()
-    }
-
-    pub fn element(&self) -> Element {
-        self.data().element
-    }
-
-    pub fn symbol(&self) -> &str {
-        self.data().element.symbol()
-    }
-
-    pub fn bonds(&self) -> &[Bond] {
-        &self.data().bonds
-    }
-}
-
 /// The core data of a pseudoatom entity.
 #[derive(Clone, Debug)]
 pub struct PseudoatomData {
@@ -123,20 +49,6 @@ impl PseudoatomData {
 
 impl Stored for Pseudoatom {
     type Data = PseudoatomData;
-}
-
-impl<'m, M> View<'m, M, Pseudoatom>
-where
-    M: Map,
-{
-    /// Returns a reference to the data struct in the core graph.
-    fn data(&self) -> &PseudoatomData {
-        self.map.as_atomic().data(self.id).unwrap()
-    }
-
-    pub fn bonds(&self) -> &[Bond] {
-        &self.data().bonds
-    }
 }
 
 /// The type of a bond e.g. covalent, ionic, hydrogen.
@@ -289,48 +201,4 @@ impl BondData {
 
 impl Stored for Bond {
     type Data = BondData;
-}
-
-impl<'m, M> View<'m, M, Bond>
-where
-    M: Map,
-{
-    /// Returns a reference to the data struct in the core graph.
-    fn data(&self) -> &BondData {
-        self.map.as_atomic().data(self.id).unwrap()
-    }
-
-    pub fn bond_type(&self) -> BondType {
-        self.data().bond_type
-    }
-
-    /// Returns `true` if the bond type is covalent/dipolar, ionic, metallic, or
-    /// the `OtherStrong` variant.
-    ///
-    /// Note that this excludes hydrogen bonds and σ-hole interactions, even though
-    /// these can in some cases have considerable strength.
-    pub fn is_strong(&self) -> bool {
-        self.bond_type().is_strong()
-    }
-
-    /// Returns `true` if the bond type is covalent or dipolar.
-    pub fn is_covalent(&self) -> bool {
-        self.bond_type().is_covalent()
-    }
-
-    /// Returns the order of a covalent bond, or `None` otherwise.
-    ///
-    /// A dipolar bond is considered covalent.
-    pub fn order(&self) -> Option<f32> {
-        match self.data().bond_type {
-            BondType::Covalent { order } => Some(order),
-            BondType::Dipolar { order } => Some(order),
-            _ => None,
-        }
-    }
-
-    pub fn partners(&self) -> [AnyBondable; 2] {
-        let data = self.data();
-        [data.start, data.end]
-    }
 }

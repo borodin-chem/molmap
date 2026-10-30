@@ -44,7 +44,7 @@ pub mod molecular;
 
 // Top-level items
 // ---------------
-pub use atomic::entities::BondType;
+pub use atomic::data::BondType;
 pub use atomic::{AtomMap, AtomMap2, AtomMap3};
 pub use element::Element;
 pub use entities::{Atom, Bond, Molecule, Pseudoatom, Substituent};

@@ -143,36 +143,6 @@ impl<const D: usize, U: Unit> SpatialAtomMap<D, U> {
     }
 }
 
-// Public API for deleting entities/changing their collection membership via mutable views
-//
-// For now these are identical to the equivalents for MolMap0, but may well
-// diverge in future e.g. if we cache emergent information like the bond vectors
-// or the centroids or bounding boxes of the collections.
-//
-// It is not necessary to delete the positions from the SecondaryMap; they will
-// be overwritten.
-
-impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Atom> {
-    /// Removes the atom from the map, as well as any bonds to it.
-    pub fn delete(self) {
-        self.map.graph.delete_atom(self.id);
-    }
-}
-
-impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Pseudoatom> {
-    /// Removes the pseudoatom from the map, as well as any bonds to it.
-    pub fn delete(self) {
-        self.map.graph.delete_pseudoatom(self.id);
-    }
-}
-
-impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Bond> {
-    /// Removes the bond from the map (but not its bonding partners).
-    pub fn delete(self) {
-        self.map.graph.delete_bond(self.id);
-    }
-}
-
 // Methods for accessing and calculating positions.
 impl<const D: usize, U: Unit> SpatialAtomMap<D, U> {
     /// Returns the position of the given atom or pseudoatom.
@@ -315,58 +285,87 @@ impl<const D: usize, U: Unit> StoresPosition<Pseudoatom> for SpatialAtomMap<D, U
     }
 }
 
-impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Atom> {
-    /// Returns the position of the atom.
-    pub fn position(&self) -> &Point<D> {
-        self.map.position(self.id).unwrap()
-    }
-}
+/// View methods specific to `SpatialAtomMap`.
+mod views {
+    use super::*;
 
-impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Atom> {
-    /// Sets the position of the atom to the provided value.
-    pub fn set_position(self, position: Point<D>) {
-        self.map.set_position(self.id, position);
-    }
-}
-
-impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Pseudoatom> {
-    /// Returns the position of the pseudoatom.
-    pub fn position(&self) -> &Point<D> {
-        self.map.position(self.id).unwrap()
-    }
-}
-
-impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Pseudoatom> {
-    /// Sets the position of the pseudoatom to the provided value.
-    pub fn set_position(self, position: Point<D>) {
-        self.map.set_position(self.id, position);
-    }
-}
-
-impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Bond> {
-    /// Returns the position of the [`Bondable`] from which the bond starts.
-    pub fn origin(&self) -> &Point<D> {
-        self.map.bond_origin(self.id)
+    impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Atom> {
+        /// Returns the position of the atom.
+        pub fn position(&self) -> &Point<D> {
+            self.map.position(self.id).unwrap()
+        }
     }
 
-    /// Returns the position of the [`Bondable`] at which the bond ends.
-    pub fn terminus(&self) -> &Point<D> {
-        self.map.bond_terminus(self.id)
+    // For now the deletion methods are identical to the equivalents for AtomMap.
+    // They may well diverge in future e.g. if we cache emergent information like
+    // the bond vectors or the centroids or bounding boxes of the collections.
+    //
+    // It is not necessary to delete the positions from the SecondaryMap; they will
+    // be overwritten.
+
+    impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Atom> {
+        /// Removes the atom from the map, as well as any bonds to it.
+        pub fn delete(self) {
+            self.map.graph.delete_atom(self.id);
+        }
+
+        /// Sets the position of the atom to the provided value.
+        pub fn set_position(self, position: Point<D>) {
+            self.map.set_position(self.id, position);
+        }
     }
 
-    /// Calculates the midpoint of the bond.
-    pub fn midpoint(&self) -> Point<D> {
-        self.map.bond_midpoint(self.id)
+    impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Pseudoatom> {
+        /// Returns the position of the pseudoatom.
+        pub fn position(&self) -> &Point<D> {
+            self.map.position(self.id).unwrap()
+        }
     }
 
-    /// Calculates the vector that the bond follows from its origin to its terminus.
-    pub fn vector(&self) -> Vector<D> {
-        self.map.bond_vector(self.id)
+    impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Pseudoatom> {
+        /// Removes the pseudoatom from the map, as well as any bonds to it.
+        pub fn delete(self) {
+            self.map.graph.delete_pseudoatom(self.id);
+        }
+
+        /// Sets the position of the pseudoatom to the provided value.
+        pub fn set_position(self, position: Point<D>) {
+            self.map.set_position(self.id, position);
+        }
     }
 
-    /// Calculates the distance from the bond's origin to its terminus.
-    pub fn length(&self) -> f64 {
-        self.vector().magnitude()
+    impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Bond> {
+        /// Returns the position of the [`Bondable`] from which the bond starts.
+        pub fn origin(&self) -> &Point<D> {
+            self.map.bond_origin(self.id)
+        }
+
+        /// Returns the position of the [`Bondable`] at which the bond ends.
+        pub fn terminus(&self) -> &Point<D> {
+            self.map.bond_terminus(self.id)
+        }
+
+        /// Calculates the midpoint of the bond.
+        pub fn midpoint(&self) -> Point<D> {
+            self.map.bond_midpoint(self.id)
+        }
+
+        /// Calculates the vector that the bond follows from its origin to its terminus.
+        pub fn vector(&self) -> Vector<D> {
+            self.map.bond_vector(self.id)
+        }
+
+        /// Calculates the distance from the bond's origin to its terminus.
+        pub fn length(&self) -> f64 {
+            self.vector().magnitude()
+        }
+    }
+
+    impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Bond> {
+        /// Removes the bond from the map (but not its bonding partners).
+        pub fn delete(self) {
+            self.map.graph.delete_bond(self.id);
+        }
     }
 }
 
