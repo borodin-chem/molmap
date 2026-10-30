@@ -28,10 +28,10 @@
 use std::collections::HashSet;
 
 use crate::{
-    atomic::AtomGraph,
+    atomic::AtomMap,
     entities::*,
     error::*,
-    traits::{Graph, Stores},
+    traits::{Map, Stores},
 };
 
 /// The result of a traversal step.
@@ -165,7 +165,7 @@ struct StackItem {
 /// then pseudoatoms.
 #[derive(Debug)]
 pub struct DepthFirstSearch<'m> {
-    graph: &'m AtomGraph,
+    graph: &'m AtomMap,
     /// All visited nodes, whether partially or fully explored.
     visited_nodes: HashSet<AnyAtomlike>,
     explored_edges: HashSet<Bond>,
@@ -180,7 +180,7 @@ impl<'m> DepthFirstSearch<'m> {
     ///
     /// Fails if the graph does not contain any atoms or pseudoatoms at all, or if
     /// the root is not a member of the graph.
-    pub fn new(graph: &'m AtomGraph, root: impl Atomlike) -> MolMapResult<Self> {
+    pub fn new(graph: &'m AtomMap, root: impl Atomlike) -> MolMapResult<Self> {
         let root = root.as_atomlike();
         if !(match root.resolve() {
             ResolvedAtomlike::Atom(atom) => graph.contains(atom),
@@ -191,11 +191,11 @@ impl<'m> DepthFirstSearch<'m> {
         let mut traversal = Self {
             graph,
             visited_nodes: HashSet::with_capacity(
-                <AtomGraph as Stores<Atom>>::count(graph)
-                    + <AtomGraph as Stores<Pseudoatom>>::count(graph),
+                <AtomMap as Stores<Atom>>::count(graph)
+                    + <AtomMap as Stores<Pseudoatom>>::count(graph),
             ),
-            explored_edges: HashSet::with_capacity(<AtomGraph as Stores<Bond>>::count(graph)),
-            stack: Vec::with_capacity(<AtomGraph as Stores<Atom>>::count(graph) / 2), // Be generous but assume at least half of nodes/atoms are pendant
+            explored_edges: HashSet::with_capacity(<AtomMap as Stores<Bond>>::count(graph)),
+            stack: Vec::with_capacity(<AtomMap as Stores<Atom>>::count(graph) / 2), // Be generous but assume at least half of nodes/atoms are pendant
             current_node: root,
         };
         // Visit root, populate its queue so that we're ready to go
@@ -478,34 +478,34 @@ mod tests {
 
     #[test]
     fn invalid_root() {
-        let mut g = AtomGraph::new();
+        let mut g = AtomMap::new();
         let h1 = g.add_atom(Element::H);
         g.delete_atom(h1);
         let h2 = g.add_atom(Element::H);
         let h3 = g.add_atom(Element::H);
-        g.add_bond(BondType::Covalent { order: 1.0 }, h2, h3);
+        g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, h2, h3);
         assert!(DepthFirstSearch::new(&g, h1).is_err());
     }
 
     #[test]
     fn linear() {
         // Traverse ethane, starting at one of the hydrogen atoms
-        let mut g = AtomGraph::new();
+        let mut g = AtomMap::new();
         let c1 = g.add_atom(Element::C);
         let h1 = g.add_atom(Element::H);
         let h2 = g.add_atom(Element::H);
         let h3 = g.add_atom(Element::H);
-        let c1h1 = g.add_bond(BondType::Covalent { order: 1.0 }, c1, h1);
-        let c1h2 = g.add_bond(BondType::Covalent { order: 1.0 }, c1, h2);
-        let c1h3 = g.add_bond(BondType::Covalent { order: 1.0 }, c1, h3);
+        let c1h1 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h1);
+        let c1h2 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h2);
+        let c1h3 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h3);
         let c2 = g.add_atom(Element::C);
         let h4 = g.add_atom(Element::H);
         let h5 = g.add_atom(Element::H);
         let h6 = g.add_atom(Element::H);
-        let c2h4 = g.add_bond(BondType::Covalent { order: 1.0 }, c2, h4);
-        let c2h5 = g.add_bond(BondType::Covalent { order: 1.0 }, c2, h5);
-        let c2h6 = g.add_bond(BondType::Covalent { order: 1.0 }, c2, h6);
-        let c1c2 = g.add_bond(BondType::Covalent { order: 1.0 }, c1, c2);
+        let c2h4 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, h4);
+        let c2h5 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, h5);
+        let c2h6 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, h6);
+        let c1c2 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, c2);
         let mut traversal = DepthFirstSearch::new(&g, h1).unwrap();
         assert_eq!(
             traversal.next(),
@@ -580,24 +580,24 @@ mod tests {
     #[test]
     fn branched() {
         // Traverse propane, starting at the carbon in the middle of the chain
-        let mut g = AtomGraph::new();
+        let mut g = AtomMap::new();
         let c1 = g.add_atom(Element::C);
         for _ in 0..3 {
             let h = g.add_atom(Element::H);
-            g.add_bond(BondType::Covalent { order: 1.0 }, c1, h);
+            g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h);
         }
         let c2 = g.add_atom(Element::C);
         for _ in 0..2 {
             let h = g.add_atom(Element::H);
-            g.add_bond(BondType::Covalent { order: 1.0 }, c2, h);
+            g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, h);
         }
         let c3 = g.add_atom(Element::C);
         for _ in 0..3 {
             let h = g.add_atom(Element::H);
-            g.add_bond(BondType::Covalent { order: 1.0 }, c3, h);
+            g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c3, h);
         }
-        g.add_bond(BondType::Covalent { order: 1.0 }, c1, c2);
-        g.add_bond(BondType::Covalent { order: 1.0 }, c2, c3);
+        g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, c2);
+        g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, c3);
         let traversal = DepthFirstSearch::new(&g, c2).unwrap();
         let mut explored_edges: Vec<Bond> = Vec::new();
         let mut visited_nodes: Vec<AnyAtomlike> = vec![c2.as_atomlike()];
@@ -642,20 +642,20 @@ mod tests {
     #[test]
     fn cyclic() {
         // Traverse cyclohexane
-        let mut g = AtomGraph::new();
+        let mut g = AtomMap::new();
         let mut carbons: Vec<AnyAtomlike> = Vec::new();
         for n in 0..6 {
             let c = g.add_atom(Element::C);
             for _ in 0..2 {
                 let h = g.add_atom(Element::H);
-                g.add_bond(BondType::Covalent { order: 1.0 }, c, h);
+                g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c, h);
             }
             if n != 0 {
-                g.add_bond(BondType::Covalent { order: 1.0 }, c, carbons[n - 1]);
+                g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c, carbons[n - 1]);
             }
             carbons.push(c.into());
         }
-        g.add_bond(BondType::Covalent { order: 1.0 }, carbons[0], carbons[5]);
+        g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, carbons[0], carbons[5]);
         let traversal = DepthFirstSearch::new(&g, carbons[0]).unwrap();
         let mut explored_edges: Vec<Bond> = Vec::new();
         let mut visited_nodes: Vec<AnyAtomlike> = vec![carbons[0]];
@@ -689,14 +689,14 @@ mod tests {
     #[test]
     fn disconnected() {
         // Ensure that only the connected network is traversed
-        let mut g = AtomGraph::new();
+        let mut g = AtomMap::new();
         // Two water molecules
         let o1 = g.add_atom(Element::O);
         let o2 = g.add_atom(Element::O);
         for o in [o1, o2] {
             for _ in 0..2 {
                 let h = g.add_atom(Element::H);
-                g.add_bond(BondType::Covalent { order: 1.0 }, o, h);
+                g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, o, h);
             }
         }
         let mut traversal = DepthFirstSearch::new(&g, o1).unwrap();
@@ -707,7 +707,7 @@ mod tests {
 
     #[test]
     fn h_bond_doesnt_connect() {
-        let mut g = AtomGraph::new();
+        let mut g = AtomMap::new();
         // Two water molecules
         let o1 = g.add_atom(Element::O);
         let o2 = g.add_atom(Element::O);
@@ -718,12 +718,12 @@ mod tests {
                 if h1.is_none() {
                     h1 = Some(h);
                 }
-                g.add_bond(BondType::Covalent { order: 1.0 }, o, h);
+                g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, o, h);
             }
         }
         // Connect via a hydrogen bond
         let h1 = h1.unwrap();
-        g.add_bond(BondType::Hydrogen, o2, h1);
+        g.add_bond_unchecked(BondType::Hydrogen, o2, h1);
         let mut traversal = DepthFirstSearch::new(&g, o1).unwrap();
         for _ in &mut traversal {}
         // Check that O of second water molecule was never visited

@@ -18,16 +18,16 @@ use crate::{
     ViewMut,
     entities::*,
     geometry,
-    traits::{Core, Graph, Stores, StoresPosition},
-    units::Unit,
+    traits::{Stores, StoresPosition},
+    units::{Angstrom, Relative, Unit},
 };
 
-use super::{AtomCore, AtomGraph, AtomMap};
+use super::AtomMap;
 
 /// A map holding only fundamental entities and their positions in `D`-dimensional space.
 #[derive(Clone, Debug, Default)]
 pub struct SpatialAtomMap<const D: usize, U> {
-    graph: AtomGraph,
+    graph: AtomMap,
     atom_positions: SecondaryMap<AtomKey, Point<D>>,
     pseudoatom_positions: SecondaryMap<PseudoatomKey, Point<D>>,
     unit: PhantomData<U>,
@@ -36,47 +36,37 @@ pub struct SpatialAtomMap<const D: usize, U> {
 impl<const D: usize, U> SpatialAtomMap<D, U> {
     pub fn new() -> Self {
         Self {
-            graph: AtomGraph::new(),
+            graph: AtomMap::new(),
             atom_positions: SecondaryMap::new(),
             pseudoatom_positions: SecondaryMap::new(),
             unit: PhantomData,
         }
     }
-
-    pub fn contains<E: Entity>(&self, entity: E) -> bool {
-        self.graph.contains(entity)
-    }
-}
-
-impl<const D: usize, U> Core for SpatialAtomMap<D, U> {
-    type Graph = AtomGraph;
-
-    fn graph(&self) -> &Self::Graph {
-        &self.graph
-    }
-
-    fn graph_mut(&mut self) -> &mut Self::Graph {
-        &mut self.graph
-    }
 }
 
 impl<const D: usize, U> Map for SpatialAtomMap<D, U> {
-    fn contains<E: Entity>(&self, entity: E) -> bool {
-        self.contains(entity)
-    }
-}
+    type Graph = AtomMap;
 
-impl<const D: usize, U> AtomCore for SpatialAtomMap<D, U> {
-    fn atom_graph(&self) -> &AtomGraph {
+    fn into_graph(self) -> Self::Graph {
+        self.graph
+    }
+
+    fn as_graph(&self) -> &Self::Graph {
         &self.graph
     }
 
-    fn atom_graph_mut(&mut self) -> &mut AtomGraph {
-        &mut self.graph
+    fn into_atomic(self) -> AtomMap {
+        self.graph
+    }
+
+    fn as_atomic(&self) -> &AtomMap {
+        &self.graph
+    }
+
+    fn contains<E: Entity>(&self, entity: E) -> bool {
+        self.as_graph().contains(entity)
     }
 }
-
-impl<const D: usize, U> AtomMap for SpatialAtomMap<D, U> {}
 
 impl<const D: usize, U: Unit> Spatial for SpatialAtomMap<D, U> {
     type Unit = U;
@@ -123,7 +113,7 @@ impl<const D: usize, U: Unit> SpatialAtomMap<D, U> {
         } else if !self.contains(end) {
             return Err(MolMapError::InvalidId(end.as_entity()));
         };
-        Ok(self.graph.add_bond(bond_type, start, end))
+        Ok(self.graph.add_bond_unchecked(bond_type, start, end))
     }
 
     /// Creates a new single covalent bond between two bondable entities.
@@ -165,21 +155,21 @@ impl<const D: usize, U: Unit> SpatialAtomMap<D, U> {
 impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Atom> {
     /// Removes the atom from the map, as well as any bonds to it.
     pub fn delete(self) {
-        self.map.graph_mut().delete_atom(self.id);
+        self.map.graph.delete_atom(self.id);
     }
 }
 
 impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Pseudoatom> {
     /// Removes the pseudoatom from the map, as well as any bonds to it.
     pub fn delete(self) {
-        self.map.graph_mut().delete_pseudoatom(self.id);
+        self.map.graph.delete_pseudoatom(self.id);
     }
 }
 
 impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Bond> {
     /// Removes the bond from the map (but not its bonding partners).
     pub fn delete(self) {
-        self.map.graph_mut().delete_bond(self.id);
+        self.map.graph.delete_bond(self.id);
     }
 }
 
@@ -223,7 +213,7 @@ impl<const D: usize, U: Unit> SpatialAtomMap<D, U> {
     ///
     /// Panics if the bond is not in the map.
     pub(crate) fn bond_origin(&self, bond: Bond) -> &Point<D> {
-        match self.graph().data(bond).unwrap().start.resolve() {
+        match self.as_graph().data(bond).unwrap().start.resolve() {
             ResolvedBondable::Atom(atom) => self.position(atom).unwrap(),
             ResolvedBondable::Pseudoatom(pseudoatom) => self.position(pseudoatom).unwrap(),
         }
@@ -235,7 +225,7 @@ impl<const D: usize, U: Unit> SpatialAtomMap<D, U> {
     ///
     /// Panics if the bond is not in the map.
     pub(crate) fn bond_terminus(&self, bond: Bond) -> &Point<D> {
-        match self.graph().data(bond).unwrap().end.resolve() {
+        match self.as_graph().data(bond).unwrap().end.resolve() {
             ResolvedBondable::Atom(atom) => self.position(atom).unwrap(),
             ResolvedBondable::Pseudoatom(pseudoatom) => self.position(pseudoatom).unwrap(),
         }
@@ -379,6 +369,12 @@ impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Bond> {
         self.vector().magnitude()
     }
 }
+
+/// A map holding only fundamental entities and their two-dimensional positions.
+pub type AtomMap2 = SpatialAtomMap<2, Relative>;
+
+/// A map holding only fundamental entities and their three-dimensional positions.
+pub type AtomMap3 = SpatialAtomMap<3, Angstrom>;
 
 #[cfg(test)]
 #[allow(unused)]

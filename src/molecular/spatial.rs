@@ -15,20 +15,19 @@ use slotmap::SecondaryMap;
 
 use crate::{
     Map, Point, Spatial, Vector,
-    atomic::{AtomCore, AtomGraph, AtomMap},
+    atomic::AtomMap,
     entities::*,
-    traits::{Core, Graph},
-    units::Unit,
+    units::{Angstrom, Relative, Unit},
 };
 
-use super::{MolCore, MolGraph, MolMap};
+use super::{MolMap, Molecular};
 
 /// A map in which the atomic entities and bonds are organized into substituents
 /// and molecules, with positions in `D`-dimensional space.
 #[derive(Clone, Debug, Default)]
 #[allow(dead_code)]
 pub struct SpatialMolMap<const D: usize, U> {
-    graph: MolGraph,
+    graph: MolMap,
     atom_positions: SecondaryMap<AtomKey, Point<D>>,
     pseudoatom_positions: SecondaryMap<PseudoatomKey, Point<D>>,
     unit: PhantomData<U>,
@@ -37,59 +36,47 @@ pub struct SpatialMolMap<const D: usize, U> {
 impl<const D: usize, U> SpatialMolMap<D, U> {
     pub fn new() -> Self {
         Self {
-            graph: MolGraph::new(),
+            graph: MolMap::new(),
             atom_positions: SecondaryMap::new(),
             pseudoatom_positions: SecondaryMap::new(),
             unit: PhantomData,
         }
     }
-
-    pub fn contains<E: Entity>(&self, entity: E) -> bool {
-        self.graph.contains(entity)
-    }
-}
-
-impl<const D: usize, U> Core for SpatialMolMap<D, U> {
-    type Graph = MolGraph;
-
-    fn graph(&self) -> &Self::Graph {
-        &self.graph
-    }
-
-    fn graph_mut(&mut self) -> &mut Self::Graph {
-        &mut self.graph
-    }
 }
 
 impl<const D: usize, U> Map for SpatialMolMap<D, U> {
-    fn contains<E: Entity>(&self, entity: E) -> bool {
-        self.contains(entity)
-    }
-}
+    type Graph = MolMap;
 
-impl<const D: usize, U> AtomCore for SpatialMolMap<D, U> {
-    fn atom_graph(&self) -> &AtomGraph {
-        self.graph.atom_graph()
+    fn into_graph(self) -> Self::Graph {
+        self.graph
     }
 
-    fn atom_graph_mut(&mut self) -> &mut AtomGraph {
-        self.graph.atom_graph_mut()
-    }
-}
-
-impl<const D: usize, U> AtomMap for SpatialMolMap<D, U> {}
-
-impl<const D: usize, U> MolCore for SpatialMolMap<D, U> {
-    fn mol_graph(&self) -> &MolGraph {
+    fn as_graph(&self) -> &Self::Graph {
         &self.graph
     }
 
-    fn mol_graph_mut(&mut self) -> &mut MolGraph {
-        &mut self.graph
+    fn into_atomic(self) -> AtomMap {
+        self.graph.into_atomic()
+    }
+
+    fn as_atomic(&self) -> &AtomMap {
+        self.graph.as_atomic()
+    }
+
+    fn contains<E: Entity>(&self, entity: E) -> bool {
+        self.as_graph().contains(entity)
     }
 }
 
-impl<const D: usize, U> MolMap for SpatialMolMap<D, U> {}
+impl<const D: usize, U> Molecular for SpatialMolMap<D, U> {
+    fn into_molecular(self) -> MolMap {
+        self.graph
+    }
+
+    fn as_molecular(&self) -> &Self::Graph {
+        &self.graph
+    }
+}
 
 impl<const D: usize, U: Unit> Spatial for SpatialMolMap<D, U> {
     type Unit = U;
@@ -289,3 +276,11 @@ impl<const D: usize, U: Unit> Spatial for SpatialMolMap<D, U> {
 //        self.map.set_pseudoatom_position(self.id, position)
 //    }
 //}
+
+/// A map holding atomic entities and bonds organized into substituents
+/// and molecules, with positions in two-dimensional space.
+pub type MolMap2 = SpatialMolMap<2, Relative>;
+
+/// A map holding atomic entities and bonds organized into substituents
+/// and molecules, with positions in three-dimensional space.
+pub type MolMap3 = SpatialMolMap<3, Angstrom>;

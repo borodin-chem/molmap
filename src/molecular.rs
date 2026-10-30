@@ -7,18 +7,22 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 mod graph;
-mod map;
 mod spatial;
-mod three;
-mod two;
-mod zero;
 
 pub(crate) mod entities;
 
-pub(crate) use graph::MolGraph;
-pub(crate) use map::MolCore;
+pub(crate) use graph::MolMap;
 
-pub use map::MolMap;
-pub use three::MolMap3;
-pub use two::MolMap2;
-pub use zero::MolMap0;
+pub use spatial::{MolMap2, MolMap3};
+
+use crate::Map;
+
+/// A map in which the atomic entities and bonds are organized into substituents
+/// and molecules.
+pub trait Molecular: Map {
+    /// Returns the molecular graph without any spatial positions.
+    fn into_molecular(self) -> MolMap;
+
+    /// Provides read-only access to the molecular graph.
+    fn as_molecular(&self) -> &MolMap;
+}

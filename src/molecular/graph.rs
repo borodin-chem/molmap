@@ -7,44 +7,46 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 //! Definition of the data structure that holds the core molecular graph.
-//!
-//! For a `MolMap` type, the following invariants are promised and must be made
-//! sure to hold (additionally to those promised by an `AtomMap`):
-//!
-//! 1. No collection is ever empty.
-//!     - Collections are only ever created using methods that add at least one
-//!       initial member (this would imply that "splitting off" methods are
-//!       necessary to move fundamentals into a different, new collection).
-//!     - Collections are cleaned up automatically when emptied.
-//! 2. All atomlikes are members of a substituent.
-//! 3. All substituents are members of a molecule.
-//! 4. Any atomlikes connected by a covalent (or dipolar) bond are members of the
-//!    same molecule.
-//!     - Joining two atomlikes that are *not* members of the same molecule causes
-//!       the parent molecules to be merged.
-//! 5. All atomlikes of a substituent are connected by strong bonds.
-//!     - Bond deletion errors if it would cause fragmentation of a substituent.
-//! 6. All substituents (and therefore atomlikes) in a molecule are connected by
-//!    strong bonds.
-//!     - If bond deletion causes a molecule to fragment into two disconnected
-//!       parts, the fragments become separate molecules.
 
 use slotmap::{SecondaryMap, SlotMap};
 
 use crate::{
-    BondType, Element, Pseudoelement,
-    atomic::AtomGraph,
+    BondType, Element, Map, MolMapError, MolMapResult, Pseudoelement, ViewMut,
+    atomic::AtomMap,
     entities::*,
-    traits::{Graph, Stores},
+    molecular::Molecular,
+    traits::{Graph, Stores, StoresMut},
 };
 
 use super::entities::*;
 
-/// The internal core of a [`MolMap`] type.
+/// A map in which the atomic entities and bonds are organized into substituents
+/// and molecules.
+///
+/// The following invariants are promised to hold (in addition to those promised
+/// by [`AtomMap`]):
+///
+/// 1. No collection is ever empty.
+///     - Collections are only ever created using methods that add at least one
+///       initial member (this would imply that "splitting off" methods are
+///       necessary to move fundamentals into a different, new collection).
+///     - Collections are cleaned up automatically when emptied.
+/// 2. All atomlikes are members of a substituent.
+/// 3. All substituents are members of a molecule.
+/// 4. Any atomlikes connected by a covalent (or dipolar) bond are members of the
+///    same molecule.
+///     - Joining two atomlikes that are *not* members of the same molecule causes
+///       the parent molecules to be merged.
+/// 5. All atomlikes of a substituent are connected by strong bonds.
+///     - Bond deletion errors if it would cause fragmentation of a substituent.
+/// 6. All substituents (and therefore atomlikes) in a molecule are connected by
+///    strong bonds.
+///     - If bond deletion causes a molecule to fragment into two disconnected
+///       parts, the fragments become separate molecules.
 #[derive(Clone, Debug, Default)]
 #[allow(dead_code)]
-pub struct MolGraph {
-    inner: AtomGraph,
+pub struct MolMap {
+    inner: AtomMap,
     substituents: SlotMap<SubstituentKey, SubstituentData>,
     molecules: SlotMap<MoleculeKey, MoleculeData>,
     atom_parents: SecondaryMap<AtomKey, Substituent>,
@@ -53,25 +55,21 @@ pub struct MolGraph {
     substituent_parents: SecondaryMap<SubstituentKey, Molecule>,
 }
 
-impl MolGraph {
-    pub(crate) fn atom_graph(&self) -> &AtomGraph {
-        &self.inner
-    }
-
-    pub(crate) fn atom_graph_mut(&mut self) -> &mut AtomGraph {
-        &mut self.inner
-    }
-}
-
-impl<E> Stores<E> for MolGraph
+impl<E> Stores<E> for MolMap
 where
     E: Kind,
-    AtomGraph: Stores<E>,
+    AtomMap: Stores<E>,
 {
     fn slotmap(&self) -> &SlotMap<<E>::Key, <E>::Data> {
         self.inner.slotmap()
     }
+}
 
+impl<E> StoresMut<E> for MolMap
+where
+    E: Kind,
+    AtomMap: StoresMut<E>,
+{
     fn slotmap_mut(&mut self) -> &mut SlotMap<<E>::Key, <E>::Data> {
         self.inner.slotmap_mut()
     }
@@ -79,11 +77,13 @@ where
 
 macro_rules! impl_stores {
     ($kind: ident, $attr: ident) => {
-        impl Stores<$kind> for MolGraph {
+        impl Stores<$kind> for MolMap {
             fn slotmap(&self) -> &SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {
                 &self.$attr
             }
+        }
 
+        impl StoresMut<$kind> for MolMap {
             fn slotmap_mut(
                 &mut self,
             ) -> &mut SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {
@@ -95,17 +95,37 @@ macro_rules! impl_stores {
 impl_stores!(Substituent, substituents);
 impl_stores!(Molecule, molecules);
 
-impl Graph for MolGraph {
+impl Graph for MolMap {}
+
+impl Map for MolMap {
+    type Graph = Self;
+
+    fn into_graph(self) -> Self::Graph {
+        self
+    }
+
+    fn as_graph(&self) -> &Self {
+        self
+    }
+
+    fn into_atomic(self) -> AtomMap {
+        self.inner
+    }
+
+    fn as_atomic(&self) -> &AtomMap {
+        &self.inner
+    }
+
     fn contains<E: Entity>(&self, entity: E) -> bool {
         match entity.to_resolved() {
             ResolvedEntity::Atom(atom) => self.inner.contains(atom),
             ResolvedEntity::Bond(bond) => self.inner.contains(bond),
             ResolvedEntity::Pseudoatom(pseudoatom) => self.inner.contains(pseudoatom),
             ResolvedEntity::Substituent(substituent) => {
-                <MolGraph as Stores<Substituent>>::slotmap(self).contains_key(substituent.to_key())
+                <MolMap as Stores<Substituent>>::slotmap(self).contains_key(substituent.to_key())
             }
             ResolvedEntity::Molecule(molecule) => {
-                <MolGraph as Stores<Molecule>>::slotmap(self).contains_key(molecule.to_key())
+                <MolMap as Stores<Molecule>>::slotmap(self).contains_key(molecule.to_key())
             }
             #[expect(unreachable_patterns)] // Unreachable for now but will be needed later
             _ => false,
@@ -113,12 +133,22 @@ impl Graph for MolGraph {
     }
 }
 
+impl Molecular for MolMap {
+    fn into_molecular(self) -> MolMap {
+        self
+    }
+
+    fn as_molecular(&self) -> &MolMap {
+        self
+    }
+}
+
 /// Constructor methods.
-impl MolGraph {
-    /// Creates a new, empty `MolGraph`.
+impl MolMap {
+    /// Creates a new, empty `MolMap`.
     pub(crate) fn new() -> Self {
         Self {
-            inner: AtomGraph::new(),
+            inner: AtomMap::new(),
             substituents: SlotMap::with_key(),
             molecules: SlotMap::with_key(),
             atom_parents: SecondaryMap::new(),
@@ -128,7 +158,7 @@ impl MolGraph {
         }
     }
 
-    /// Creates a new `MolGraph` with the specified capacities for each kind of entity.
+    /// Creates a new `MolMap` with the specified capacities for each kind of entity.
     #[expect(dead_code)]
     pub(crate) fn with_capacities(
         atoms: usize,
@@ -138,7 +168,7 @@ impl MolGraph {
         molecules: usize,
     ) -> Self {
         Self {
-            inner: AtomGraph::with_capacities(atoms, pseudoatoms, bonds),
+            inner: AtomMap::with_capacities(atoms, pseudoatoms, bonds),
             substituents: SlotMap::with_capacity_and_key(substituents),
             molecules: SlotMap::with_capacity_and_key(molecules),
             atom_parents: SecondaryMap::with_capacity(atoms),
@@ -151,7 +181,7 @@ impl MolGraph {
 
 /// Methods for entity addition.
 #[allow(dead_code)]
-impl MolGraph {
+impl MolMap {
     /// Adds a substituent to the given molecule with the given atomlike as its centre.
     ///
     /// Note that this method will not fail, even if `centre` is an invalid ID.
@@ -206,668 +236,936 @@ impl MolGraph {
         (pseudoatom, sub, mol)
     }
 
-    /// Creates a new bond between two bondable entities.
+    /// Creates a new bond between two bondable entities without validating them first.
     ///
     /// # Panics
     ///
     /// Panics if either of `start` and `end` are invalid.
-    pub(crate) fn add_bond(
-        &mut self,
-        _bond_type: BondType,
-        _start: impl Bondable,
-        _end: impl Bondable,
-    ) -> Bond {
+    #[expect(unused_variables)]
+    pub fn add_bond_unchecked<A, B>(&mut self, bond_type: BondType, start: A, end: B) -> Bond
+    where
+        A: Bondable,
+        B: Bondable,
+    {
+        // This requires implementation of breadth-first searches/connectedness checks
+        todo!()
+    }
+
+    /// Creates a new bond between two bondable entities.
+    ///
+    /// # Errors
+    ///
+    /// Fails if either of `start` and `end` are invalid.
+    pub fn add_bond<A, B>(&mut self, bond_type: BondType, start: A, end: B) -> MolMapResult<Bond>
+    where
+        A: Bondable,
+        B: Bondable,
+    {
+        if !self.contains(start) {
+            return Err(MolMapError::InvalidId(start.as_entity()));
+        } else if !self.contains(end) {
+            return Err(MolMapError::InvalidId(end.as_entity()));
+        };
+        Ok(self.add_bond_unchecked(bond_type, start, end))
+    }
+
+    /// Creates a new single covalent bond between two bondable entities.
+    ///
+    /// # Errors
+    ///
+    /// Fails if either of `start` and `end` are invalid.
+    pub fn add_single_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    where
+        A: Bondable,
+        B: Bondable,
+    {
+        self.add_bond(BondType::Covalent { order: 1.0 }, start, end)
+    }
+
+    /// Creates a new double covalent bond between two bondable entities.
+    ///
+    /// # Errors
+    ///
+    /// Fails if either of `start` and `end` are invalid.
+    pub fn add_double_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    where
+        A: Bondable,
+        B: Bondable,
+    {
+        self.add_bond(BondType::Covalent { order: 2.0 }, start, end)
+    }
+}
+
+/// Methods for entity removal.
+impl MolMap {
+    /// Removes an atom from the map, as well as any bonds to it.
+    ///
+    /// Returns whether the atom was present in the map.
+    ///
+    /// This is infallible – if the atom is not in the map, nothing changes.
+    #[expect(unused_variables)]
+    pub(crate) fn delete_atom(&mut self, atom: Atom) -> bool {
+        // if !self.contains(atom) {
+        //     return false;
+        // }
+        // // Make sure we always remove bonds first
+        // let bonds = self.data(atom).unwrap().bonds.clone();
+        // for bond in bonds {
+        //     self.delete_bond(bond);
+        // }
+        // // Remove from any collections
+        // if let Some(sub) = self.parent_substituent(atom) {
+        //     self.remove_from_substituent(sub, atom);
+        // }
+        // if let Some(mol) = self.parent_molecule(atom) {
+        //     self.remove_from_molecule(mol, atom);
+        // }
+        // // Now we can safely remove the atom itself without leaving dangling bonds
+        // self.atoms.remove(atom.into()).is_some() // Should always be `true`
+        todo!()
+    }
+
+    /// Removes a pseudoatom from the map, as well as any bonds to it.
+    ///
+    /// Returns whether the pseudoatom was present in the map.
+    ///
+    /// This is infallible – if the pseudoatom is not in the map, nothing changes.
+    #[expect(unused_variables)]
+    pub(crate) fn delete_pseudoatom(&mut self, pseudoatom: Pseudoatom) -> bool {
+        // if !self.contains(pseudoatom) {
+        //     return false;
+        // }
+        // // Make sure we always remove bonds first
+        // let bonds = self.data(pseudoatom).unwrap().bonds.clone();
+        // for bond in bonds {
+        //     self.delete_bond(bond);
+        // }
+        // // Remove from any collections
+        // if let Some(sub) = self.parent_substituent(pseudoatom) {
+        //     self.remove_from_substituent(sub, pseudoatom);
+        // }
+        // if let Some(mol) = self.parent_molecule(pseudoatom) {
+        //     self.remove_from_molecule(mol, pseudoatom);
+        // }
+        // // Now we can safely remove the pseudoatom itself without leaving dangling bonds
+        // self.pseudoatoms.remove(pseudoatom.into()).is_some()
+        todo!()
+    }
+
+    /// Removes a bond from the map (but not its bonding partners).
+    ///
+    /// Returns whether the bond was present in the map.
+    ///
+    /// If the bond is not in the map, nothing changes.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either of the bond's bonding partners does not exist (which
+    /// should never be the case – bonds are last in, first out).
+    #[expect(unused_variables)]
+    pub(crate) fn delete_bond(&mut self, bond: Bond) -> bool {
+        // if let Some(bond_data) = self.bonds.remove(bond.into()) {
+        //     for bonding_partner in [bond_data.start, bond_data.end] {
+        //         match bonding_partner.resolve() {
+        //             ResolvedBondable::Atom(atom) => {
+        //                 let atom_data = self
+        //                     .data_mut(atom)
+        //                     .expect("Bonds are always removed before their bonding partners");
+        //                 let pos = atom_data.bonds.iter().position(|x| *x == bond).expect(
+        //                     "Bond should be listed in the bonding partner's bonds until deletion",
+        //                 );
+        //                 atom_data.bonds.remove(pos);
+        //             }
+        //             ResolvedBondable::Pseudoatom(pseudoatom) => {
+        //                 let pseudoatom_data = self
+        //                     .data_mut(pseudoatom)
+        //                     .expect("Bonds are always removed before their bonding partners");
+        //                 let pos = pseudoatom_data.bonds.iter().position(|x| *x == bond).expect(
+        //                     "Bond should be listed in the bonding partner's bonds until deletion",
+        //                 );
+        //                 pseudoatom_data.bonds.remove(pos);
+        //             }
+        //         }
+        //     }
+        //     // Remove from any collections
+        //     if let Some(sub) = self.parent_substituent(bond) {
+        //         self.remove_from_substituent(sub, bond);
+        //     }
+        //     if let Some(mol) = self.parent_molecule(bond) {
+        //         self.remove_from_molecule(mol, bond);
+        //     }
+        //     true
+        // } else {
+        //     false
+        // }
+        todo!()
+    }
+
+    /// Removes a substituent from the map, as well as all of its members.
+    ///
+    /// Returns whether the substituent was present in the map.
+    ///
+    /// This is infallible – if the substituent is not in the map, nothing changes.
+    #[expect(unused_variables)]
+    pub(crate) fn delete_substituent(&mut self, substituent: Substituent) -> bool {
+        // if !self.contains(substituent) {
+        //     return false;
+        // };
+        // let members = self.data(substituent).unwrap().members.clone();
+        // for member in members {
+        //     match member.resolve() {
+        //         ResolvedFundamental::Atom(atom) => {
+        //             self.delete_atom(atom);
+        //         }
+        //         ResolvedFundamental::Pseudoatom(pseudoatom) => {
+        //             self.delete_pseudoatom(pseudoatom);
+        //         }
+        //         ResolvedFundamental::Bond(bond) => {
+        //             self.delete_bond(bond);
+        //         }
+        //     }
+        // }
+        // self.substituents.remove(substituent.into()).is_some()
+        todo!()
+    }
+
+    /// Removes a molecule from the map, as well as all of its members.
+    ///
+    /// Returns whether the molecule was present in the map.
+    ///
+    /// This is infallible – if the molecule is not in the map, nothing changes.
+    #[expect(unused_variables)]
+    pub(crate) fn delete_molecule(&mut self, molecule: Molecule) -> bool {
+        // if !self.contains(molecule) {
+        //     return false;
+        // };
+        // let members = self.data(molecule).unwrap().members.clone();
+        // for member in members {
+        //     match member.resolve() {
+        //         ResolvedFundamental::Atom(id) => {
+        //             self.delete_atom(id);
+        //         }
+        //         ResolvedFundamental::Pseudoatom(id) => {
+        //             self.delete_pseudoatom(id);
+        //         }
+        //         ResolvedFundamental::Bond(id) => {
+        //             self.delete_bond(id);
+        //         }
+        //     }
+        // }
+        // self.molecules.remove(molecule.into()).is_some()
         todo!()
     }
 }
 
-///// Methods for entity removal.
-//impl MolGraph {
-//    /// Removes an atom from the map, as well as any bonds to it.
-//    ///
-//    /// Returns whether the atom was present in the map.
-//    ///
-//    /// This is infallible – if the atom is not in the map, nothing changes.
-//    pub(crate) fn delete_atom(&mut self, atom: Atom) -> bool {
-//        if !self.contains(atom) {
-//            return false;
-//        }
-//        // Make sure we always remove bonds first
-//        let bonds = self.data(atom).unwrap().bonds.clone();
-//        for bond in bonds {
-//            self.delete_bond(bond);
-//        }
-//        // Remove from any collections
-//        if let Some(sub) = self.parent_substituent(atom) {
-//            self.remove_from_substituent(sub, atom);
-//        }
-//        if let Some(mol) = self.parent_molecule(atom) {
-//            self.remove_from_molecule(mol, atom);
-//        }
-//        // Now we can safely remove the atom itself without leaving dangling bonds
-//        self.atoms.remove(atom.into()).is_some() // Should always be `true`
-//    }
-//
-//    /// Removes a pseudoatom from the map, as well as any bonds to it.
-//    ///
-//    /// Returns whether the pseudoatom was present in the map.
-//    ///
-//    /// This is infallible – if the pseudoatom is not in the map, nothing changes.
-//    pub(crate) fn delete_pseudoatom(&mut self, pseudoatom: Pseudoatom) -> bool {
-//        if !self.contains(pseudoatom) {
-//            return false;
-//        }
-//        // Make sure we always remove bonds first
-//        let bonds = self.data(pseudoatom).unwrap().bonds.clone();
-//        for bond in bonds {
-//            self.delete_bond(bond);
-//        }
-//        // Remove from any collections
-//        if let Some(sub) = self.parent_substituent(pseudoatom) {
-//            self.remove_from_substituent(sub, pseudoatom);
-//        }
-//        if let Some(mol) = self.parent_molecule(pseudoatom) {
-//            self.remove_from_molecule(mol, pseudoatom);
-//        }
-//        // Now we can safely remove the pseudoatom itself without leaving dangling bonds
-//        self.pseudoatoms.remove(pseudoatom.into()).is_some()
-//    }
-//
-//    /// Removes a bond from the map (but not its bonding partners).
-//    ///
-//    /// Returns whether the bond was present in the map.
-//    ///
-//    /// If the bond is not in the map, nothing changes.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if either of the bond's bonding partners does not exist (which
-//    /// should never be the case – bonds are last in, first out).
-//    pub(crate) fn delete_bond(&mut self, bond: Bond) -> bool {
-//        if let Some(bond_data) = self.bonds.remove(bond.into()) {
-//            for bonding_partner in [bond_data.start, bond_data.end] {
-//                match bonding_partner.resolve() {
-//                    ResolvedBondable::Atom(atom) => {
-//                        let atom_data = self
-//                            .data_mut(atom)
-//                            .expect("Bonds are always removed before their bonding partners");
-//                        let pos = atom_data.bonds.iter().position(|x| *x == bond).expect(
-//                            "Bond should be listed in the bonding partner's bonds until deletion",
-//                        );
-//                        atom_data.bonds.remove(pos);
-//                    }
-//                    ResolvedBondable::Pseudoatom(pseudoatom) => {
-//                        let pseudoatom_data = self
-//                            .data_mut(pseudoatom)
-//                            .expect("Bonds are always removed before their bonding partners");
-//                        let pos = pseudoatom_data.bonds.iter().position(|x| *x == bond).expect(
-//                            "Bond should be listed in the bonding partner's bonds until deletion",
-//                        );
-//                        pseudoatom_data.bonds.remove(pos);
-//                    }
-//                }
-//            }
-//            // Remove from any collections
-//            if let Some(sub) = self.parent_substituent(bond) {
-//                self.remove_from_substituent(sub, bond);
-//            }
-//            if let Some(mol) = self.parent_molecule(bond) {
-//                self.remove_from_molecule(mol, bond);
-//            }
-//            true
-//        } else {
-//            false
-//        }
-//    }
-//
-//    /// Removes a substituent from the map, as well as all of its members.
-//    ///
-//    /// Returns whether the substituent was present in the map.
-//    ///
-//    /// This is infallible – if the substituent is not in the map, nothing changes.
-//    pub(crate) fn delete_substituent(&mut self, substituent: Substituent) -> bool {
-//        if !self.contains(substituent) {
-//            return false;
-//        };
-//        let members = self.data(substituent).unwrap().members.clone();
-//        for member in members {
-//            match member.resolve() {
-//                ResolvedFundamental::Atom(atom) => {
-//                    self.delete_atom(atom);
-//                }
-//                ResolvedFundamental::Pseudoatom(pseudoatom) => {
-//                    self.delete_pseudoatom(pseudoatom);
-//                }
-//                ResolvedFundamental::Bond(bond) => {
-//                    self.delete_bond(bond);
-//                }
-//            }
-//        }
-//        self.substituents.remove(substituent.into()).is_some()
-//    }
-//
-//    /// Removes a molecule from the map, as well as all of its members.
-//    ///
-//    /// Returns whether the molecule was present in the map.
-//    ///
-//    /// This is infallible – if the molecule is not in the map, nothing changes.
-//    pub(crate) fn delete_molecule(&mut self, molecule: Molecule) -> bool {
-//        if !self.contains(molecule) {
-//            return false;
-//        };
-//        let members = self.data(molecule).unwrap().members.clone();
-//        for member in members {
-//            match member.resolve() {
-//                ResolvedFundamental::Atom(id) => {
-//                    self.delete_atom(id);
-//                }
-//                ResolvedFundamental::Pseudoatom(id) => {
-//                    self.delete_pseudoatom(id);
-//                }
-//                ResolvedFundamental::Bond(id) => {
-//                    self.delete_bond(id);
-//                }
-//            }
-//        }
-//        self.molecules.remove(molecule.into()).is_some()
-//    }
-//}
-//
-///// Methods to change collection membership.
-/////
-///// Some of these methods are identical for all current collection types, but are not
-///// implemented using macros due to the likelihood that they will need to diverge in
-///// future.
-//impl MolGraph {
-//    /// Adds an atom, pseudoatom, or bond to a substituent.
-//    ///
-//    /// Returns whether the fundamental was newly inserted.
-//    ///
-//    /// If the fundamental is already a member of another substituent, it is removed
-//    /// from it before it is inserted into this one.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if `substituent` is invalid, but is unaffected if `fundamental` is
-//    /// invalid.
-//    pub(crate) fn insert_into_substituent(
-//        &mut self,
-//        substituent: Substituent,
-//        fundamental: impl Fundamental,
-//    ) -> bool {
-//        if let Some(parent) = self.parent_substituent(fundamental) {
-//            if parent == substituent {
-//                // Already a member of this substituent
-//                return false;
-//            } else {
-//                self.remove_from_substituent(parent, fundamental);
-//            }
-//        }
-//        self.insert_into_substituent_unchecked(substituent, fundamental)
-//    }
-//
-//    /// Adds an atom, pseudoatom, or bond to a substituent.
-//    ///
-//    /// Returns whether the fundamental was newly inserted.
-//    ///
-//    /// This method should only ever be used with fundamentals that do not already
-//    /// belong to a substituent.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if `substituent` is invalid, but is unaffected if `fundamental` is
-//    /// invalid.
-//    pub(crate) fn insert_into_substituent_unchecked(
-//        &mut self,
-//        substituent: Substituent,
-//        fundamental: impl Fundamental,
-//    ) -> bool {
-//        let sub = self.substituents.get_mut(substituent.into()).unwrap();
-//        let fund = fundamental.as_fundamental();
-//        // members is just a Vec, so have to manually make sure we don't end up with
-//        // any ID in the substituent twice
-//        if !sub.members.contains(&fund) {
-//            sub.members.push(fund);
-//            true
-//        } else {
-//            false
-//        }
-//    }
-//
-//    /// Adds an atom, pseudoatom, or bond to a molecule.
-//    ///
-//    /// Returns whether the fundamental was newly inserted.
-//    ///
-//    /// If the fundamental is already a member of another molecule, it is removed
-//    /// from it before it is inserted into this one.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if `molecule` is invalid, but is unaffected if `fundamental` is
-//    /// invalid.
-//    pub(crate) fn insert_into_molecule(
-//        &mut self,
-//        molecule: Molecule,
-//        fundamental: impl Fundamental,
-//    ) -> bool {
-//        if let Some(parent) = self.parent_molecule(fundamental) {
-//            if parent == molecule {
-//                // Already a member of this molecule
-//                return false;
-//            } else {
-//                self.remove_from_molecule(parent, fundamental);
-//            }
-//        }
-//        self.insert_into_molecule_unchecked(molecule, fundamental)
-//    }
-//
-//    /// Adds an atom, pseudoatom, or bond to a molecule.
-//    ///
-//    /// Returns whether the fundamental was newly inserted.
-//    ///
-//    /// This method should only ever be used with fundamentals that do not already
-//    /// belong to a molecule.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if `molecule` is invalid, but is unaffected if `fundamental` is
-//    /// invalid.
-//    pub(crate) fn insert_into_molecule_unchecked(
-//        &mut self,
-//        molecule: Molecule,
-//        fundamental: impl Fundamental,
-//    ) -> bool {
-//        let mol = self.molecules.get_mut(molecule.into()).unwrap();
-//        mol.members.insert(fundamental.as_fundamental())
-//    }
-//
-//    /// Adds atoms, pseudoatoms, or bonds from an iterator to a substituent.
-//    ///
-//    /// This method should only ever be used with fundamentals that do not already
-//    /// belong to a substituent.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if `substituent` is invalid, but is unaffected if any of the fundamental
-//    /// IDs are invalid.
-//    #[allow(unused)]
-//    pub(crate) fn extend_substituent_unchecked<I, E>(
-//        &mut self,
-//        substituent: Substituent,
-//        fundamentals: I,
-//    ) where
-//        I: IntoIterator<Item = E>,
-//        E: Fundamental,
-//    {
-//        let sub = self.substituents.get_mut(substituent.into()).unwrap();
-//        sub.members
-//            .extend(fundamentals.into_iter().map(|e| e.as_fundamental()))
-//    }
-//
-//    /// Adds atoms, pseudoatoms, or bonds from an iterator to a molecule.
-//    ///
-//    /// This method should only ever be used with fundamentals that do not already
-//    /// belong to a molecule.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if `molecule` is invalid, but is unaffected if any of the fundamental
-//    /// IDs are invalid.
-//    #[allow(unused)]
-//    pub(crate) fn extend_molecule_unchecked<I, E>(&mut self, molecule: Molecule, fundamentals: I)
-//    where
-//        I: IntoIterator<Item = E>,
-//        E: Fundamental,
-//    {
-//        let mol = self.molecules.get_mut(molecule.into()).unwrap();
-//        mol.members
-//            .extend(fundamentals.into_iter().map(|e| e.as_fundamental()))
-//    }
-//
-//    /// Removes an atom, pseudoatom, or bond from a substituent.
-//    ///
-//    /// Returns whether the fundamental was a member of the substituent.
-//    ///
-//    /// If the fundamental is an atomlike and is the centre of the substituent,
-//    /// the centre is adjusted accordingly; if it is the lone centre, the
-//    /// substituent becomes centreless. If it is one of two centres,
-//    /// however, the centre remains `SubstituentCentre::Multiple` rather than
-//    /// becoming `Single`.
-//    ///
-//    /// The substituent continues to exist, even if empty, as does the removed
-//    /// fundamental.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if `substituent` is invalid.
-//    pub(crate) fn remove_from_substituent(
-//        &mut self,
-//        substituent: Substituent,
-//        fundamental: impl Fundamental,
-//    ) -> bool {
-//        let sub = self.substituents.get_mut(substituent.into()).unwrap();
-//        let fund = fundamental.as_fundamental();
-//        if let Some(index) = sub.members.iter().position(|x| *x == fund) {
-//            sub.members.swap_remove(index);
-//        } else {
-//            return false;
-//        }
-//        // If fundamental is an atomlike, we might be removing the centre of the
-//        // substituent (or one of them).
-//        // Is so, adjust the centres of the substituent accordingly
-//        match &mut sub.centre {
-//            SubstituentCentre::None => (),
-//            SubstituentCentre::Single(atomlike) => {
-//                if atomlike.into_inner() == fundamental.into_inner() {
-//                    // No longer has a centre
-//                    sub.centre = SubstituentCentre::None
-//                }
-//            }
-//            SubstituentCentre::Multiple(atomlikes) => {
-//                if let Some(atomlike) = match Fundamental::to_resolved(fundamental) {
-//                    ResolvedFundamental::Bond(_) => None,
-//                    ResolvedFundamental::Atom(atom) => Some(atom.into()),
-//                    ResolvedFundamental::Pseudoatom(pseudoatom) => Some(pseudoatom.into()),
-//                } && let Some(index) = atomlikes.iter().position(|x| *x == atomlike)
-//                {
-//                    // We want to preserve order
-//                    atomlikes.remove(index);
-//                }
-//            }
-//        }
-//        true
-//    }
-//
-//    /// Removes an atom, pseudoatom, or bond from a molecule.
-//    ///
-//    /// Returns whether the fundamental was a member of the molecule.
-//    ///
-//    /// The molecule continues to exist even if empty, as does the removed
-//    /// fundamental.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if `molecule` is invalid.
-//    pub(crate) fn remove_from_molecule(
-//        &mut self,
-//        molecule: Molecule,
-//        fundamental: impl Fundamental,
-//    ) -> bool {
-//        let mol = self.molecules.get_mut(molecule.into()).unwrap();
-//        mol.members.remove(&fundamental.as_fundamental())
-//    }
-//
-//    /// Empties a substituent by removing all its members, returning an iterator over
-//    /// the IDs of the former members.
-//    ///
-//    /// The substituent and all removed fundamentals continue to exist.
-//    ///
-//    /// After this operation, the substituent will be centreless.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if the substituent is not in the map.
-//    pub(crate) fn drain_substituent(
-//        &mut self,
-//        substituent: Substituent,
-//    ) -> impl Iterator<Item = AnyFundamental> {
-//        let sub = self
-//            .substituents
-//            .get_mut(substituent.into())
-//            .expect("Caller is required to ensure that the substituent is valid");
-//        sub.centre = SubstituentCentre::None;
-//        sub.members.drain(..)
-//    }
-//
-//    /// Empties a molecule by removing all its members, returning an iterator over
-//    /// the IDs of the former members.
-//    ///
-//    /// The molecule and all removed fundamentals continue to exist.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if the molecule is not in the map.
-//    pub(crate) fn drain_molecule(
-//        &mut self,
-//        molecule: Molecule,
-//    ) -> impl Iterator<Item = AnyFundamental> {
-//        let mol = self
-//            .molecules
-//            .get_mut(molecule.into())
-//            .expect("Caller is required to ensure that the molecule is valid");
-//        mol.members.drain()
-//    }
-//
-//    /// Empties a substituent by deleting all its members.
-//    ///
-//    /// The substituent itself continues to exist, and will be centreless.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if the substituent is not in the map.
-//    pub(crate) fn clear_substituent(&mut self, substituent: Substituent) {
-//        let sub = self
-//            .substituents
-//            .get_mut(substituent.into())
-//            .expect("Caller is required to ensure that the substituent is valid");
-//        sub.centre = SubstituentCentre::None;
-//        let former_members: Vec<AnyFundamental> = std::mem::take(&mut sub.members);
-//        // It's fine to delete in any order as if something isn't in the map any more
-//        // (e.g. because it's a bond and one of its bonding partners was already deleted
-//        // and thus it too was already deleted) then nothing changes when the deletion
-//        // is attempted
-//        for member in former_members {
-//            match member.resolve() {
-//                ResolvedFundamental::Atom(atom) => self.delete_atom(atom),
-//                ResolvedFundamental::Pseudoatom(pseudoatom) => self.delete_pseudoatom(pseudoatom),
-//                ResolvedFundamental::Bond(bond) => self.delete_bond(bond),
-//            };
-//        }
-//    }
-//
-//    /// Empties a molecule by deleting all its members.
-//    ///
-//    /// The molecule itself continues to exist.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if the molecule is not in the map.
-//    pub(crate) fn clear_molecule(&mut self, molecule: Molecule) {
-//        let mol = self
-//            .molecules
-//            .get_mut(molecule.into())
-//            .expect("Caller is required to ensure that the Molecule is valid");
-//        let former_members: Vec<AnyFundamental> = mol.members.drain().collect();
-//        // It's fine to delete in any order as if something isn't in the map any more
-//        // (e.g. because it's a bond and one of its bonding partners was already deleted
-//        // and thus it too was already deleted) then nothing changes when the deletion
-//        // is attempted
-//        for member in former_members {
-//            match member.resolve() {
-//                ResolvedFundamental::Atom(atom) => self.delete_atom(atom),
-//                ResolvedFundamental::Pseudoatom(pseudoatom) => self.delete_pseudoatom(pseudoatom),
-//                ResolvedFundamental::Bond(bond) => self.delete_bond(bond),
-//            };
-//        }
-//    }
-//
-//    /// Empties a substituent and then removes it from the map, returning the IDs of the
-//    /// former members.
-//    ///
-//    /// All removed fundamentals continue to exist.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if the substituent is not in the map.
-//    pub(crate) fn dissolve_substituent(
-//        &mut self,
-//        substituent: Substituent,
-//    ) -> impl Iterator<Item = AnyFundamental> {
-//        let sub = self
-//            .substituents
-//            .remove(substituent.into())
-//            .expect("Caller is required to ensure that the Molecule is valid");
-//        sub.members.into_iter()
-//    }
-//
-//    /// Empties a molecule and then removes it from the map, returning the IDs of the
-//    /// former members.
-//    ///
-//    /// All removed fundamentals continue to exist.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if the molecule is not in the map.
-//    pub(crate) fn dissolve_molecule(
-//        &mut self,
-//        molecule: Molecule,
-//    ) -> impl Iterator<Item = AnyFundamental> {
-//        let mol = self
-//            .molecules
-//            .remove(molecule.into())
-//            .expect("Caller is required to ensure that the Molecule is valid");
-//        mol.members.into_iter()
-//    }
-//}
-//
-///// Methods to query or ascertain membership.
-//impl MolGraph {
-//    /// Determines the substituent that contains the atom, pseudoatom, or bond, if any.
-//    pub(crate) fn parent_substituent(&self, fundamental: impl Fundamental) -> Option<Substituent> {
-//        for (sub, sub_data) in self.substituents.iter() {
-//            if sub_data.members.contains(&fundamental.as_fundamental()) {
-//                return Some(sub.into());
-//            }
-//        }
-//        None
-//    }
-//
-//    /// Determines the molecule that contains the atom, pseudoatom, or bond, if any.
-//    pub(crate) fn parent_molecule(&self, fundamental: impl Fundamental) -> Option<Molecule> {
-//        for (mol, mol_data) in self.molecules.iter() {
-//            if mol_data.members.contains(&fundamental.as_fundamental()) {
-//                return Some(mol.into());
-//            }
-//        }
-//        None
-//    }
-//}
-//
-//impl MolGraph {
-//    /// Attempts to change the centre of the substituent to the one requested.
-//    ///
-//    /// # Errors
-//    ///
-//    /// Fails if the requested centre is not already a member of the substituent,
-//    /// or if there are already bonds to the current centre(s).
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if `substituent` is invalid.
-//    pub(crate) fn set_substituent_centre(
-//        &mut self,
-//        substituent: Substituent,
-//        new_centre: impl Atomlike,
-//    ) -> MolMapResult<()> {
-//        // First confirm that the new centre is actually a member of the substituent
-//        let sub_data = self
-//            .data(substituent)
-//            .expect("Caller is required to ensure that the molecule is valid");
-//        if !sub_data
-//            .members
-//            .contains(&new_centre.as_atomlike().as_fundamental())
-//        {
-//            return Err(MolMapError::Membership(
-//                new_centre.as_atomlike().as_fundamental(),
-//            ));
-//        }
-//        // A closure that determines if an atom or pseudoatom has bonds already
-//        let atomlike_has_bonds = |id: AnyAtomlike| -> bool {
-//            let bonds = match id.resolve() {
-//                ResolvedAtomlike::Atom(atom) => {
-//                    &self
-//                        .data(atom)
-//                        .expect("Wouldn't be listed as the centre if it had been removed")
-//                        .bonds
-//                }
-//                ResolvedAtomlike::Pseudoatom(pseudoatom) => {
-//                    &self
-//                        .data(pseudoatom)
-//                        .expect("Wouldn't be listed as the centre if it had been removed")
-//                        .bonds
-//                }
-//            };
-//            !bonds.is_empty()
-//        };
-//        // Check that there aren't already bonds to the current centre
-//        let already_bonded = match &sub_data.centre {
-//            SubstituentCentre::None => false,
-//            SubstituentCentre::Single(atomlike_id) => atomlike_has_bonds(*atomlike_id),
-//            SubstituentCentre::Multiple(atomlike_ids) => {
-//                atomlike_ids.iter().copied().any(atomlike_has_bonds)
-//            }
-//        };
-//        if already_bonded {
-//            Err(MolMapError::Disallowed(String::from(
-//                "Substituent already has at least one bond to its centre(s)",
-//            )))
-//        } else {
-//            self.data_mut(substituent)
-//                .expect("Already validated")
-//                .centre = SubstituentCentre::Single(new_centre.as_atomlike());
-//            Ok(())
-//        }
-//    }
-//
-//    /// Makes the requested atomlike a centre of the substituent, in addition to any
-//    /// already existing centres.
-//    ///
-//    /// # Errors
-//    ///
-//    /// Fails if the requested centre is not already a member of the substituent.
-//    ///
-//    /// # Panics
-//    ///
-//    /// Panics if `substituent` is invalid.
-//    pub(crate) fn add_substituent_centre(
-//        &mut self,
-//        substituent: Substituent,
-//        new_centre: impl Atomlike,
-//    ) -> MolMapResult<()> {
-//        // First confirm that the new centre is actually a member of the substituent
-//        let sub_data = self
-//            .data_mut(substituent)
-//            .expect("Caller is required to ensure that the molecule is valid");
-//        if !sub_data
-//            .members
-//            .contains(&new_centre.as_atomlike().as_fundamental())
-//        {
-//            return Err(MolMapError::Membership(
-//                new_centre.as_atomlike().as_fundamental(),
-//            ));
-//        }
-//        match &mut sub_data.centre {
-//            SubstituentCentre::None => {
-//                self.data_mut(substituent)
-//                    .expect("Already validated")
-//                    .centre = SubstituentCentre::Single(new_centre.as_atomlike())
-//            }
-//            SubstituentCentre::Single(existing_centre) => {
-//                self.data_mut(substituent)
-//                    .expect("Already validated")
-//                    .centre = SubstituentCentre::Multiple(Box::new(vec![
-//                    *existing_centre,
-//                    new_centre.as_atomlike(),
-//                ]))
-//            }
-//            SubstituentCentre::Multiple(existing_centres) => {
-//                existing_centres.push(new_centre.as_atomlike())
-//            }
-//        }
-//        Ok(())
-//    }
-//}
-//
+// Public API for deleting entities via mutable views
+
+impl<'m> ViewMut<'m, MolMap, Atom> {
+    /// Removes the atom from the map, as well as any bonds to it.
+    pub fn delete(self) {
+        self.map.delete_atom(self.id);
+    }
+}
+
+impl<'m> ViewMut<'m, MolMap, Pseudoatom> {
+    /// Removes the pseudoatom from the map, as well as any bonds to it.
+    pub fn delete(self) {
+        self.map.delete_pseudoatom(self.id);
+    }
+}
+
+impl<'m> ViewMut<'m, MolMap, Bond> {
+    /// Removes the bond from the map (but not its bonding partners).
+    pub fn delete(self) {
+        self.map.delete_bond(self.id);
+    }
+}
+
+impl<'m> ViewMut<'m, MolMap, Substituent> {
+    /// Removes the substituent from the map, as well as all of its members.
+    pub fn delete(self) {
+        self.map.delete_substituent(self.id);
+    }
+}
+
+impl<'m> ViewMut<'m, MolMap, Molecule> {
+    /// Removes the molecule from the map, as well as all of its members.
+    pub fn delete(self) {
+        self.map.delete_molecule(self.id);
+    }
+}
+
+/// Methods to change collection membership.
+impl MolMap {
+    // /// Adds an atom, pseudoatom, or bond to a substituent.
+    // ///
+    // /// Returns whether the fundamental was newly inserted.
+    // ///
+    // /// If the fundamental is already a member of another substituent, it is removed
+    // /// from it before it is inserted into this one.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if `substituent` is invalid, but is unaffected if `fundamental` is
+    // /// invalid.
+    // pub(crate) fn insert_into_substituent(
+    //     &mut self,
+    //     substituent: Substituent,
+    //     fundamental: impl Fundamental,
+    // ) -> bool {
+    //     if let Some(parent) = self.parent_substituent(fundamental) {
+    //         if parent == substituent {
+    //             // Already a member of this substituent
+    //             return false;
+    //         } else {
+    //             self.remove_from_substituent(parent, fundamental);
+    //         }
+    //     }
+    //     self.insert_into_substituent_unchecked(substituent, fundamental)
+    // }
+
+    // /// Adds an atom, pseudoatom, or bond to a substituent.
+    // ///
+    // /// Returns whether the fundamental was newly inserted.
+    // ///
+    // /// This method should only ever be used with fundamentals that do not already
+    // /// belong to a substituent.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if `substituent` is invalid, but is unaffected if `fundamental` is
+    // /// invalid.
+    // pub(crate) fn insert_into_substituent_unchecked(
+    //     &mut self,
+    //     substituent: Substituent,
+    //     fundamental: impl Fundamental,
+    // ) -> bool {
+    //     let sub = self.substituents.get_mut(substituent.into()).unwrap();
+    //     let fund = fundamental.as_fundamental();
+    //     // members is just a Vec, so have to manually make sure we don't end up with
+    //     // any ID in the substituent twice
+    //     if !sub.members.contains(&fund) {
+    //         sub.members.push(fund);
+    //         true
+    //     } else {
+    //         false
+    //     }
+    // }
+
+    // /// Adds an atom, pseudoatom, or bond to a molecule.
+    // ///
+    // /// Returns whether the fundamental was newly inserted.
+    // ///
+    // /// If the fundamental is already a member of another molecule, it is removed
+    // /// from it before it is inserted into this one.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if `molecule` is invalid, but is unaffected if `fundamental` is
+    // /// invalid.
+    // pub(crate) fn insert_into_molecule(
+    //     &mut self,
+    //     molecule: Molecule,
+    //     fundamental: impl Fundamental,
+    // ) -> bool {
+    //     if let Some(parent) = self.parent_molecule(fundamental) {
+    //         if parent == molecule {
+    //             // Already a member of this molecule
+    //             return false;
+    //         } else {
+    //             self.remove_from_molecule(parent, fundamental);
+    //         }
+    //     }
+    //     self.insert_into_molecule_unchecked(molecule, fundamental)
+    // }
+
+    // /// Adds an atom, pseudoatom, or bond to a molecule.
+    // ///
+    // /// Returns whether the fundamental was newly inserted.
+    // ///
+    // /// This method should only ever be used with fundamentals that do not already
+    // /// belong to a molecule.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if `molecule` is invalid, but is unaffected if `fundamental` is
+    // /// invalid.
+    // pub(crate) fn insert_into_molecule_unchecked(
+    //     &mut self,
+    //     molecule: Molecule,
+    //     fundamental: impl Fundamental,
+    // ) -> bool {
+    //     let mol = self.molecules.get_mut(molecule.into()).unwrap();
+    //     mol.members.insert(fundamental.as_fundamental())
+    // }
+
+    // /// Adds atoms, pseudoatoms, or bonds from an iterator to a substituent.
+    // ///
+    // /// This method should only ever be used with fundamentals that do not already
+    // /// belong to a substituent.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if `substituent` is invalid, but is unaffected if any of the fundamental
+    // /// IDs are invalid.
+    // #[allow(unused)]
+    // pub(crate) fn extend_substituent_unchecked<I, E>(
+    //     &mut self,
+    //     substituent: Substituent,
+    //     fundamentals: I,
+    // ) where
+    //     I: IntoIterator<Item = E>,
+    //     E: Fundamental,
+    // {
+    //     let sub = self.substituents.get_mut(substituent.into()).unwrap();
+    //     sub.members
+    //         .extend(fundamentals.into_iter().map(|e| e.as_fundamental()))
+    // }
+
+    // /// Adds atoms, pseudoatoms, or bonds from an iterator to a molecule.
+    // ///
+    // /// This method should only ever be used with fundamentals that do not already
+    // /// belong to a molecule.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if `molecule` is invalid, but is unaffected if any of the fundamental
+    // /// IDs are invalid.
+    // #[allow(unused)]
+    // pub(crate) fn extend_molecule_unchecked<I, E>(&mut self, molecule: Molecule, fundamentals: I)
+    // where
+    //     I: IntoIterator<Item = E>,
+    //     E: Fundamental,
+    // {
+    //     let mol = self.molecules.get_mut(molecule.into()).unwrap();
+    //     mol.members
+    //         .extend(fundamentals.into_iter().map(|e| e.as_fundamental()))
+    // }
+
+    // /// Removes an atom, pseudoatom, or bond from a substituent.
+    // ///
+    // /// Returns whether the fundamental was a member of the substituent.
+    // ///
+    // /// If the fundamental is an atomlike and is the centre of the substituent,
+    // /// the centre is adjusted accordingly; if it is the lone centre, the
+    // /// substituent becomes centreless. If it is one of two centres,
+    // /// however, the centre remains `SubstituentCentre::Multiple` rather than
+    // /// becoming `Single`.
+    // ///
+    // /// The substituent continues to exist, even if empty, as does the removed
+    // /// fundamental.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if `substituent` is invalid.
+    // pub(crate) fn remove_from_substituent(
+    //     &mut self,
+    //     substituent: Substituent,
+    //     fundamental: impl Fundamental,
+    // ) -> bool {
+    //     let sub = self.substituents.get_mut(substituent.into()).unwrap();
+    //     let fund = fundamental.as_fundamental();
+    //     if let Some(index) = sub.members.iter().position(|x| *x == fund) {
+    //         sub.members.swap_remove(index);
+    //     } else {
+    //         return false;
+    //     }
+    //     // If fundamental is an atomlike, we might be removing the centre of the
+    //     // substituent (or one of them).
+    //     // Is so, adjust the centres of the substituent accordingly
+    //     match &mut sub.centre {
+    //         SubstituentCentre::None => (),
+    //         SubstituentCentre::Single(atomlike) => {
+    //             if atomlike.into_inner() == fundamental.into_inner() {
+    //                 // No longer has a centre
+    //                 sub.centre = SubstituentCentre::None
+    //             }
+    //         }
+    //         SubstituentCentre::Multiple(atomlikes) => {
+    //             if let Some(atomlike) = match Fundamental::to_resolved(fundamental) {
+    //                 ResolvedFundamental::Bond(_) => None,
+    //                 ResolvedFundamental::Atom(atom) => Some(atom.into()),
+    //                 ResolvedFundamental::Pseudoatom(pseudoatom) => Some(pseudoatom.into()),
+    //             } && let Some(index) = atomlikes.iter().position(|x| *x == atomlike)
+    //             {
+    //                 // We want to preserve order
+    //                 atomlikes.remove(index);
+    //             }
+    //         }
+    //     }
+    //     true
+    // }
+
+    // /// Removes an atom, pseudoatom, or bond from a molecule.
+    // ///
+    // /// Returns whether the fundamental was a member of the molecule.
+    // ///
+    // /// The molecule continues to exist even if empty, as does the removed
+    // /// fundamental.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if `molecule` is invalid.
+    // pub(crate) fn remove_from_molecule(
+    //     &mut self,
+    //     molecule: Molecule,
+    //     fundamental: impl Fundamental,
+    // ) -> bool {
+    //     let mol = self.molecules.get_mut(molecule.into()).unwrap();
+    //     mol.members.remove(&fundamental.as_fundamental())
+    // }
+
+    // /// Empties a substituent by removing all its members, returning an iterator over
+    // /// the IDs of the former members.
+    // ///
+    // /// The substituent and all removed fundamentals continue to exist.
+    // ///
+    // /// After this operation, the substituent will be centreless.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if the substituent is not in the map.
+    // pub(crate) fn drain_substituent(
+    //     &mut self,
+    //     substituent: Substituent,
+    // ) -> impl Iterator<Item = AnyFundamental> {
+    //     let sub = self
+    //         .substituents
+    //         .get_mut(substituent.into())
+    //         .expect("Caller is required to ensure that the substituent is valid");
+    //     sub.centre = SubstituentCentre::None;
+    //     sub.members.drain(..)
+    // }
+
+    // /// Empties a molecule by removing all its members, returning an iterator over
+    // /// the IDs of the former members.
+    // ///
+    // /// The molecule and all removed fundamentals continue to exist.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if the molecule is not in the map.
+    // pub(crate) fn drain_molecule(
+    //     &mut self,
+    //     molecule: Molecule,
+    // ) -> impl Iterator<Item = AnyFundamental> {
+    //     let mol = self
+    //         .molecules
+    //         .get_mut(molecule.into())
+    //         .expect("Caller is required to ensure that the molecule is valid");
+    //     mol.members.drain()
+    // }
+
+    // /// Empties a substituent by deleting all its members.
+    // ///
+    // /// The substituent itself continues to exist, and will be centreless.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if the substituent is not in the map.
+    // pub(crate) fn clear_substituent(&mut self, substituent: Substituent) {
+    //     let sub = self
+    //         .substituents
+    //         .get_mut(substituent.into())
+    //         .expect("Caller is required to ensure that the substituent is valid");
+    //     sub.centre = SubstituentCentre::None;
+    //     let former_members: Vec<AnyFundamental> = std::mem::take(&mut sub.members);
+    //     // It's fine to delete in any order as if something isn't in the map any more
+    //     // (e.g. because it's a bond and one of its bonding partners was already deleted
+    //     // and thus it too was already deleted) then nothing changes when the deletion
+    //     // is attempted
+    //     for member in former_members {
+    //         match member.resolve() {
+    //             ResolvedFundamental::Atom(atom) => self.delete_atom(atom),
+    //             ResolvedFundamental::Pseudoatom(pseudoatom) => self.delete_pseudoatom(pseudoatom),
+    //             ResolvedFundamental::Bond(bond) => self.delete_bond(bond),
+    //         };
+    //     }
+    // }
+
+    // /// Empties a molecule by deleting all its members.
+    // ///
+    // /// The molecule itself continues to exist.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if the molecule is not in the map.
+    // pub(crate) fn clear_molecule(&mut self, molecule: Molecule) {
+    //     let mol = self
+    //         .molecules
+    //         .get_mut(molecule.into())
+    //         .expect("Caller is required to ensure that the Molecule is valid");
+    //     let former_members: Vec<AnyFundamental> = mol.members.drain().collect();
+    //     // It's fine to delete in any order as if something isn't in the map any more
+    //     // (e.g. because it's a bond and one of its bonding partners was already deleted
+    //     // and thus it too was already deleted) then nothing changes when the deletion
+    //     // is attempted
+    //     for member in former_members {
+    //         match member.resolve() {
+    //             ResolvedFundamental::Atom(atom) => self.delete_atom(atom),
+    //             ResolvedFundamental::Pseudoatom(pseudoatom) => self.delete_pseudoatom(pseudoatom),
+    //             ResolvedFundamental::Bond(bond) => self.delete_bond(bond),
+    //         };
+    //     }
+    // }
+
+    // /// Empties a substituent and then removes it from the map, returning the IDs of the
+    // /// former members.
+    // ///
+    // /// All removed fundamentals continue to exist.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if the substituent is not in the map.
+    // pub(crate) fn dissolve_substituent(
+    //     &mut self,
+    //     substituent: Substituent,
+    // ) -> impl Iterator<Item = AnyFundamental> {
+    //     let sub = self
+    //         .substituents
+    //         .remove(substituent.into())
+    //         .expect("Caller is required to ensure that the Molecule is valid");
+    //     sub.members.into_iter()
+    // }
+
+    // /// Empties a molecule and then removes it from the map, returning the IDs of the
+    // /// former members.
+    // ///
+    // /// All removed fundamentals continue to exist.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if the molecule is not in the map.
+    // pub(crate) fn dissolve_molecule(
+    //     &mut self,
+    //     molecule: Molecule,
+    // ) -> impl Iterator<Item = AnyFundamental> {
+    //     let mol = self
+    //         .molecules
+    //         .remove(molecule.into())
+    //         .expect("Caller is required to ensure that the Molecule is valid");
+    //     mol.members.into_iter()
+    // }
+}
+
+/// Methods to query or ascertain membership.
+impl MolMap {
+    // /// Determines the substituent that contains the atom, pseudoatom, or bond, if any.
+    // pub(crate) fn parent_substituent(&self, fundamental: impl Fundamental) -> Option<Substituent> {
+    //     for (sub, sub_data) in self.substituents.iter() {
+    //         if sub_data.members.contains(&fundamental.as_fundamental()) {
+    //             return Some(sub.into());
+    //         }
+    //     }
+    //     None
+    // }
+
+    // /// Determines the molecule that contains the atom, pseudoatom, or bond, if any.
+    // pub(crate) fn parent_molecule(&self, fundamental: impl Fundamental) -> Option<Molecule> {
+    //     for (mol, mol_data) in self.molecules.iter() {
+    //         if mol_data.members.contains(&fundamental.as_fundamental()) {
+    //             return Some(mol.into());
+    //         }
+    //     }
+    //     None
+    // }
+}
+
+impl MolMap {
+    // /// Attempts to change the centre of the substituent to the one requested.
+    // ///
+    // /// # Errors
+    // ///
+    // /// Fails if the requested centre is not already a member of the substituent,
+    // /// or if there are already bonds to the current centre(s).
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if `substituent` is invalid.
+    // pub(crate) fn set_substituent_centre(
+    //     &mut self,
+    //     substituent: Substituent,
+    //     new_centre: impl Atomlike,
+    // ) -> MolMapResult<()> {
+    //     // First confirm that the new centre is actually a member of the substituent
+    //     let sub_data = self
+    //         .data(substituent)
+    //         .expect("Caller is required to ensure that the molecule is valid");
+    //     if !sub_data
+    //         .members
+    //         .contains(&new_centre.as_atomlike().as_fundamental())
+    //     {
+    //         return Err(MolMapError::Membership(
+    //             new_centre.as_atomlike().as_fundamental(),
+    //         ));
+    //     }
+    //     // A closure that determines if an atom or pseudoatom has bonds already
+    //     let atomlike_has_bonds = |id: AnyAtomlike| -> bool {
+    //         let bonds = match id.resolve() {
+    //             ResolvedAtomlike::Atom(atom) => {
+    //                 &self
+    //                     .data(atom)
+    //                     .expect("Wouldn't be listed as the centre if it had been removed")
+    //                     .bonds
+    //             }
+    //             ResolvedAtomlike::Pseudoatom(pseudoatom) => {
+    //                 &self
+    //                     .data(pseudoatom)
+    //                     .expect("Wouldn't be listed as the centre if it had been removed")
+    //                     .bonds
+    //             }
+    //         };
+    //         !bonds.is_empty()
+    //     };
+    //     // Check that there aren't already bonds to the current centre
+    //     let already_bonded = match &sub_data.centre {
+    //         SubstituentCentre::None => false,
+    //         SubstituentCentre::Single(atomlike_id) => atomlike_has_bonds(*atomlike_id),
+    //         SubstituentCentre::Multiple(atomlike_ids) => {
+    //             atomlike_ids.iter().copied().any(atomlike_has_bonds)
+    //         }
+    //     };
+    //     if already_bonded {
+    //         Err(MolMapError::Disallowed(String::from(
+    //             "Substituent already has at least one bond to its centre(s)",
+    //         )))
+    //     } else {
+    //         self.data_mut(substituent)
+    //             .expect("Already validated")
+    //             .centre = SubstituentCentre::Single(new_centre.as_atomlike());
+    //         Ok(())
+    //     }
+    // }
+
+    // /// Makes the requested atomlike a centre of the substituent, in addition to any
+    // /// already existing centres.
+    // ///
+    // /// # Errors
+    // ///
+    // /// Fails if the requested centre is not already a member of the substituent.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if `substituent` is invalid.
+    // pub(crate) fn add_substituent_centre(
+    //     &mut self,
+    //     substituent: Substituent,
+    //     new_centre: impl Atomlike,
+    // ) -> MolMapResult<()> {
+    //     // First confirm that the new centre is actually a member of the substituent
+    //     let sub_data = self
+    //         .data_mut(substituent)
+    //         .expect("Caller is required to ensure that the molecule is valid");
+    //     if !sub_data
+    //         .members
+    //         .contains(&new_centre.as_atomlike().as_fundamental())
+    //     {
+    //         return Err(MolMapError::Membership(
+    //             new_centre.as_atomlike().as_fundamental(),
+    //         ));
+    //     }
+    //     match &mut sub_data.centre {
+    //         SubstituentCentre::None => {
+    //             self.data_mut(substituent)
+    //                 .expect("Already validated")
+    //                 .centre = SubstituentCentre::Single(new_centre.as_atomlike())
+    //         }
+    //         SubstituentCentre::Single(existing_centre) => {
+    //             self.data_mut(substituent)
+    //                 .expect("Already validated")
+    //                 .centre = SubstituentCentre::Multiple(Box::new(vec![
+    //                 *existing_centre,
+    //                 new_centre.as_atomlike(),
+    //             ]))
+    //         }
+    //         SubstituentCentre::Multiple(existing_centres) => {
+    //             existing_centres.push(new_centre.as_atomlike())
+    //         }
+    //     }
+    //     Ok(())
+    // }
+}
+
+impl<'m> ViewMut<'m, MolMap, Substituent> {
+    // /// Adds an atom, pseudoatom, or bond to the substituent.
+    // ///
+    // /// Returns whether the fundamental was newly inserted.
+    // ///
+    // /// If the fundamental is already a member of another substituent, it is removed
+    // /// from it before it is inserted into this one.
+    // ///
+    // /// # Errors
+    // ///
+    // /// Returns an error if the fundamental is invalid.
+    // pub fn insert(self, fundamental: impl Fundamental) -> MolMapResult<bool> {
+    //     if !self.map.contains(fundamental) {
+    //         return Err(MolMapError::InvalidId(fundamental.as_entity()));
+    //     };
+    //     Ok(self
+    //         .map
+    //         .core_mut()
+    //         .insert_into_substituent(self.id, fundamental))
+    // }
+
+    // /// Adds atoms, pseudoatoms, or bonds from an iterator to the substituent.
+    // ///
+    // /// If any of the fundamentals are already members of other substituents, they are
+    // /// removed before they are inserted into this one.
+    // ///
+    // /// # Errors
+    // ///
+    // /// Returns an error if any of the fundamentals are invalid, in which case the
+    // /// map will remain unchanged; the returned error will hold the ID of the first
+    // /// invalid fundamental encountered.
+    // pub fn extend<E, I>(self, fundamentals: I) -> MolMapResult<()>
+    // where
+    //     E: Entity + Into<AnyFundamental>,
+    //     I: IntoIterator<Item = E>,
+    //     I::IntoIter: Clone,
+    // {
+    //     let fundamentals = fundamentals.into_iter();
+    //     for f in fundamentals.clone() {
+    //         if !self.map.contains(f) {
+    //             return Err(MolMapError::InvalidId(f.as_entity()));
+    //         }
+    //     }
+    //     for f in fundamentals {
+    //         self.map
+    //             .core_mut()
+    //             .insert_into_substituent(self.id, f.into());
+    //     }
+    //     Ok(())
+    // }
+
+    // /// Removes an atom, pseudoatom, or bond from the substituent.
+    // ///
+    // /// Returns whether the fundamental was a member of the substituent.
+    // ///
+    // /// If the fundamental is an atomlike and is the centre of the substituent,
+    // /// the centre is adjusted accordingly; if it is the lone centre, the
+    // /// substituent becomes centreless. If it is one of two centres,
+    // /// however, the centre remains `SubstituentCentre::Multiple` rather than
+    // /// becoming `Single`.
+    // ///
+    // /// The substituent continues to exist, even if empty, as does the removed
+    // /// fundamental.
+    // pub fn remove(self, fundamental: impl Fundamental) -> bool {
+    //     self.map
+    //         .core_mut()
+    //         .remove_from_substituent(self.id, fundamental)
+    // }
+
+    // /// Empties the substituent by removing all its members, returning an iterator
+    // /// over the IDs of the former members.
+    // ///
+    // /// The substituent and all removed fundamentals continue to exist.
+    // ///
+    // /// After this operation, the substituent will be centreless.
+    // pub fn drain(self) -> impl Iterator<Item = AnyFundamental> {
+    //     self.map.core_mut().drain_substituent(self.id)
+    // }
+
+    // /// Empties the substituent by deleting all its members.
+    // ///
+    // /// The substituent itself continues to exist, and will be centreless.
+    // pub fn clear(self) {
+    //     self.map.core_mut().clear_substituent(self.id);
+    // }
+
+    // /// Empties the substituent and then removes it from the map, returning the IDs of
+    // /// the former members.
+    // ///
+    // /// All removed fundamentals continue to exist.
+    // pub fn dissolve(self) -> impl Iterator<Item = AnyFundamental> {
+    //     self.map.core_mut().dissolve_substituent(self.id)
+    // }
+}
+
+impl<'m> ViewMut<'m, MolMap, Molecule> {
+    // /// Adds an atom, pseudoatom, or bond to the molecule.
+    // ///
+    // /// Returns whether the fundamental was newly inserted.
+    // ///
+    // /// If the fundamental is already a member of another molecule, it is removed
+    // /// from it before it is inserted into this one.
+    // ///
+    // /// # Errors
+    // ///
+    // /// Returns an error if the fundamental is invalid.
+    // pub fn insert(self, fundamental: impl Fundamental) -> MolMapResult<bool> {
+    //     if !self.map.contains(fundamental) {
+    //         return Err(MolMapError::InvalidId(fundamental.as_entity()));
+    //     };
+    //     Ok(self
+    //         .map
+    //         .core_mut()
+    //         .insert_into_molecule(self.id, fundamental))
+    // }
+
+    // /// Adds atoms, pseudoatoms, or bonds from an iterator to the molecule.
+    // ///
+    // /// If any of the fundamentals are already members of other molecules, they are
+    // /// removed before they are inserted into this one.
+    // ///
+    // /// # Errors
+    // ///
+    // /// Returns an error if any of the fundamentals are invalid, in which case the
+    // /// map will remain unchanged; the returned error will hold the ID of the first
+    // /// invalid fundamental encountered.
+    // pub fn extend<E, I>(self, fundamentals: I) -> MolMapResult<()>
+    // where
+    //     E: Entity + Into<AnyFundamental>,
+    //     I: IntoIterator<Item = E>,
+    //     I::IntoIter: Clone,
+    // {
+    //     let fundamentals = fundamentals.into_iter();
+    //     for f in fundamentals.clone() {
+    //         if !self.map.contains(f) {
+    //             return Err(MolMapError::InvalidId(f.as_entity()));
+    //         }
+    //     }
+    //     for f in fundamentals {
+    //         self.map.core_mut().insert_into_molecule(self.id, f.into());
+    //     }
+    //     Ok(())
+    // }
+
+    // /// Removes an atom, pseudoatom, or bond from the molecule.
+    // ///
+    // /// Returns whether the fundamental was a member of the molecule.
+    // ///
+    // /// The molecule continues to exist even if empty, as does the removed
+    // /// fundamental.
+    // pub fn remove(self, fundamental: impl Fundamental) -> bool {
+    //     self.map
+    //         .core_mut()
+    //         .remove_from_molecule(self.id, fundamental)
+    // }
+
+    // /// Empties the molecule by removing all its members, returning an iterator
+    // /// over the IDs of the former members.
+    // ///
+    // /// The molecule and all removed fundamentals continue to exist.
+    // pub fn drain(self) -> impl Iterator<Item = AnyFundamental> {
+    //     self.map.core_mut().drain_molecule(self.id)
+    // }
+
+    // /// Empties the molecule by deleting all its members.
+    // ///
+    // /// The molecule itself continues to exist.
+    // pub fn clear(self) {
+    //     self.map.core_mut().clear_molecule(self.id);
+    // }
+
+    // /// Empties the molecule and then removes it from the map, returning the IDs of the
+    // /// former members.
+    // ///
+    // /// All removed fundamentals continue to exist.
+    // pub fn dissolve(self) -> impl Iterator<Item = AnyFundamental> {
+    //     self.map.core_mut().dissolve_molecule(self.id)
+    // }
+}
+
 //#[cfg(test)]
 //#[allow(unused)]
 //pub(crate) mod tests {
@@ -880,8 +1178,8 @@ impl MolGraph {
 //    /// - two substituents (CH3, OH)
 //    /// - six atoms
 //    /// - five bonds
-//    pub(crate) fn meoh_graph() -> MolGraph {
-//        let mut g = MolGraph::new();
+//    pub(crate) fn meoh_graph() -> MolMap {
+//        let mut g = MolMap::new();
 //        let h1 = g.add_atom(Element::H);
 //        let h2 = g.add_atom(Element::H);
 //        let h3 = g.add_atom(Element::H);
@@ -909,7 +1207,7 @@ impl MolGraph {
 //
 //    #[test]
 //    fn add_atom() {
-//        let mut g = MolGraph::new();
+//        let mut g = MolMap::new();
 //        assert!(g.atoms.is_empty());
 //        let h1 = g.add_atom(Element::H);
 //        assert_eq!(g.atoms.len(), 1);
@@ -924,7 +1222,7 @@ impl MolGraph {
 //
 //    #[test]
 //    fn add_pseudoatom() {
-//        let mut g = MolGraph::new();
+//        let mut g = MolMap::new();
 //        assert!(g.pseudoatoms.is_empty());
 //        let ph = g.add_pseudoatom(Pseudoelement::Ph);
 //        assert_eq!(g.pseudoatoms.len(), 1);
@@ -932,7 +1230,7 @@ impl MolGraph {
 //
 //    #[test]
 //    fn delete_atom() {
-//        let mut g = MolGraph::new();
+//        let mut g = MolMap::new();
 //        let h1 = g.add_atom(Element::H);
 //        let c1 = g.add_atom(Element::C);
 //        assert_eq!(g.atoms.len(), 2);
@@ -946,7 +1244,7 @@ impl MolGraph {
 //
 //    #[test]
 //    fn delete_pseudoatom() {
-//        let mut g = MolGraph::new();
+//        let mut g = MolMap::new();
 //        let et = g.add_pseudoatom(Pseudoelement::Et);
 //        assert_eq!(g.pseudoatoms.len(), 1);
 //        g.delete_pseudoatom(et);
@@ -955,7 +1253,7 @@ impl MolGraph {
 //
 //    #[test]
 //    fn slotmap() {
-//        let g = MolGraph::new();
+//        let g = MolMap::new();
 //        // Make sure that the generic slotmap method returns a reference to the appropriate slotmap
 //        assert!(std::ptr::eq(g.slotmap::<Atom>(), &g.atoms));
 //        assert!(std::ptr::eq(g.slotmap::<Bond>(), &g.bonds));
@@ -964,7 +1262,7 @@ impl MolGraph {
 //
 //    #[test]
 //    fn data() {
-//        let mut g = MolGraph::new();
+//        let mut g = MolMap::new();
 //        let h1 = g.add_atom(Element::H);
 //        let ph = g.add_pseudoatom(Pseudoelement::Ph);
 //        // Make sure that the generic data method returns a reference to the appropriate entity data struct
@@ -980,7 +1278,7 @@ impl MolGraph {
 //
 //    #[test]
 //    fn contains() {
-//        let mut g = MolGraph::new();
+//        let mut g = MolMap::new();
 //        let h1 = g.add_atom(Element::H);
 //        assert!(g.contains(h1));
 //        let ph = g.add_pseudoatom(Pseudoelement::Ph);
@@ -994,7 +1292,7 @@ impl MolGraph {
 //
 //    #[test]
 //    fn add_bond_between_atoms() {
-//        let mut g = MolGraph::new();
+//        let mut g = MolMap::new();
 //        assert!(g.bonds.is_empty());
 //        let h1 = g.add_atom(Element::H);
 //        let h2 = g.add_atom(Element::H);
@@ -1009,7 +1307,7 @@ impl MolGraph {
 //
 //    #[test]
 //    fn delete_bond_between_atoms() {
-//        let mut g = MolGraph::new();
+//        let mut g = MolMap::new();
 //        let h1 = g.add_atom(Element::H);
 //        let h2 = g.add_atom(Element::H);
 //        let b1 = g.add_bond(BondType::Covalent { order: 1.0 }, h1, h2);
@@ -1032,7 +1330,7 @@ impl MolGraph {
 //
 //    #[test]
 //    fn deleting_bonding_partner_deletes_bond() {
-//        let mut g = MolGraph::new();
+//        let mut g = MolMap::new();
 //        let h1 = g.add_atom(Element::H);
 //        let h2 = g.add_atom(Element::H);
 //        let b1 = g.add_bond(BondType::Covalent { order: 1.0 }, h1, h2);
@@ -1104,7 +1402,7 @@ impl MolGraph {
 //
 //    #[test]
 //    fn insert_into_sub() {
-//        let mut g = MolGraph::new();
+//        let mut g = MolMap::new();
 //        let h1 = g.add_atom(Element::H);
 //        let h2 = g.add_atom(Element::H);
 //        let s1 = g.add_substituent();
@@ -1129,7 +1427,7 @@ impl MolGraph {
 //
 //    #[test]
 //    fn insert_into_mol() {
-//        let mut g = MolGraph::new();
+//        let mut g = MolMap::new();
 //        let h1 = g.add_atom(Element::H);
 //        let h2 = g.add_atom(Element::H);
 //        let m1 = g.add_molecule();
@@ -1271,7 +1569,7 @@ impl MolGraph {
 //
 //    #[test]
 //    fn set_substituent_centre() {
-//        let mut g = MolGraph::new();
+//        let mut g = MolMap::new();
 //        let c1 = g.add_atom(Element::C);
 //        let n1 = g.add_atom(Element::N);
 //        assert_ne!(c1, n1);
@@ -1306,7 +1604,7 @@ impl MolGraph {
 //
 //    #[test]
 //    fn add_substituent_centre() {
-//        let mut g = MolGraph::new();
+//        let mut g = MolMap::new();
 //        let c1 = g.add_atom(Element::C);
 //        let o1 = g.add_atom(Element::O); // The double-bonded oxygen (designated arbitrarily)
 //        let o2 = g.add_atom(Element::O);

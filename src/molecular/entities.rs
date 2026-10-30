@@ -11,7 +11,7 @@
 
 use std::collections::HashSet;
 
-use crate::{View, ViewMut, entities::*, molecular::MolMap, traits::Stores};
+use crate::{View, ViewMut, entities::*, molecular::Molecular, traits::Stores};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum SubstituentCentre<'a> {
@@ -60,11 +60,11 @@ impl Stored for Substituent {
 
 impl<'m, M> View<'m, M, Substituent>
 where
-    M: MolMap,
+    M: Molecular,
 {
     /// Returns a reference to the data struct in the core graph.
     fn data(&self) -> &SubstituentData {
-        self.map.mol_graph().data(self.id).unwrap()
+        self.map.as_molecular().data(self.id).unwrap()
     }
 
     /// Returns details of the centre(s) of the substituent.
@@ -102,7 +102,7 @@ where
 
 impl<'m, M> ViewMut<'m, M, Substituent>
 where
-    M: MolMap,
+    M: Molecular,
 {
     ///// Attempts to change the centre of the substituent to the one requested.
     /////
@@ -154,11 +154,11 @@ impl Stored for Molecule {
 
 impl<'m, M> View<'m, M, Molecule>
 where
-    M: MolMap,
+    M: Molecular,
 {
     /// Returns a reference to the data struct in the core graph.
     fn data(&self) -> &MoleculeData {
-        self.map.mol_graph().data(self.id).unwrap()
+        self.map.as_molecular().data(self.id).unwrap()
     }
 
     /// Returns an iterator over the IDs of all constituent atoms, pseudoatoms, and bonds.
@@ -172,7 +172,7 @@ where
         for sub in &self.data().substituents {
             members.extend(
                 self.map
-                    .mol_graph()
+                    .as_molecular()
                     .data(*sub)
                     .unwrap()
                     .atomlikes
@@ -181,7 +181,7 @@ where
             );
             members.extend(
                 self.map
-                    .mol_graph()
+                    .as_molecular()
                     .data(*sub)
                     .unwrap()
                     .bonds
@@ -197,7 +197,7 @@ where
         match Fundamental::to_resolved(fundamental) {
             ResolvedFundamental::Atom(atom) => self.data().substituents.iter().any(|x| {
                 self.map
-                    .mol_graph()
+                    .as_molecular()
                     .data(*x)
                     .unwrap()
                     .atomlikes
@@ -206,7 +206,7 @@ where
             ResolvedFundamental::Pseudoatom(pseudoatom) => {
                 self.data().substituents.iter().any(|x| {
                     self.map
-                        .mol_graph()
+                        .as_molecular()
                         .data(*x)
                         .unwrap()
                         .atomlikes
@@ -215,11 +215,14 @@ where
             }
             ResolvedFundamental::Bond(bond) => {
                 self.data().bonds.contains(&bond)
-                    || self
-                        .data()
-                        .substituents
-                        .iter()
-                        .any(|x| self.map.mol_graph().data(*x).unwrap().bonds.contains(&bond))
+                    || self.data().substituents.iter().any(|x| {
+                        self.map
+                            .as_molecular()
+                            .data(*x)
+                            .unwrap()
+                            .bonds
+                            .contains(&bond)
+                    })
             }
         }
     }
