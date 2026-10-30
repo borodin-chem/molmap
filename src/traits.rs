@@ -166,7 +166,7 @@ pub trait Map: Sized {
     /// This method must be flexible and able to do the check for any [`Entity`] type,
     /// not just ones actually in the map, and including category types.
     fn contains<E: Entity>(&self, entity: E) -> bool {
-        self.as_graph().contains(entity)
+        self.as_graph().contains_entity(entity)
     }
 
     /// Returns an iterator over all of a given kind of entity in the map.
