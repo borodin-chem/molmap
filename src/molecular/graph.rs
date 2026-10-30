@@ -241,6 +241,7 @@ impl MolMap {
     /// # Panics
     ///
     /// Panics if either of `start` and `end` are invalid.
+    #[expect(unused_variables)]
     pub fn add_bond_unchecked<A, B>(&mut self, bond_type: BondType, start: A, end: B) -> Bond
     where
         A: Bondable,
@@ -302,6 +303,7 @@ impl MolMap {
     /// Returns whether the atom was present in the map.
     ///
     /// This is infallible – if the atom is not in the map, nothing changes.
+    #[expect(unused_variables)]
     pub(crate) fn delete_atom(&mut self, atom: Atom) -> bool {
         // if !self.contains(atom) {
         //     return false;
@@ -328,6 +330,7 @@ impl MolMap {
     /// Returns whether the pseudoatom was present in the map.
     ///
     /// This is infallible – if the pseudoatom is not in the map, nothing changes.
+    #[expect(unused_variables)]
     pub(crate) fn delete_pseudoatom(&mut self, pseudoatom: Pseudoatom) -> bool {
         // if !self.contains(pseudoatom) {
         //     return false;
@@ -359,6 +362,7 @@ impl MolMap {
     ///
     /// Panics if either of the bond's bonding partners does not exist (which
     /// should never be the case – bonds are last in, first out).
+    #[expect(unused_variables)]
     pub(crate) fn delete_bond(&mut self, bond: Bond) -> bool {
         // if let Some(bond_data) = self.bonds.remove(bond.into()) {
         //     for bonding_partner in [bond_data.start, bond_data.end] {
@@ -402,6 +406,7 @@ impl MolMap {
     /// Returns whether the substituent was present in the map.
     ///
     /// This is infallible – if the substituent is not in the map, nothing changes.
+    #[expect(unused_variables)]
     pub(crate) fn delete_substituent(&mut self, substituent: Substituent) -> bool {
         // if !self.contains(substituent) {
         //     return false;
@@ -429,6 +434,7 @@ impl MolMap {
     /// Returns whether the molecule was present in the map.
     ///
     /// This is infallible – if the molecule is not in the map, nothing changes.
+    #[expect(unused_variables)]
     pub(crate) fn delete_molecule(&mut self, molecule: Molecule) -> bool {
         // if !self.contains(molecule) {
         //     return false;
