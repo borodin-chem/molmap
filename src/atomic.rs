@@ -8,8 +8,9 @@
 
 mod graph;
 mod spatial;
+mod views;
 
-pub(crate) mod entities;
+pub(crate) mod data;
 
 pub use graph::AtomMap;
 pub use spatial::{AtomMap2, AtomMap3};

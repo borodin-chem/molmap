@@ -16,7 +16,7 @@ use crate::{
     traits::{Graph, Stores, StoresMut},
 };
 
-use super::entities::*;
+use super::data::*;
 
 /// A map holding fundamental atomic entities, and a network of bonds between them.
 ///
@@ -319,26 +319,29 @@ impl AtomMap {
     }
 }
 
-// Public API for deleting entities via mutable views
+/// View methods specific to `AtomMap`.
+mod views {
+    use super::*;
 
-impl<'m> ViewMut<'m, AtomMap, Atom> {
-    /// Removes the atom from the map, as well as any bonds to it.
-    pub fn delete(self) {
-        self.map.delete_atom(self.id);
+    impl<'m> ViewMut<'m, AtomMap, Atom> {
+        /// Removes the atom from the map, as well as any bonds to it.
+        pub fn delete(self) {
+            self.map.delete_atom(self.id);
+        }
     }
-}
 
-impl<'m> ViewMut<'m, AtomMap, Pseudoatom> {
-    /// Removes the pseudoatom from the map, as well as any bonds to it.
-    pub fn delete(self) {
-        self.map.delete_pseudoatom(self.id);
+    impl<'m> ViewMut<'m, AtomMap, Pseudoatom> {
+        /// Removes the pseudoatom from the map, as well as any bonds to it.
+        pub fn delete(self) {
+            self.map.delete_pseudoatom(self.id);
+        }
     }
-}
 
-impl<'m> ViewMut<'m, AtomMap, Bond> {
-    /// Removes the bond from the map (but not its bonding partners).
-    pub fn delete(self) {
-        self.map.delete_bond(self.id);
+    impl<'m> ViewMut<'m, AtomMap, Bond> {
+        /// Removes the bond from the map (but not its bonding partners).
+        pub fn delete(self) {
+            self.map.delete_bond(self.id);
+        }
     }
 }
 
