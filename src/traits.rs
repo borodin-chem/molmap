@@ -10,13 +10,9 @@
 //!
 //! Traits specific to each layer are defined in the appropriate module.
 
-use nalgebra as na;
 use slotmap::SlotMap;
 
-use crate::{
-    Point2, Point3, Vector2, Vector3, View, ViewMut, Views, atomic::AtomMap, entities::*, error::*,
-    units::Unit,
-};
+use crate::{View, ViewMut, Views, atomic::AtomMap, entities::*, error::*, units::Unit};
 
 /// Traits that must remain unnameable from outside the crate.
 #[allow(unreachable_pub)]
@@ -256,37 +252,11 @@ pub trait Map: Sized {
 /// the form of a graph, without any spatial information.
 pub trait Graph: Map {}
 
-pub trait Spatial: Map {
-    /// The dimensionality of the map, as a type.
-    type DimName: na::DimName;
-
+pub trait Spatial<const D: usize>: Map {
     /// The unit represented by a length of 1 in the map.
     type Unit: Unit;
-
-    /// The type of a position in the map.
-    type Point: Copy
-        + Clone
-        + PartialEq
-        + PartialOrd
-        + std::fmt::Debug
-        + Default
-        + std::ops::Add<Self::Vector, Output = Self::Point>
-        + std::ops::Sub<Self::Point, Output = Self::Vector>;
-
-    /// The type of a vector in the map.
-    type Vector: Copy
-        + Clone
-        + PartialEq
-        + PartialOrd
-        + std::fmt::Debug
-        + std::ops::Add<Output = Self::Vector>
-        + std::ops::Sub<Output = Self::Vector>
-        + std::ops::Mul<f64, Output = Self::Vector>
-        + std::ops::Div<f64, Output = Self::Vector>
-        + std::ops::Neg<Output = Self::Vector>
-        + num_traits::Zero;
 }
 
-pub trait TwoDimensional: Spatial<DimName = na::U2, Point = Point2, Vector = Vector2> {}
+pub trait TwoDimensional: Spatial<2> {}
 
-pub trait ThreeDimensional: Spatial<DimName = na::U3, Point = Point3, Vector = Vector3> {}
+pub trait ThreeDimensional: Spatial<3> {}

@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// Methods common to all spatial maps.
-pub(crate) trait SpatialCommon<const D: usize>: Spatial {
+pub(crate) trait SpatialCommon<const D: usize>: Spatial<D> {
     /// Returns the position of the atom, or `None` if it is invalid.
     fn atom_position(&self, atom: Atom) -> Option<&Point<D>>;
 

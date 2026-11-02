@@ -10,7 +10,6 @@
 
 use std::marker::PhantomData;
 
-use nalgebra as na;
 use slotmap::SecondaryMap;
 
 use crate::{
@@ -66,14 +65,8 @@ impl<const D: usize, U> Map for SpatialAtomMap<D, U> {
     }
 }
 
-impl<const D: usize, U: Unit> Spatial for SpatialAtomMap<D, U> {
+impl<const D: usize, U: Unit> Spatial<D> for SpatialAtomMap<D, U> {
     type Unit = U;
-
-    type DimName = na::Const<D>;
-
-    type Point = Point<D>;
-
-    type Vector = Vector<D>;
 }
 
 /// Methods for entity addition.

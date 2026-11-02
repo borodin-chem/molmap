@@ -10,7 +10,6 @@
 
 use std::marker::PhantomData;
 
-use nalgebra as na;
 use slotmap::SecondaryMap;
 
 use crate::{
@@ -79,14 +78,8 @@ impl<const D: usize, U> Molecular for SpatialMolMap<D, U> {
     }
 }
 
-impl<const D: usize, U: Unit> Spatial for SpatialMolMap<D, U> {
+impl<const D: usize, U: Unit> Spatial<D> for SpatialMolMap<D, U> {
     type Unit = U;
-
-    type DimName = na::Const<D>;
-
-    type Point = Point<D>;
-
-    type Vector = Vector<D>;
 }
 
 impl<const D: usize, U: Unit> SpatialCommon<D> for SpatialMolMap<D, U> {
