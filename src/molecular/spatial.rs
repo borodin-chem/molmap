@@ -14,13 +14,14 @@ use nalgebra as na;
 use slotmap::SecondaryMap;
 
 use crate::{
-    Map, Point, Spatial, Vector,
+    Map, MolMapResult, Point, Spatial, Vector,
     atomic::AtomMap,
     entities::*,
+    spatial::SpatialCommon,
     units::{Angstrom, Relative, Unit},
 };
 
-use super::{MolMap, Molecular};
+use super::{MolMap, Molecular, data::SubstituentCentre};
 
 /// A map in which the atomic entities and bonds are organized into substituents
 /// and molecules, with positions in `D`-dimensional space.
@@ -88,197 +89,176 @@ impl<const D: usize, U: Unit> Spatial for SpatialMolMap<D, U> {
     type Vector = Vector<D>;
 }
 
-impl<const D: usize, U> SpatialMolMap<D, U> {
-    // /// Calculates the unweighted geometric centre of the substituent,
-    // /// or `None` if the molecule is empty.
-    // ///
-    // /// If `centres_only` is `true`, the centroid of the substituent's centre(s) will be
-    // /// returned; in the typical case where substituent a only has one centre, this will
-    // /// simply be the position of the central atomlike.
-    // ///
-    // /// Only the positions of the constituent atoms and pseudoatoms are taken into
-    // /// consideration, not the bonds, nor any other member fundamentals.
-    // ///
-    // /// # Panics
-    // ///
-    // /// Panics if the substituent is not in the map.
-    // pub(crate) fn substituent_centroid(
-    //     &self,
-    //     substituent: Substituent,
-    //     centres_only: bool,
-    // ) -> Option<Point<D>> {
-    //     let data = self
-    //         .graph
-    //         .data(substituent)
-    //         .expect("Caller is required to ensure that the ID is valid");
-    //     if centres_only {
-    //         match &data.centre() {
-    //             // Early return if substituent is empty/has no centre (should be the same thing)
-    //             SubstituentCentre::None => None,
-    //             // Early return if single centre (no need to take average)
-    //             SubstituentCentre::Single(centre) => Some(self.atomlike_position(*centre)).copied(),
-    //             // Only if there are multiple centres do we need to proceed to find the centroid
-    //             SubstituentCentre::Multiple(centres) => {
-    //                 let positions = centres.iter().map(|&x| self.atomlike_position(x));
-    //                 Self::mean_point(positions)
-    //             }
-    //         }
-    //     } else {
-    //         let positions = data
-    //             .members
-    //             .iter()
-    //             .filter_map(|&x| AnyAtomlike::try_from(x).ok())
-    //             .map(|x| self.atomlike_position(x));
-    //         Self::mean_point(positions)
-    //     }
-    // }
-    //
-    //    /// Returns an iterator over the positions of the constituent atoms and
-    //    /// pseudoatoms of a molecule.
-    //    ///
-    //    /// Only the positions of the constituent atomlikes are included,
-    //    /// not the bonds, nor any other member fundamentals.
-    //    ///
-    //    /// # Panics
-    //    ///
-    //    /// Panics if the molecule is not in the map.
-    //    pub(crate) fn molecule_member_positions(
-    //        &self,
-    //        molecule: Molecule,
-    //    ) -> impl Iterator<Item = &Point<f64, D>> {
-    //        let members = self
-    //            .core
-    //            .data(molecule)
-    //            .expect("Caller is required to ensure that the ID is valid")
-    //            .members
-    //            .iter();
-    //        let atomlikes = members.filter_map(|&x| AnyAtomlike::try_from(x).ok());
-    //        atomlikes.map(|x| self.atomlike_position(x))
-    //    }
-    //
-    //    /// Calculates the unweighted geometric centre of the molecule,
-    //    /// or `None` if the molecule is empty.
-    //    ///
-    //    /// Only the positions of the constituent atoms and pseudoatoms are taken into
-    //    /// consideration, not the bonds, nor any other member fundamentals.
-    //    ///
-    //    /// # Panics
-    //    ///
-    //    /// Panics if the molecule is not in the map.
-    //    pub(crate) fn molecule_centroid(&self, molecule: Molecule) -> Option<Point<f64, D>> {
-    //        let positions = self.molecule_member_positions(molecule);
-    //        // Centroid is unweighted average of all these positions
-    //        Self::mean_point(positions)
-    //    }
+impl<const D: usize, U: Unit> SpatialCommon<D> for SpatialMolMap<D, U> {
+    fn atom_position(&self, atom: Atom) -> Option<&Point<D>> {
+        // When an entity is removed from the map, any spatial data is not deleted.
+        // If the slot has not since been overwritten, it is possible to obtain a stale
+        // position from the SecondaryMap using the stale ID, so we must first confirm
+        // the ID's validity.
+        if self.contains(atom) {
+            self.atom_positions.get(atom.into())
+        } else {
+            None
+        }
+    }
+
+    fn set_atom_position(&mut self, atom: Atom, new: Point<D>) -> Option<Point<D>> {
+        // Here, slotmap's insert method takes care of the checking for us
+        // The promised behaviour of set_position matches that of slotmap::insert
+        self.atom_positions.insert(atom.into(), new)
+    }
+
+    fn pseudoatom_position(&self, pseudoatom: Pseudoatom) -> Option<&Point<D>> {
+        if self.contains(pseudoatom) {
+            self.pseudoatom_positions.get(pseudoatom.into())
+        } else {
+            None
+        }
+    }
+
+    fn set_pseudoatom_position(
+        &mut self,
+        pseudoatom: Pseudoatom,
+        new: Point<D>,
+    ) -> Option<Point<D>> {
+        self.pseudoatom_positions.insert(pseudoatom.into(), new)
+    }
+}
+
+/// Methods for accessing and calculating positions.
+impl<const D: usize, U: Unit> SpatialMolMap<D, U> {
+    /// Calculates the unweighted geometric centre of the substituent.
+    ///
+    /// If `centres_only` is `true`, the centroid of the substituent's centre(s) will be
+    /// returned; in the typical case where substituent a only has one centre, this will
+    /// simply be the position of the central atomlike.
+    ///
+    /// Only the positions of the constituent atoms and pseudoatoms are taken into
+    /// consideration, not the bonds, nor any other member fundamentals.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the substituent is not in the map.
+    pub(crate) fn substituent_centroid(
+        &self,
+        substituent: Substituent,
+        centres_only: bool,
+    ) -> MolMapResult<Point<D>> {
+        let centroid = if centres_only {
+            match self.graph.substituent_centres(substituent)? {
+                // Early return if substituent is empty/has no centre (should be the same thing)
+                SubstituentCentre::None => unreachable!("Substituent should always have a centre"),
+                // Early return if single centre (no need to take average)
+                SubstituentCentre::Single(centre) => *self
+                    .atomlike_position(centre)
+                    .expect("Substituent's centre should always exist"),
+                // Only if there are multiple centres do we need to proceed to find the centroid
+                SubstituentCentre::Multiple(centres) => self
+                    .centroid(centres.iter().copied())
+                    .expect("All substituent members should exist"),
+            }
+        } else {
+            let members = self
+                .graph
+                .substituent_members(substituent)?
+                .filter_map(|x| AnyAtomlike::try_from(x).ok());
+            self.centroid(members).unwrap()
+        };
+        Ok(centroid)
+    }
+
+    /// Calculates the unweighted geometric centre of the molecule.
+    ///
+    /// Only the positions of the constituent atoms and pseudoatoms are taken into
+    /// consideration, not the bonds, nor any other member fundamentals.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the molecule is not in the map.
+    pub(crate) fn molecule_centroid(&self, molecule: Molecule) -> MolMapResult<Point<D>> {
+        let members = self
+            .graph
+            .molecule_members(molecule)?
+            .filter_map(|x| AnyAtomlike::try_from(x).ok());
+        // Centroid is unweighted average of the atomlike positions
+        Ok(self.centroid(members).expect(
+            "All molecule members should exist and molecule should have at least one member",
+        ))
+    }
 }
 
 /// View methods specific to `SpatialMolMap`.
 mod views {
-    //use super::*;
+    use crate::View;
 
-    //impl<'m, const D: usize> View<'m, SpatialMolMap<D>, Atom> {
-    //    /// Returns the position of the atom.
-    //    pub fn position(&self) -> &Point<f64, D> {
-    //        self.map.atom_position(self.id)
-    //    }
-    //}
-    //
-    //impl<'m, const D: usize> View<'m, SpatialMolMap<D>, Pseudoatom> {
-    //    /// Returns the position of the pseudoatom.
-    //    pub fn position(&self) -> &Point<f64, D> {
-    //        self.map.pseudoatom_position(self.id)
-    //    }
-    //}
-    //
-    //impl<'m, const D: usize> View<'m, SpatialMolMap<D>, Bond> {
-    //    /// Returns the position of the [`Bondable`] from which the bond starts.
-    //    pub fn origin(&self) -> &Point<f64, D> {
-    //        self.map.bond_origin(self.id)
-    //    }
-    //
-    //    /// Returns the position of the [`Bondable`] at which the bond ends.
-    //    pub fn terminus(&self) -> &Point<f64, D> {
-    //        self.map.bond_terminus(self.id)
-    //    }
-    //
-    //    /// Calculates the midpoint of the bond.
-    //    pub fn midpoint(&self) -> Point<f64, D> {
-    //        self.map.bond_midpoint(self.id)
-    //    }
-    //
-    //    /// Calculates the vector that the bond follows from its origin to its terminus.
-    //    pub fn vector(&self) -> Vector<f64, D> {
-    //        self.map.bond_vector(self.id)
-    //    }
-    //
-    //    /// Calculates the distance from the bond's origin to its terminus.
-    //    pub fn length(&self) -> f64 {
-    //        self.vector().magnitude()
-    //    }
-    //}
-    //
-    //impl<'m, const D: usize> View<'m, SpatialMolMap<D>, Substituent> {
-    //    /// Calculates the unweighted geometric centre of the substituent,
-    //    /// or `None` if the molecule is empty.
-    //    ///
-    //    /// If `centres_only` is `true`, the centroid of the substituent's centre(s) will be
-    //    /// returned; in the typical case where substituent a only has one centre, this will
-    //    /// simply be the position of the central atomlike.
-    //    ///
-    //    /// Only the positions of the constituent atoms and pseudoatoms are taken into
-    //    /// consideration, not the bonds, nor any other member fundamentals.
-    //    pub fn centroid(&self, centres_only: bool) -> Option<Point<f64, D>> {
-    //        self.map.substituent_centroid(self.id, centres_only)
-    //    }
-    //}
-    //
-    //impl<'m, const D: usize> View<'m, SpatialMolMap<D>, Molecule> {
-    //    /// Calculates the unweighted geometric centre of the molecule,
-    //    /// or `None` if the molecule is empty.
-    //    ///
-    //    /// Only the positions of the constituent atoms and pseudoatoms are taken into
-    //    /// consideration, not the bonds, nor any other member fundamentals.
-    //    pub fn centroid(&self) -> Option<Point<f64, D>> {
-    //        self.map.molecule_centroid(self.id)
-    //    }
-    //}
-    //
-    //
-    ///// Methods for setting positions and applying transformations.
-    //impl<const D: usize> SpatialMolMap<D> {
-    //    /// Sets the position of the given atom to the provided value.
-    //    ///
-    //    /// This does not panic – if the atom is not in the map, nothing happens.
-    //    pub(crate) fn set_atom_position(&mut self, atom: Atom, position: Point<f64, D>) {
-    //        self.atom_positions.insert(atom.to_key(), position);
-    //    }
-    //
-    //    /// Sets the position of the given pseudoatom to the provided value.
-    //    ///
-    //    /// This does not panic – if the pseudoatom is not in the map, nothing happens.
-    //    pub(crate) fn set_pseudoatom_position(
-    //        &mut self,
-    //        pseudoatom: Pseudoatom,
-    //        position: Point<f64, D>,
-    //    ) {
-    //        self.pseudoatom_positions
-    //            .insert(pseudoatom.to_key(), position);
-    //    }
-    //}
-    //
-    //impl<'m, const D: usize> ViewMut<'m, SpatialMolMap<D>, Atom> {
-    //    /// Sets the position of the atom to the provided value.
-    //    pub fn set_position(self, position: Point<f64, D>) {
-    //        self.map.set_atom_position(self.id, position)
-    //    }
-    //}
-    //
-    //impl<'m, const D: usize> ViewMut<'m, SpatialMolMap<D>, Pseudoatom> {
-    //    /// Sets the position of the pseudoatom to the provided value.
-    //    pub fn set_position(self, position: Point<f64, D>) {
-    //        self.map.set_pseudoatom_position(self.id, position)
-    //    }
-    //}
+    use super::*;
+
+    impl<'m, const D: usize, U: Unit> View<'m, SpatialMolMap<D, U>, Atom> {
+        /// Returns the position of the atom.
+        pub fn position(&self) -> &Point<D> {
+            self.map.atom_position(self.id).unwrap()
+        }
+    }
+
+    impl<'m, const D: usize, U: Unit> View<'m, SpatialMolMap<D, U>, Pseudoatom> {
+        /// Returns the position of the pseudoatom.
+        pub fn position(&self) -> &Point<D> {
+            self.map.pseudoatom_position(self.id).unwrap()
+        }
+    }
+
+    impl<'m, const D: usize, U: Unit> View<'m, SpatialMolMap<D, U>, Bond> {
+        /// Returns the position of the [`Bondable`] from which the bond starts.
+        pub fn origin(&self) -> &Point<D> {
+            self.map.bond_origin(self.id).unwrap()
+        }
+
+        /// Returns the position of the [`Bondable`] at which the bond ends.
+        pub fn terminus(&self) -> &Point<D> {
+            self.map.bond_terminus(self.id).unwrap()
+        }
+
+        /// Calculates the midpoint of the bond.
+        pub fn midpoint(&self) -> Point<D> {
+            self.map.bond_midpoint(self.id).unwrap()
+        }
+
+        /// Calculates the vector that the bond follows from its origin to its terminus.
+        pub fn vector(&self) -> Vector<D> {
+            self.map.bond_vector(self.id).unwrap()
+        }
+
+        /// Calculates the distance from the bond's origin to its terminus.
+        pub fn length(&self) -> f64 {
+            self.vector().magnitude()
+        }
+    }
+
+    impl<'m, const D: usize, U: Unit> View<'m, SpatialMolMap<D, U>, Substituent> {
+        /// Calculates the unweighted geometric centre of the substituent.
+        ///
+        /// If `centres_only` is `true`, the centroid of the substituent's centre(s) will be
+        /// returned; in the typical case where substituent a only has one centre, this will
+        /// simply be the position of the central atomlike.
+        ///
+        /// Only the positions of the constituent atoms and pseudoatoms are taken into
+        /// consideration, not the bonds, nor any other member fundamentals.
+        pub fn centroid(&self, centres_only: bool) -> Point<D> {
+            self.map
+                .substituent_centroid(self.id, centres_only)
+                .unwrap()
+        }
+    }
+
+    impl<'m, const D: usize, U: Unit> View<'m, SpatialMolMap<D, U>, Molecule> {
+        /// Calculates the unweighted geometric centre of the molecule.
+        ///
+        /// Only the positions of the constituent atoms and pseudoatoms are taken into
+        /// consideration, not the bonds, nor any other member fundamentals.
+        pub fn centroid(&self) -> Point<D> {
+            self.map.molecule_centroid(self.id).unwrap()
+        }
+    }
 }
 
 /// A map holding atomic entities and bonds organized into substituents

@@ -14,11 +14,9 @@ use nalgebra as na;
 use slotmap::SecondaryMap;
 
 use crate::{
-    BondType, Element, Map, MolMapError, MolMapResult, Point, Pseudoelement, Spatial, Vector, View,
-    ViewMut,
+    BondType, Element, Map, MolMapError, MolMapResult, Point, Pseudoelement, Spatial, Vector,
     entities::*,
-    geometry,
-    traits::{Stores, StoresPosition},
+    spatial::SpatialCommon,
     units::{Angstrom, Relative, Unit},
 };
 
@@ -83,7 +81,7 @@ impl<const D: usize, U: Unit> SpatialAtomMap<D, U> {
     /// Adds an atom to the map at the given position.
     pub fn add_atom(&mut self, element: Element, position: Point<D>) -> Atom {
         let atom = self.graph.add_atom(element);
-        self.set_position(atom, position);
+        self.set_atom_position(atom, position);
         atom
     }
 
@@ -94,7 +92,7 @@ impl<const D: usize, U: Unit> SpatialAtomMap<D, U> {
         position: Point<D>,
     ) -> Pseudoatom {
         let pseudoatom = self.graph.add_pseudoatom(pseudoelement);
-        self.set_position(pseudoatom, position);
+        self.set_pseudoatom_position(pseudoatom, position);
         pseudoatom
     }
 
@@ -143,156 +141,52 @@ impl<const D: usize, U: Unit> SpatialAtomMap<D, U> {
     }
 }
 
-// Methods for accessing and calculating positions.
-impl<const D: usize, U: Unit> SpatialAtomMap<D, U> {
-    /// Returns the position of the given atom or pseudoatom.
-    ///
-    /// A stale (i.e. invalid) ID may return a position, as spatial data is not
-    /// automatically cleaned up. The caller is responsible for not making such a
-    /// request.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the atomlike has no stored position (usually meaning that it is not
-    /// in the map).
-    pub(crate) fn atomlike_position(&self, atomlike: impl Atomlike) -> &Point<D> {
-        match Atomlike::to_resolved(atomlike) {
-            ResolvedAtomlike::Atom(atom) => self.position(atom).unwrap(),
-            ResolvedAtomlike::Pseudoatom(pseudoatom) => self.position(pseudoatom).unwrap(),
-        }
-    }
-
-    /// Calculates the vector of the line between two atomlikes, from `a` to `b`.
-    ///
-    /// Stale (i.e. invalid) IDs may return positions, as spatial data is not
-    /// automatically cleaned up. The caller is responsible for not making such a
-    /// request.
-    ///
-    /// # Panics
-    ///
-    /// Panics if either atomlike has no stored position (usually meaning that it is not
-    /// in the map).
-    #[allow(unused)]
-    pub(crate) fn interatomlike_line(&self, a: impl Atomlike, b: impl Atomlike) -> Vector<D> {
-        self.atomlike_position(b) - self.atomlike_position(a)
-    }
-
-    /// Returns the position of the [`Bondable`] from which the bond starts.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the bond is not in the map.
-    pub(crate) fn bond_origin(&self, bond: Bond) -> &Point<D> {
-        match self.as_graph().data(bond).unwrap().start.resolve() {
-            ResolvedBondable::Atom(atom) => self.position(atom).unwrap(),
-            ResolvedBondable::Pseudoatom(pseudoatom) => self.position(pseudoatom).unwrap(),
-        }
-    }
-
-    /// Returns the position of the [`Bondable`] at which the bond ends.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the bond is not in the map.
-    pub(crate) fn bond_terminus(&self, bond: Bond) -> &Point<D> {
-        match self.as_graph().data(bond).unwrap().end.resolve() {
-            ResolvedBondable::Atom(atom) => self.position(atom).unwrap(),
-            ResolvedBondable::Pseudoatom(pseudoatom) => self.position(pseudoatom).unwrap(),
-        }
-    }
-
-    /// Calculates the midpoint of the bond.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the bond is not in the map.
-    pub(crate) fn bond_midpoint(&self, bond: Bond) -> Point<D> {
-        na::center(self.bond_origin(bond), self.bond_terminus(bond))
-    }
-
-    /// Calculates the vector that the bond follows from its origin to its terminus.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the bond is not in the map.
-    pub(crate) fn bond_vector(&self, bond: Bond) -> Vector<D> {
-        self.bond_terminus(bond) - self.bond_origin(bond)
-    }
-
-    /// Calculates the unweighted geometric centre of the specified atoms and
-    /// pseudoatoms.
-    ///
-    /// # Errors
-    ///
-    /// Fails (returning [`MolMapError::InvalidId`]) if any of the atomlikes are not in
-    /// the map.
-    ///
-    /// Fails (returning [`MolMapError::EmptyIterator`]) if the provided iterator is
-    /// empty.
-    pub fn centroid(
-        &self,
-        atomlikes: impl IntoIterator<Item = AnyAtomlike>,
-    ) -> MolMapResult<Point<D>> {
-        let positions = atomlikes
-            .into_iter()
-            .map(|x| {
-                if self.contains(x) {
-                    Ok(self.atomlike_position(x))
-                } else {
-                    Err(MolMapError::InvalidId(x.as_entity()))
-                }
-            })
-            .collect::<MolMapResult<Vec<&Point<D>>>>()?;
-        geometry::mean_point(positions).ok_or(MolMapError::EmptyIterator)
-    }
-}
-
-impl<const D: usize, U: Unit> StoresPosition<Atom> for SpatialAtomMap<D, U> {
-    fn position(&self, entity: Atom) -> Option<&Point<D>> {
+impl<const D: usize, U: Unit> SpatialCommon<D> for SpatialAtomMap<D, U> {
+    fn atom_position(&self, atom: Atom) -> Option<&Point<D>> {
         // When an entity is removed from the map, any spatial data is not deleted.
-        // Thus it is possible to obtain a stale position from the SecondaryMap that does
-        // not correspond to any existing entity.
-        //
-        // If the entity ID is stale, it's not possible for the user to construct a
-        // view of it. When working internally, it would be possible to get a spurious
-        // position from a stale ID; to help avoid that, this method confirms the validity
-        // of the ID first.
-        if self.contains(entity) {
-            self.atom_positions.get(entity.into())
+        // If the slot has not since been overwritten, it is possible to obtain a stale
+        // position from the SecondaryMap using the stale ID, so we must first confirm
+        // the ID's validity.
+        if self.contains(atom) {
+            self.atom_positions.get(atom.into())
         } else {
             None
         }
     }
 
-    fn set_position(&mut self, entity: Atom, new: Self::Point) -> Option<Point<D>> {
+    fn set_atom_position(&mut self, atom: Atom, new: Point<D>) -> Option<Point<D>> {
         // Here, slotmap's insert method takes care of the checking for us
         // The promised behaviour of set_position matches that of slotmap::insert
-        self.atom_positions.insert(entity.into(), new)
+        self.atom_positions.insert(atom.into(), new)
     }
-}
 
-impl<const D: usize, U: Unit> StoresPosition<Pseudoatom> for SpatialAtomMap<D, U> {
-    fn position(&self, entity: Pseudoatom) -> Option<&Point<D>> {
-        if self.contains(entity) {
-            self.pseudoatom_positions.get(entity.into())
+    fn pseudoatom_position(&self, pseudoatom: Pseudoatom) -> Option<&Point<D>> {
+        if self.contains(pseudoatom) {
+            self.pseudoatom_positions.get(pseudoatom.into())
         } else {
             None
         }
     }
 
-    fn set_position(&mut self, entity: Pseudoatom, new: Self::Point) -> Option<Point<D>> {
-        self.pseudoatom_positions.insert(entity.into(), new)
+    fn set_pseudoatom_position(
+        &mut self,
+        pseudoatom: Pseudoatom,
+        new: Point<D>,
+    ) -> Option<Point<D>> {
+        self.pseudoatom_positions.insert(pseudoatom.into(), new)
     }
 }
 
 /// View methods specific to `SpatialAtomMap`.
 mod views {
+    use crate::{View, ViewMut};
+
     use super::*;
 
     impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Atom> {
         /// Returns the position of the atom.
         pub fn position(&self) -> &Point<D> {
-            self.map.position(self.id).unwrap()
+            self.map.atom_position(self.id).unwrap()
         }
     }
 
@@ -309,16 +203,16 @@ mod views {
             self.map.graph.delete_atom(self.id);
         }
 
-        /// Sets the position of the atom to the provided value.
-        pub fn set_position(self, position: Point<D>) {
-            self.map.set_position(self.id, position);
-        }
+        // /// Sets the position of the atom to the provided value.
+        // pub fn set_position(self, position: Point<D>) {
+        //     self.map.set_position(self.id, position);
+        // }
     }
 
     impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Pseudoatom> {
         /// Returns the position of the pseudoatom.
         pub fn position(&self) -> &Point<D> {
-            self.map.position(self.id).unwrap()
+            self.map.pseudoatom_position(self.id).unwrap()
         }
     }
 
@@ -328,31 +222,31 @@ mod views {
             self.map.graph.delete_pseudoatom(self.id);
         }
 
-        /// Sets the position of the pseudoatom to the provided value.
-        pub fn set_position(self, position: Point<D>) {
-            self.map.set_position(self.id, position);
-        }
+        // /// Sets the position of the pseudoatom to the provided value.
+        // pub fn set_position(self, position: Point<D>) {
+        //     self.map.set_position(self.id, position);
+        // }
     }
 
     impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Bond> {
         /// Returns the position of the [`Bondable`] from which the bond starts.
         pub fn origin(&self) -> &Point<D> {
-            self.map.bond_origin(self.id)
+            self.map.bond_origin(self.id).unwrap()
         }
 
         /// Returns the position of the [`Bondable`] at which the bond ends.
         pub fn terminus(&self) -> &Point<D> {
-            self.map.bond_terminus(self.id)
+            self.map.bond_terminus(self.id).unwrap()
         }
 
         /// Calculates the midpoint of the bond.
         pub fn midpoint(&self) -> Point<D> {
-            self.map.bond_midpoint(self.id)
+            self.map.bond_midpoint(self.id).unwrap()
         }
 
         /// Calculates the vector that the bond follows from its origin to its terminus.
         pub fn vector(&self) -> Vector<D> {
-            self.map.bond_vector(self.id)
+            self.map.bond_vector(self.id).unwrap()
         }
 
         /// Calculates the distance from the bond's origin to its terminus.

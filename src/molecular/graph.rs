@@ -956,9 +956,9 @@ impl MolMap {
 impl MolMap {
     /// Returns details of the centre(s) of a substituent.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if the substituent does not exist.
+    /// Fails if the substituent does not exist.
     pub(crate) fn substituent_centres(
         &self,
         substituent: Substituent,

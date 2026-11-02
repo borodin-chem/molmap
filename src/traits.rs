@@ -57,20 +57,27 @@ mod internal {
         }
     }
 
-    /// Implemented by maps to indicate that they store positions for
-    /// a specific kind of entity and provide access to the data point.
-    pub trait StoresPosition<E: Kind>: Spatial {
-        /// Returns a reference to the position of the entity, or `None` if `entity` is invalid.
-        fn position(&self, entity: E) -> Option<&Self::Point>;
+    // /// Implemented by maps to indicate that they store positions for
+    // /// a specific kind of entity and provide access to the data point.
+    // pub trait StoresPosition<E: Kind>: Spatial {
+    //     /// Returns the position of the entity, or `None` if `entity` is invalid.
+    //     fn position(&self, entity: E) -> Option<&Self::Point>;
+    // }
 
-        /// Sets the position of the entity.
-        ///
-        /// This should not panic – if the entity is not in the map, nothing happens.
-        ///
-        /// Can silently fail and return `None` if the entity is no longer valid.
-        /// Returns `None` if the entity did not have a position previously, the old value otherwise.
-        fn set_position(&mut self, entity: E, new: Self::Point) -> Option<Self::Point>;
-    }
+    // /// Implemented by maps to provide themselves with a convenient setter for
+    // /// an entity's position.
+    // pub(crate) trait StoresPositionMut<E: Kind>: Spatial + StoresPosition<E> {
+    //     /// Sets the position of the entity.
+    //     ///
+    //     /// Can silently fail and return `None` if the entity was removed.
+    //     ///
+    //     /// Returns `None` if the entity did not previously have a position, or the
+    //     /// old value otherwise.
+    //     ///
+    //     /// As such, this method does not panic – if the entity is not in the map,
+    //     /// nothing happens, and `None` is returned.
+    //     fn set_position(&mut self, entity: E, new: Self::Point) -> Option<Self::Point>;
+    // }
 
     ///// A trait required of all implementors of [`Map`] in order to provide access
     ///// (internally) to their core graph.

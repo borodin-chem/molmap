@@ -21,6 +21,7 @@ mod pseudoelement;
 mod view;
 
 pub(crate) mod geometry;
+pub(crate) mod spatial;
 pub(crate) mod traits;
 
 // ----------
