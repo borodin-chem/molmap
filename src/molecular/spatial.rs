@@ -13,8 +13,8 @@ use std::marker::PhantomData;
 use slotmap::SecondaryMap;
 
 use crate::{
-    Atomic, Map, MolMapResult, Point, Spatial, Vector,
-    atomic::{AtomMap, SpatialAtomicCommon},
+    Map, MolMapResult, Point, Spatial, Vector,
+    atomic::{AtomMap, Atomic, SpatialAtomicCommon},
     entities::*,
     units::{Angstrom, Relative, Unit},
 };
@@ -88,8 +88,7 @@ pub(crate) trait SpatialMolecularCommon<const D: usize>:
     }
 }
 
-/// A map in which the atomic entities and bonds are organized into substituents
-/// and molecules, with positions in `D`-dimensional space.
+/// A [`MolMap`] extended to also hold the positions of its entities in `D`-dimensional space.
 #[derive(Clone, Debug, Default)]
 #[allow(dead_code)]
 pub struct SpatialMolMap<const D: usize, U> {
@@ -262,10 +261,8 @@ mod views {
     }
 }
 
-/// A map holding atomic entities and bonds organized into substituents
-/// and molecules, with positions in two-dimensional space.
+/// A [`MolMap`] extended to also hold the two-dimensional positions of its entities.
 pub type MolMap2 = SpatialMolMap<2, Relative>;
 
-/// A map holding atomic entities and bonds organized into substituents
-/// and molecules, with positions in three-dimensional space.
+/// A [`MolMap`] extended to also hold the three-dimensional positions of its entities.
 pub type MolMap3 = SpatialMolMap<3, Angstrom>;

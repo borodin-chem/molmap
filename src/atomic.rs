@@ -6,6 +6,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+//! Maps holding fundamental atomic entities connected by a network of bonds.
+
 mod graph;
 mod spatial;
 mod views;
@@ -18,7 +20,7 @@ pub use spatial::{AtomMap2, AtomMap3, SpatialAtomMap};
 
 use crate::Map;
 
-/// A map holding fundamental atomic entities, and a network of bonds between them.
+/// A map that holds fundamental atomic entities, and a network of bonds between them.
 ///
 /// This applies to all maps, and so all map types in the crate implement this trait.
 pub trait Atomic: Map {

@@ -6,10 +6,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+//! Traits implemented by parsers of chemical notations or file formats.
+
 use crate::MolMapError;
 
-/// A parser between a chemical notation or file format and at least one kind of
-/// `MolMap`.
+/// A parser between a chemical notation or file format and at least one map type.
 ///
 /// Parsers may provide read or write functionality, or both, by implementing the
 /// [`Reader`] and [`Writer`] traits.
@@ -36,8 +37,7 @@ pub trait Parser: Default {
     fn with_config(config: Self::Config) -> Self;
 }
 
-/// A parser that reads a chemical notation or file format into a corresponding
-/// `MolMap`.
+/// A parser that reads a chemical notation or file format into a corresponding map.
 ///
 /// Parsers are not obliged to parse all information contained in the input, but
 /// should make their scope clear.
@@ -47,7 +47,7 @@ pub trait Parser: Default {
 /// downstream user at their own discretion. This applies especially when multiple
 /// interpretations or algorithms are possible.
 ///
-/// For example, a parser that converts SMILES to a [`MolMap0`] makes sense, but one
+/// For example, a parser that converts SMILES to a [`MolMap`] makes sense, but one
 /// that parses to a [`MolMap3`] does not, as the parser would have to apply some
 /// algorithm for 3D structure generation from the molecular graph.
 pub trait Read: Parser {
@@ -76,15 +76,15 @@ pub trait MultiRead: Parser {
 
     /// Parses the format from a `std::io` reader.
     ///
-    /// The maps are returned as an iterator over the output `MolMap` type.
+    /// The maps are returned as an iterator over the output map type.
     ///
     /// For text formats the input should be valid UTF-8.
     fn read<R: std::io::Read>(&self, reader: R) -> Result<Self::Iter, Self::Error>;
 }
 
-/// A parser that writes a chemical notation or file format based on a `MolMap`.
+/// A parser that writes a chemical notation or file format based on a map.
 ///
-/// Parsers are not obliged to support all features of the `MolMap` type – and
+/// Parsers are not obliged to support all features of the `Map` type – and
 /// indeed this may not even be possible for the output format in question – but
 /// should make their scope clear.
 ///
@@ -97,7 +97,7 @@ pub trait MultiRead: Parser {
 /// For example, a parser that generates a SMILES string from any `MolMap` makes
 /// sense, as all `MolMap` types hold the details of the molecular graph that are
 /// necessary for SMILES generation, but one that writes an XYZ file from a
-/// [`MolMap0`] does not, as the parser would have to apply some algorithm for 3D
+/// [`MolMap`] does not, as the parser would have to apply some algorithm for 3D
 /// structure generation from the molecular graph.
 pub trait Write<M>: Parser {
     /// Parses the format to a `std::io` writer.
@@ -117,6 +117,6 @@ where
 {
     /// Parses the format to a `std::io` writer.
     ///
-    /// The maps are supplied as an iterator over the output `MolMap` type.
+    /// The maps are supplied as an iterator over the output map type.
     fn write<W: std::io::Write>(&self, writer: W, maps: I) -> Result<(), Self::Error>;
 }

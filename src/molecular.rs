@@ -6,6 +6,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+//! Maps in which the atomic entities and bonds are organized into substituents
+//! and molecules.
+
 mod graph;
 mod spatial;
 mod views;

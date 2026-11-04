@@ -14,15 +14,14 @@ use nalgebra as na;
 use slotmap::SecondaryMap;
 
 use crate::{
-    Atomic, BondType, Element, Map, MolMapError, MolMapResult, Point, Pseudoelement, Spatial,
-    Vector,
+    BondType, Element, Map, MolMapError, MolMapResult, Point, Pseudoelement, Spatial, Vector,
     entities::*,
     geometry,
     traits::Stores,
     units::{Angstrom, Relative, Unit},
 };
 
-use super::AtomMap;
+use super::{AtomMap, Atomic};
 
 /// Methods common to all spatial maps.
 ///
@@ -200,7 +199,7 @@ pub(crate) trait SpatialAtomicCommon<const D: usize>: Spatial<D> + Atomic {
     }
 }
 
-/// A map holding only fundamental entities and their positions in `D`-dimensional space.
+/// An [`AtomMap`] extended to also hold the positions of its entities in `D`-dimensional space.
 #[derive(Clone, Debug, Default)]
 pub struct SpatialAtomMap<const D: usize, U> {
     graph: AtomMap,
@@ -437,10 +436,10 @@ mod views {
     }
 }
 
-/// A map holding only fundamental entities and their two-dimensional positions.
+/// An [`AtomMap`] extended to also hold the two-dimensional positions of its entities.
 pub type AtomMap2 = SpatialAtomMap<2, Relative>;
 
-/// A map holding only fundamental entities and their three-dimensional positions.
+/// An [`AtomMap`] extended to also hold the three-dimensional positions of its entities.
 pub type AtomMap3 = SpatialAtomMap<3, Angstrom>;
 
 #[cfg(test)]

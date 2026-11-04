@@ -11,8 +11,8 @@
 use slotmap::{SecondaryMap, SlotMap};
 
 use crate::{
-    Atomic, BondType, Element, Map, MolMapError, MolMapResult, Pseudoelement, ViewMut,
-    atomic::AtomMap,
+    BondType, Element, Map, MolMapError, MolMapResult, Pseudoelement, ViewMut,
+    atomic::{AtomMap, Atomic},
     entities::*,
     molecular::Molecular,
     traits::{Graph, Stores, StoresMut},
