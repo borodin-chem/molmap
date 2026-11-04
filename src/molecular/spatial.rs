@@ -13,14 +13,80 @@ use std::marker::PhantomData;
 use slotmap::SecondaryMap;
 
 use crate::{
-    Map, MolMapResult, Point, Spatial, Vector,
-    atomic::AtomMap,
+    Atomic, Map, MolMapResult, Point, Spatial, Vector,
+    atomic::{AtomMap, SpatialAtomicCommon},
     entities::*,
-    spatial::SpatialCommon,
     units::{Angstrom, Relative, Unit},
 };
 
 use super::{MolMap, Molecular, data::SubstituentCentre};
+
+/// Methods common to all spatial maps holding molecular collections.
+///
+/// This trait and its methods should remain internal -- see [`SpatialAtomicCommon`]
+/// for further explanation.
+pub(crate) trait SpatialMolecularCommon<const D: usize>:
+    Spatial<D> + SpatialAtomicCommon<D> + Molecular
+{
+    /// Calculates the unweighted geometric centre of the substituent.
+    ///
+    /// If `centres_only` is `true`, the centroid of the substituent's centre(s) will be
+    /// returned; in the typical case where substituent a only has one centre, this will
+    /// simply be the position of the central atomlike.
+    ///
+    /// Only the positions of the constituent atoms and pseudoatoms are taken into
+    /// consideration, not the bonds, nor any other member fundamentals.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the substituent is not in the map.
+    fn substituent_centroid(
+        &self,
+        substituent: Substituent,
+        centres_only: bool,
+    ) -> MolMapResult<Point<D>> {
+        let centroid = if centres_only {
+            match self.as_molecular().substituent_centres(substituent)? {
+                // Early return if substituent is empty/has no centre (should be the same thing)
+                SubstituentCentre::None => unreachable!("Substituent should always have a centre"),
+                // Early return if single centre (no need to take average)
+                SubstituentCentre::Single(centre) => *self
+                    .atomlike_position(centre)
+                    .expect("Substituent's centre should always exist"),
+                // Only if there are multiple centres do we need to proceed to find the centroid
+                SubstituentCentre::Multiple(centres) => self
+                    .centroid(centres.iter().copied())
+                    .expect("All substituent members should exist"),
+            }
+        } else {
+            let members = self
+                .as_molecular()
+                .substituent_members(substituent)?
+                .filter_map(|x| AnyAtomlike::try_from(x).ok());
+            self.centroid(members).unwrap()
+        };
+        Ok(centroid)
+    }
+
+    /// Calculates the unweighted geometric centre of the molecule.
+    ///
+    /// Only the positions of the constituent atoms and pseudoatoms are taken into
+    /// consideration, not the bonds, nor any other member fundamentals.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the molecule is not in the map.
+    fn molecule_centroid(&self, molecule: Molecule) -> MolMapResult<Point<D>> {
+        let members = self
+            .as_molecular()
+            .molecule_members(molecule)?
+            .filter_map(|x| AnyAtomlike::try_from(x).ok());
+        // Centroid is unweighted average of the atomlike positions
+        Ok(self.centroid(members).expect(
+            "All molecule members should exist and molecule should have at least one member",
+        ))
+    }
+}
 
 /// A map in which the atomic entities and bonds are organized into substituents
 /// and molecules, with positions in `D`-dimensional space.
@@ -55,16 +121,18 @@ impl<const D: usize, U> Map for SpatialMolMap<D, U> {
         &self.graph
     }
 
+    fn contains<E: Entity>(&self, entity: E) -> bool {
+        self.as_graph().contains(entity)
+    }
+}
+
+impl<const D: usize, U> Atomic for SpatialMolMap<D, U> {
     fn into_atomic(self) -> AtomMap {
         self.graph.into_atomic()
     }
 
     fn as_atomic(&self) -> &AtomMap {
         self.graph.as_atomic()
-    }
-
-    fn contains<E: Entity>(&self, entity: E) -> bool {
-        self.as_graph().contains(entity)
     }
 }
 
@@ -82,7 +150,7 @@ impl<const D: usize, U: Unit> Spatial<D> for SpatialMolMap<D, U> {
     type Unit = U;
 }
 
-impl<const D: usize, U: Unit> SpatialCommon<D> for SpatialMolMap<D, U> {
+impl<const D: usize, U: Unit> SpatialAtomicCommon<D> for SpatialMolMap<D, U> {
     fn atom_position(&self, atom: Atom) -> Option<&Point<D>> {
         // When an entity is removed from the map, any spatial data is not deleted.
         // If the slot has not since been overwritten, it is possible to obtain a stale
@@ -118,67 +186,7 @@ impl<const D: usize, U: Unit> SpatialCommon<D> for SpatialMolMap<D, U> {
     }
 }
 
-/// Methods for accessing and calculating positions.
-impl<const D: usize, U: Unit> SpatialMolMap<D, U> {
-    /// Calculates the unweighted geometric centre of the substituent.
-    ///
-    /// If `centres_only` is `true`, the centroid of the substituent's centre(s) will be
-    /// returned; in the typical case where substituent a only has one centre, this will
-    /// simply be the position of the central atomlike.
-    ///
-    /// Only the positions of the constituent atoms and pseudoatoms are taken into
-    /// consideration, not the bonds, nor any other member fundamentals.
-    ///
-    /// # Errors
-    ///
-    /// Fails if the substituent is not in the map.
-    pub(crate) fn substituent_centroid(
-        &self,
-        substituent: Substituent,
-        centres_only: bool,
-    ) -> MolMapResult<Point<D>> {
-        let centroid = if centres_only {
-            match self.graph.substituent_centres(substituent)? {
-                // Early return if substituent is empty/has no centre (should be the same thing)
-                SubstituentCentre::None => unreachable!("Substituent should always have a centre"),
-                // Early return if single centre (no need to take average)
-                SubstituentCentre::Single(centre) => *self
-                    .atomlike_position(centre)
-                    .expect("Substituent's centre should always exist"),
-                // Only if there are multiple centres do we need to proceed to find the centroid
-                SubstituentCentre::Multiple(centres) => self
-                    .centroid(centres.iter().copied())
-                    .expect("All substituent members should exist"),
-            }
-        } else {
-            let members = self
-                .graph
-                .substituent_members(substituent)?
-                .filter_map(|x| AnyAtomlike::try_from(x).ok());
-            self.centroid(members).unwrap()
-        };
-        Ok(centroid)
-    }
-
-    /// Calculates the unweighted geometric centre of the molecule.
-    ///
-    /// Only the positions of the constituent atoms and pseudoatoms are taken into
-    /// consideration, not the bonds, nor any other member fundamentals.
-    ///
-    /// # Errors
-    ///
-    /// Fails if the molecule is not in the map.
-    pub(crate) fn molecule_centroid(&self, molecule: Molecule) -> MolMapResult<Point<D>> {
-        let members = self
-            .graph
-            .molecule_members(molecule)?
-            .filter_map(|x| AnyAtomlike::try_from(x).ok());
-        // Centroid is unweighted average of the atomlike positions
-        Ok(self.centroid(members).expect(
-            "All molecule members should exist and molecule should have at least one member",
-        ))
-    }
-}
+impl<const D: usize, U: Unit> SpatialMolecularCommon<D> for SpatialMolMap<D, U> {}
 
 /// View methods specific to `SpatialMolMap`.
 mod views {

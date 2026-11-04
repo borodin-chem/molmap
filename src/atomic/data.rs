@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! The data held by an `AtomGraph` for the fundamental entities.
+//! The data held by an `AtomMap` for the fundamental entities.
 
 use crate::{Element, Pseudoelement, entities::*};
 

@@ -11,10 +11,11 @@ mod spatial;
 mod views;
 
 pub(crate) mod data;
+#[expect(unused)]
+pub(crate) use spatial::SpatialMolecularCommon;
 
-pub(crate) use graph::MolMap;
-
-pub use spatial::{MolMap2, MolMap3};
+pub use graph::MolMap;
+pub use spatial::{MolMap2, MolMap3, SpatialMolMap};
 
 use crate::Map;
 

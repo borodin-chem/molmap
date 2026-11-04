@@ -12,7 +12,7 @@
 
 use slotmap::SlotMap;
 
-use crate::{View, ViewMut, Views, atomic::AtomMap, entities::*, error::*, units::Unit};
+use crate::{View, ViewMut, Views, entities::*, error::*, units::Unit};
 
 /// Traits that must remain unnameable from outside the crate.
 #[allow(unreachable_pub)]
@@ -52,46 +52,17 @@ mod internal {
             self.slotmap_mut().get_mut(entity.to_key())
         }
     }
-
-    // /// Implemented by maps to indicate that they store positions for
-    // /// a specific kind of entity and provide access to the data point.
-    // pub trait StoresPosition<E: Kind>: Spatial {
-    //     /// Returns the position of the entity, or `None` if `entity` is invalid.
-    //     fn position(&self, entity: E) -> Option<&Self::Point>;
-    // }
-
-    // /// Implemented by maps to provide themselves with a convenient setter for
-    // /// an entity's position.
-    // pub(crate) trait StoresPositionMut<E: Kind>: Spatial + StoresPosition<E> {
-    //     /// Sets the position of the entity.
-    //     ///
-    //     /// Can silently fail and return `None` if the entity was removed.
-    //     ///
-    //     /// Returns `None` if the entity did not previously have a position, or the
-    //     /// old value otherwise.
-    //     ///
-    //     /// As such, this method does not panic – if the entity is not in the map,
-    //     /// nothing happens, and `None` is returned.
-    //     fn set_position(&mut self, entity: E, new: Self::Point) -> Option<Self::Point>;
-    // }
-
-    ///// A trait required of all implementors of [`Map`] in order to provide access
-    ///// (internally) to their core graph.
-    //pub trait Core {
-    //    type Graph: Graph;
-
-    //    /// Provides access to the core graph.
-    //    fn graph(&self) -> &Self::Graph;
-
-    //    /// Provides mutable access to the core graph.
-    //    fn graph_mut(&mut self) -> &mut Self::Graph;
-    //}
 }
 // Re-export for **crate-internal** use
 pub(crate) use internal::*;
 
 /// An arena-like data structure to represent a set of chemical entities, their
 /// properties, and the relationships between them, with or without spatial positions.
+///
+/// All `Map` types additionally implement one of [`Graph`] and [`Spatial`].
+///
+/// As all maps hold, at minimum, fundamental atomic and bond entity types, all
+/// `Map` types also implement `Atomic`.
 pub trait Map: Sized {
     // Most interaction with the crate's map types is through entity IDs and views of
     // the entities. This trait provides methods for:
@@ -122,12 +93,6 @@ pub trait Map: Sized {
 
     /// Provides read-only access to the graph in a generic fashion.
     fn as_graph(&self) -> &Self::Graph;
-
-    /// Returns the the core network of atoms and bonds without any spatial positions.
-    fn into_atomic(self) -> AtomMap;
-
-    /// Provides read-only access to the core network of atoms and bonds.
-    fn as_atomic(&self) -> &AtomMap;
 
     // Constructors
     // ------------
@@ -252,11 +217,8 @@ pub trait Map: Sized {
 /// the form of a graph, without any spatial information.
 pub trait Graph: Map {}
 
+/// A map that holds the positions of its entities in `D`-dimensional space.
 pub trait Spatial<const D: usize>: Map {
     /// The unit represented by a length of 1 in the map.
     type Unit: Unit;
 }
-
-pub trait TwoDimensional: Spatial<2> {}
-
-pub trait ThreeDimensional: Spatial<3> {}

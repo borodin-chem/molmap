@@ -11,7 +11,7 @@
 use slotmap::{SecondaryMap, SlotMap};
 
 use crate::{
-    BondType, Element, Map, MolMapError, MolMapResult, Pseudoelement, ViewMut,
+    Atomic, BondType, Element, Map, MolMapError, MolMapResult, Pseudoelement, ViewMut,
     atomic::AtomMap,
     entities::*,
     molecular::Molecular,
@@ -108,14 +108,6 @@ impl Map for MolMap {
         self
     }
 
-    fn into_atomic(self) -> AtomMap {
-        self.inner
-    }
-
-    fn as_atomic(&self) -> &AtomMap {
-        &self.inner
-    }
-
     fn contains<E: Entity>(&self, entity: E) -> bool {
         match entity.to_resolved() {
             ResolvedEntity::Atom(atom) => self.inner.contains(atom),
@@ -130,6 +122,16 @@ impl Map for MolMap {
             #[expect(unreachable_patterns)] // Unreachable for now but will be needed later
             _ => false,
         }
+    }
+}
+
+impl Atomic for MolMap {
+    fn into_atomic(self) -> AtomMap {
+        self.inner
+    }
+
+    fn as_atomic(&self) -> &AtomMap {
+        &self.inner
     }
 }
 

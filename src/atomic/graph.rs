@@ -16,9 +16,9 @@ use crate::{
     traits::{Graph, Stores, StoresMut},
 };
 
-use super::data::*;
+use super::{Atomic, data::*};
 
-/// A map holding fundamental atomic entities, and a network of bonds between them.
+/// A map holding only fundamental atomic entities, and a network of bonds between them.
 ///
 /// This is the basic graph at the core of all other [`Map`] types.
 ///
@@ -69,14 +69,6 @@ impl Map for AtomMap {
         self
     }
 
-    fn into_atomic(self) -> AtomMap {
-        self
-    }
-
-    fn as_atomic(&self) -> &AtomMap {
-        self
-    }
-
     fn contains<E: Entity>(&self, entity: E) -> bool {
         match entity.to_resolved() {
             ResolvedEntity::Atom(atom) => {
@@ -90,6 +82,16 @@ impl Map for AtomMap {
             }
             _ => false,
         }
+    }
+}
+
+impl Atomic for AtomMap {
+    fn into_atomic(self) -> AtomMap {
+        self
+    }
+
+    fn as_atomic(&self) -> &AtomMap {
+        self
     }
 }
 
