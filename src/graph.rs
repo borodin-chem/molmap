@@ -8,4 +8,5 @@
 
 //! Functions and methods for working on the graph structures.
 
-pub mod traversal;
+pub(crate) mod breadth_first;
+pub(crate) mod depth_first;

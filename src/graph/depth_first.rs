@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 //
-// This Source Code Form is subject to the terms of the Mozilla Public
+// This Source Code Form is subject to the terms of the Mozilla pub(crate)lic
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! Methods for molecular graph traversal.
+//! Implementation of depth-first graph traversal.
 //!
 //! # Implementation notes
 //!
@@ -25,6 +25,8 @@
 //! ring are the nodes, and each is adjacent to the iron atom, even though they
 //! are not directly connected by edges.
 
+#![expect(unused)]
+
 use std::collections::HashSet;
 
 use crate::{
@@ -34,9 +36,9 @@ use crate::{
     traits::{Map, Stores},
 };
 
-/// The result of a traversal step.
+/// The result of a step in a depth-first traversal.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum Step {
+pub(crate) enum DFStep {
     /// A previously unexplored edge has been explored and followed to a previously
     /// unexplored node that is _not_ a pendant node.
     ///
@@ -60,7 +62,7 @@ pub enum Step {
     ///
     /// Pendant nodes are nodes with degree one, meaning that there is only one edge
     /// leading in to or out of it: the one between it and the parent node. The pendant
-    /// node is thus now fully explored.
+    /// node is thus now fully explored, and will never become the current node.
     ///
     /// A pendant node is most often a hydrogen atom, but may also be e.g. a halogen,
     /// =O, ≡N etc.
@@ -107,7 +109,7 @@ pub enum Step {
     ///    becoming the current node
     ///
     /// No nodes or edges have been explored in this step.
-    Back {
+    BackTrack {
         left: AnyAtomlike,
         reentered: AnyAtomlike,
     },
@@ -134,7 +136,7 @@ pub enum Step {
 }
 
 #[derive(Clone, Debug)]
-struct QueueItem {
+struct EdgeQueueItem {
     priority: u16,
     degree: u8,
     edge: Bond,
@@ -142,9 +144,9 @@ struct QueueItem {
 }
 
 #[derive(Clone, Debug)]
-struct StackItem {
+struct NodeStackItem {
     node: AnyAtomlike,
-    queue: Vec<QueueItem>,
+    edge_queue: Vec<EdgeQueueItem>,
 }
 
 /// A depth-first search of the molecular graph in the form of an iterator over
@@ -157,19 +159,19 @@ struct StackItem {
 /// have been explored. As such, if the graph contains multiple disconnected
 /// networks, only a subset will be traversed.
 ///
-/// Each iteration returns an instance of [`Step`]. Not every step explores a
+/// Each iteration returns an instance of [`DFStep`]. Not every step explores a
 /// new edge or node – some just result in a change of the current node.
 ///
 /// At a given node, bonds to pendant (terminal) hydrogen atoms will be explored
 /// first, followed by carbon atoms, then other atoms by ascending atomic number,
 /// then pseudoatoms.
 #[derive(Debug)]
-pub struct DepthFirstSearch<'m> {
+pub(crate) struct DepthFirstSearch<'m> {
     graph: &'m AtomMap,
     /// All visited nodes, whether partially or fully explored.
     visited_nodes: HashSet<AnyAtomlike>,
     explored_edges: HashSet<Bond>,
-    stack: Vec<StackItem>,
+    node_stack: Vec<NodeStackItem>,
     current_node: AnyAtomlike,
 }
 
@@ -180,7 +182,7 @@ impl<'m> DepthFirstSearch<'m> {
     ///
     /// Fails if the graph does not contain any atoms or pseudoatoms at all, or if
     /// the root is not a member of the graph.
-    pub fn new(graph: &'m AtomMap, root: impl Atomlike) -> MolMapResult<Self> {
+    pub(crate) fn new(graph: &'m AtomMap, root: impl Atomlike) -> MolMapResult<Self> {
         let root = root.as_atomlike();
         if !(match root.resolve() {
             ResolvedAtomlike::Atom(atom) => graph.contains(atom),
@@ -195,7 +197,7 @@ impl<'m> DepthFirstSearch<'m> {
                     + <AtomMap as Stores<Pseudoatom>>::count(graph),
             ),
             explored_edges: HashSet::with_capacity(<AtomMap as Stores<Bond>>::count(graph)),
-            stack: Vec::with_capacity(<AtomMap as Stores<Atom>>::count(graph) / 2), // Be generous but assume at least half of nodes/atoms are pendant
+            node_stack: Vec::with_capacity(<AtomMap as Stores<Atom>>::count(graph) / 2), // Be generous but assume at least half of nodes/atoms are pendant
             current_node: root,
         };
         // Visit root, populate its queue so that we're ready to go
@@ -211,12 +213,12 @@ impl<'m> DepthFirstSearch<'m> {
     ///
     /// Only strong bonds are considered edges, and previously explored edges are ignored.
     fn create_queue_on_stack(&mut self, node: AnyAtomlike) {
-        let mut queue: Vec<QueueItem> = Vec::with_capacity(6);
+        let mut queue: Vec<EdgeQueueItem> = Vec::with_capacity(6);
         let outward_bonds = match node.resolve() {
             ResolvedAtomlike::Atom(atom) => &self.graph.data(atom).unwrap().bonds,
             ResolvedAtomlike::Pseudoatom(pseudoatom) => &self.graph.data(pseudoatom).unwrap().bonds,
         };
-        // Add in reverse order so that when we the subsequent descending order sort the
+        // Add in reverse order so that when we do the subsequent descending order sort the
         // original order is maintained between ties
         for &bond in outward_bonds.iter().rev() {
             // Skip bond if it has already been explored (i.e. we came in to the
@@ -235,7 +237,7 @@ impl<'m> DepthFirstSearch<'m> {
             // but for now we just prioritize first pendant (non-bridging) hydrogen atoms,
             // then carbon atoms, then other atoms in order of atomic number, then
             // pseudoatoms.
-            // First, need to work out what the other end of this bond is
+            // First, need to work out what the other end of this bond is.
             let dest_bondable = if bond_data.start == node.as_bondable() {
                 bond_data.end
             } else if bond_data.end == node.as_bondable() {
@@ -275,7 +277,7 @@ impl<'m> DepthFirstSearch<'m> {
                     (pseudoatom.as_atomlike(), priority, degree)
                 }
             };
-            queue.push(QueueItem {
+            queue.push(EdgeQueueItem {
                 edge: bond,
                 dest,
                 priority,
@@ -289,7 +291,10 @@ impl<'m> DepthFirstSearch<'m> {
         // ascending priority. That we can get the next edge in the queue - the one with
         // the next-highest priority - by popping off the back of the queue
         queue.sort_by_key(|a| std::cmp::Reverse(a.priority));
-        self.stack.push(StackItem { node, queue });
+        self.node_stack.push(NodeStackItem {
+            node,
+            edge_queue: queue,
+        });
     }
 
     /// Makes a forward transition along the next edge in the queue.
@@ -297,8 +302,8 @@ impl<'m> DepthFirstSearch<'m> {
     /// # Panics
     ///
     /// Panics if either the stack or queue are empty.
-    fn step_forward(&mut self) -> Step {
-        let queue = &mut self.stack.last_mut().unwrap().queue;
+    fn step_forward(&mut self) -> DFStep {
+        let queue = &mut self.node_stack.last_mut().unwrap().edge_queue;
         let next = queue.pop().unwrap();
         let edge = next.edge;
         let entered = next.dest;
@@ -308,13 +313,13 @@ impl<'m> DepthFirstSearch<'m> {
         let left = self.current_node;
         let left_fully_explored = queue.is_empty();
         if left_fully_explored {
-            self.stack.pop();
+            self.node_stack.pop();
         }
         // We have moved to a completely unexplored, unvisited node
         self.current_node = entered;
         self.visited_nodes.insert(entered);
         self.create_queue_on_stack(entered);
-        Step::Forward {
+        DFStep::Forward {
             left,
             edge,
             entered,
@@ -329,22 +334,23 @@ impl<'m> DepthFirstSearch<'m> {
     /// # Panics
     ///
     /// Panics if either the stack or queue are empty.
-    fn explore_pendant(&mut self) -> Step {
+    fn explore_pendant(&mut self) -> DFStep {
         let parent = self.current_node;
-        let parent_queue = &mut self.stack.last_mut().unwrap().queue;
+        let parent_queue = &mut self.node_stack.last_mut().unwrap().edge_queue;
         let next = parent_queue.pop().unwrap();
         let edge = next.edge;
         let pendant = next.dest;
+        let parent_fully_explored = parent_queue.is_empty();
         self.explored_edges.insert(edge);
         // Pendant node gets visited now, but it never becomes the current node!
         self.visited_nodes.insert(pendant);
         // Don't bother doing anything to the stack, it will get sorted in the
         // next step if it needs to be
-        Step::Pendant {
+        DFStep::Pendant {
             parent,
             edge,
             pendant,
-            parent_fully_explored: parent_queue.is_empty(),
+            parent_fully_explored,
         }
     }
 
@@ -357,8 +363,8 @@ impl<'m> DepthFirstSearch<'m> {
     ///
     /// Panics if either the stack or queue are empty, or if the confluence node
     /// does not have a queue somewhere back along the stack.
-    fn close_cycle(&mut self) -> Step {
-        let current_queue = &mut self.stack.last_mut().unwrap().queue;
+    fn close_cycle(&mut self) -> DFStep {
+        let current_queue = &mut self.node_stack.last_mut().unwrap().edge_queue;
         let next = current_queue.pop().unwrap();
         let edge = next.edge;
         let confluence = next.dest;
@@ -367,9 +373,9 @@ impl<'m> DepthFirstSearch<'m> {
         // we can reborrow from self) - does it have remaining edges to explore?
         let current_fully_explored = current_queue.is_empty();
         // We have just explored one of the edges that the confluence had in its queue,
-        // so we should find its item in the stack and remove the edge from its queue
+        // so we should find its item in the stack and remove this edge from its queue
         let (_stack_pos, confluence_on_stack) = self
-            .stack
+            .node_stack
             .iter_mut()
             .enumerate()
             .rev()
@@ -378,20 +384,20 @@ impl<'m> DepthFirstSearch<'m> {
                 "Must be on stack, as the edge we followed to get to it was unexplored until now",
             );
         if let Some(queue_pos) = confluence_on_stack
-            .queue
+            .edge_queue
             .iter()
             .position(|x| x.edge == edge)
         {
-            confluence_on_stack.queue.remove(queue_pos);
+            confluence_on_stack.edge_queue.remove(queue_pos);
         }
-        let confluence_fully_explored = confluence_on_stack.queue.is_empty();
+        let confluence_fully_explored = confluence_on_stack.edge_queue.is_empty();
         // Back-tracking can cope with empty queues on the stack, so while we could
         // remove it from the stack if it is now empty, it would be a bit inefficient,
         // as it would cause a big shift on the stack
         //if confluence_fully_explored {
         //    self.stack.remove(stack_pos);
         //}
-        Step::CycleClosure {
+        DFStep::CycleClosure {
             current: self.current_node,
             edge,
             confluence,
@@ -404,16 +410,16 @@ impl<'m> DepthFirstSearch<'m> {
     /// if none remain and the stack is now empty.
     ///
     /// Nodes with empty queues are removed from the stack.
-    fn backtrack(&mut self) -> Option<Step> {
-        while let Some(last) = self.stack.last() {
-            if last.queue.is_empty() {
-                self.stack.pop();
+    fn backtrack(&mut self) -> Option<DFStep> {
+        while let Some(last) = self.node_stack.last() {
+            if last.edge_queue.is_empty() {
+                self.node_stack.pop();
             } else {
                 // Found a node that is only partially explored
                 let left = self.current_node;
                 let reentered = last.node;
                 self.current_node = reentered;
-                return Some(Step::Back { left, reentered });
+                return Some(DFStep::BackTrack { left, reentered });
             }
         }
         None
@@ -421,10 +427,10 @@ impl<'m> DepthFirstSearch<'m> {
 }
 
 impl<'m> Iterator for DepthFirstSearch<'m> {
-    type Item = Step;
+    type Item = DFStep;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // Possible variants of Step and the scenarios in which they will be returned:
+        // Possible variants of DFStep and the scenarios in which they will be returned:
         // - Forward      - next edge to explore leads to unvisited node with degree > 1
         // - Pendant      - next edge to explore leads to unvisited node with degree == 1
         // - CycleClosure - next edge to explore leads to already visited node, a cycle is closed
@@ -433,12 +439,12 @@ impl<'m> Iterator for DepthFirstSearch<'m> {
         // If the stack is empty, or a backtrack fails to find any nodes with edges left to
         // explore, traversal is finished.
 
-        if self.stack.is_empty() {
+        if self.node_stack.is_empty() {
             None
         } else {
             // Last item in the stack should in all cases correspond to the current node
-            debug_assert!(self.stack.last().unwrap().node == self.current_node);
-            let current_queue = &self.stack.last().unwrap().queue;
+            debug_assert!(self.node_stack.last().unwrap().node == self.current_node);
+            let current_queue = &self.node_stack.last().unwrap().edge_queue;
             if current_queue.is_empty() {
                 // Nothing in the queue, so the current node is fully explored -
                 // backtrack and see if we can find one that isn't yet
@@ -509,7 +515,7 @@ mod tests {
         let mut traversal = DepthFirstSearch::new(&g, h1).unwrap();
         assert_eq!(
             traversal.next(),
-            Some(Step::Forward {
+            Some(DFStep::Forward {
                 left: h1.into(),
                 edge: c1h1,
                 entered: c1.into(),
@@ -519,7 +525,7 @@ mod tests {
         // Pendant Hs should be explored first, in insertion order
         assert_eq!(
             traversal.next(),
-            Some(Step::Pendant {
+            Some(DFStep::Pendant {
                 parent: c1.into(),
                 edge: c1h2,
                 pendant: h2.into(),
@@ -528,7 +534,7 @@ mod tests {
         );
         assert_eq!(
             traversal.next(),
-            Some(Step::Pendant {
+            Some(DFStep::Pendant {
                 parent: c1.into(),
                 edge: c1h3,
                 pendant: h3.into(),
@@ -538,7 +544,7 @@ mod tests {
         // Then we move to the next carbon in the chain
         assert_eq!(
             traversal.next(),
-            Some(Step::Forward {
+            Some(DFStep::Forward {
                 left: c1.into(),
                 edge: c1c2,
                 entered: c2.into(),
@@ -548,7 +554,7 @@ mod tests {
         // Then the other H atoms, again in insertion order
         assert_eq!(
             traversal.next(),
-            Some(Step::Pendant {
+            Some(DFStep::Pendant {
                 parent: c2.into(),
                 edge: c2h4,
                 pendant: h4.into(),
@@ -557,7 +563,7 @@ mod tests {
         );
         assert_eq!(
             traversal.next(),
-            Some(Step::Pendant {
+            Some(DFStep::Pendant {
                 parent: c2.into(),
                 edge: c2h5,
                 pendant: h5.into(),
@@ -566,7 +572,7 @@ mod tests {
         );
         assert_eq!(
             traversal.next(),
-            Some(Step::Pendant {
+            Some(DFStep::Pendant {
                 parent: c2.into(),
                 edge: c2h6,
                 pendant: h6.into(),
@@ -605,19 +611,19 @@ mod tests {
         let mut cycle_closures: Vec<usize> = Vec::new();
         for (i, step) in traversal.enumerate() {
             match step {
-                Step::Forward { edge, entered, .. } => {
+                DFStep::Forward { edge, entered, .. } => {
                     explored_edges.push(edge);
                     visited_nodes.push(entered);
                 }
-                Step::Pendant { edge, pendant, .. } => {
+                DFStep::Pendant { edge, pendant, .. } => {
                     explored_edges.push(edge);
                     visited_nodes.push(pendant);
                 }
-                Step::CycleClosure { edge, .. } => {
+                DFStep::CycleClosure { edge, .. } => {
                     explored_edges.push(edge);
                     cycle_closures.push(i);
                 }
-                Step::Back { .. } => backtracks.push(i),
+                DFStep::BackTrack { .. } => backtracks.push(i),
             }
         }
         assert_eq!(explored_edges.len(), 10);
@@ -663,19 +669,19 @@ mod tests {
         let mut cycle_closures: Vec<usize> = Vec::new();
         for (i, step) in traversal.enumerate() {
             match step {
-                Step::Forward { edge, entered, .. } => {
+                DFStep::Forward { edge, entered, .. } => {
                     explored_edges.push(edge);
                     visited_nodes.push(entered);
                 }
-                Step::Pendant { edge, pendant, .. } => {
+                DFStep::Pendant { edge, pendant, .. } => {
                     explored_edges.push(edge);
                     visited_nodes.push(pendant);
                 }
-                Step::CycleClosure { edge, .. } => {
+                DFStep::CycleClosure { edge, .. } => {
                     explored_edges.push(edge);
                     cycle_closures.push(i);
                 }
-                Step::Back { .. } => backtracks.push(i),
+                DFStep::BackTrack { .. } => backtracks.push(i),
             }
         }
         assert_eq!(explored_edges.len(), 18);
