@@ -6,6 +6,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+//! Units of measure for spatial map types.
+
 /// A unit of measure.
 pub trait Unit {
     // We don't go to the trouble of using decimal floating point everywhere (at

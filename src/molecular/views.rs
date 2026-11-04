@@ -8,13 +8,13 @@
 
 //! View methods that apply to all molecular maps.
 
-use crate::{View, ViewMut, entities::*, molecular::Molecular, traits::Stores};
+use crate::{Map, View, ViewMut, entities::*, molecular::Molecular, traits::Stores};
 
 use super::data::*;
 
 impl<'m, M> View<'m, M, Substituent>
 where
-    M: Molecular,
+    M: Map + Molecular,
 {
     /// Returns a reference to the data struct in the core graph.
     #[allow(unused)]
@@ -49,7 +49,7 @@ where
 
 impl<'m, M> ViewMut<'m, M, Substituent>
 where
-    M: Molecular,
+    M: Map + Molecular,
 {
     ///// Attempts to change the centre of the substituent to the one requested.
     /////
@@ -78,7 +78,7 @@ where
 
 impl<'m, M> View<'m, M, Molecule>
 where
-    M: Molecular,
+    M: Map + Molecular,
 {
     /// Returns a reference to the data struct in the core graph.
     #[allow(unused)]

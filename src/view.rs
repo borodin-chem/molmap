@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! Immutable and mutable views of an entity in a specific [`MolMap`].
+//! Immutable and mutable views of an entity in a specific map.
 
 use std::iter::FusedIterator;
 
@@ -38,7 +38,7 @@ use crate::entities::*;
 //    methods of the mutable one (note that this cannot be exposed publicly as it
 //    does not consume the mutable view)
 
-/// An immutable view of an individual entity in a specific [`MolMap`].
+/// An immutable view of an individual entity in a specific map.
 #[derive(Copy, Clone, Debug)]
 pub struct View<'m, M, E> {
     pub(crate) map: &'m M,
@@ -54,7 +54,7 @@ where
     }
 }
 
-/// A mutable view of an individual entity in a specific [`MolMap`].
+/// A mutable view of an individual entity in a specific map.
 ///
 /// All views are intended to be ephemeral, but this is especially the case for
 /// mutable views. A new one should be obtained from the parent map for each mutating

@@ -10,11 +10,11 @@
 
 use crate::{Element, Map, View, entities::*, traits::Stores};
 
-use super::data::*;
+use super::{Atomic, data::*};
 
 impl<'m, M> View<'m, M, Atom>
 where
-    M: Map,
+    M: Map + Atomic,
 {
     /// Returns a reference to the data struct in the core graph.
     fn data(&self) -> &AtomData {
@@ -39,7 +39,7 @@ where
 
 impl<'m, M> View<'m, M, Pseudoatom>
 where
-    M: Map,
+    M: Map + Atomic,
 {
     /// Returns a reference to the data struct in the core graph.
     fn data(&self) -> &PseudoatomData {
@@ -56,7 +56,7 @@ where
 
 impl<'m, M> View<'m, M, Bond>
 where
-    M: Map,
+    M: Map + Atomic,
 {
     /// Returns a reference to the data struct in the core graph.
     fn data(&self) -> &BondData {

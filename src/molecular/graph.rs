@@ -12,7 +12,7 @@ use slotmap::{SecondaryMap, SlotMap};
 
 use crate::{
     BondType, Element, Map, MolMapError, MolMapResult, Pseudoelement, ViewMut,
-    atomic::AtomMap,
+    atomic::{AtomMap, Atomic},
     entities::*,
     molecular::Molecular,
     traits::{Graph, Stores, StoresMut},
@@ -108,14 +108,6 @@ impl Map for MolMap {
         self
     }
 
-    fn into_atomic(self) -> AtomMap {
-        self.inner
-    }
-
-    fn as_atomic(&self) -> &AtomMap {
-        &self.inner
-    }
-
     fn contains<E: Entity>(&self, entity: E) -> bool {
         match entity.to_resolved() {
             ResolvedEntity::Atom(atom) => self.inner.contains(atom),
@@ -130,6 +122,16 @@ impl Map for MolMap {
             #[expect(unreachable_patterns)] // Unreachable for now but will be needed later
             _ => false,
         }
+    }
+}
+
+impl Atomic for MolMap {
+    fn into_atomic(self) -> AtomMap {
+        self.inner
+    }
+
+    fn as_atomic(&self) -> &AtomMap {
+        &self.inner
     }
 }
 
@@ -956,9 +958,9 @@ impl MolMap {
 impl MolMap {
     /// Returns details of the centre(s) of a substituent.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if the substituent does not exist.
+    /// Fails if the substituent does not exist.
     pub(crate) fn substituent_centres(
         &self,
         substituent: Substituent,

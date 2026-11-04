@@ -6,15 +6,19 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+//! Maps in which the atomic entities and bonds are organized into substituents
+//! and molecules.
+
 mod graph;
 mod spatial;
 mod views;
 
 pub(crate) mod data;
+#[expect(unused)]
+pub(crate) use spatial::SpatialMolecularCommon;
 
-pub(crate) use graph::MolMap;
-
-pub use spatial::{MolMap2, MolMap3};
+pub use graph::MolMap;
+pub use spatial::{MolMap2, MolMap3, SpatialMolMap};
 
 use crate::Map;
 
