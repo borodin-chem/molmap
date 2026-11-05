@@ -6,6 +6,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! Functions and methods for working on the graph structures.
+//! Graph algorithms and functionality.
 
 pub mod traversal;
