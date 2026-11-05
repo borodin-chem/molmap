@@ -55,6 +55,7 @@ pub(crate) enum DFStep {
         left: AnyAtomlike,
         edge: Bond,
         entered: AnyAtomlike,
+        entered_depth: usize,
         left_fully_explored: bool,
     },
     /// A previously unexplored edge to a pendant node has been explored and the pendant
@@ -74,6 +75,7 @@ pub(crate) enum DFStep {
         parent: AnyAtomlike,
         edge: Bond,
         pendant: AnyAtomlike,
+        pendant_depth: usize,
         parent_fully_explored: bool,
     },
     /// A previously unexplored edge leading to a **previously visited** node has been
@@ -81,6 +83,15 @@ pub(crate) enum DFStep {
     ///
     /// The confluence node (the previously visited node and the destination of the
     /// edge) has not been revisited as part of this. The current node remains the same.
+    ///
+    /// The depth of the confluence within the graph is calculated in two different ways
+    /// and both values are returned: `confluence_original_depth` is the number of edges
+    /// that were followed between the root and the confluence originally, while
+    /// `confluence_current_depth` is the number of edges that have been followed from
+    /// the root to get to this cycle-closing step. As the cycle closing step in a
+    /// depth-first search will always be a loop round to a node either in the current
+    /// branch or a distance of 1 from it, `confluence_original_depth` will always be
+    /// lower.
     ///
     /// Prior to this step, the confluence node will have definitely been on the stack,
     /// as it was only partially explored. That node may or may not now be fully
@@ -96,8 +107,27 @@ pub(crate) enum DFStep {
         current: AnyAtomlike,
         edge: Bond,
         confluence: AnyAtomlike,
+        /// The depth of the confluence along the original path to it from the root.
+        confluence_original_depth: usize,
+        /// The depth of the confluence along this now-concluded path to it from the root.
+        confluence_current_depth: usize,
         current_fully_explored: bool,
         confluence_fully_explored: bool,
+    },
+    /// An edge has been explored that led to a child node at a depth that exceeds the
+    /// specified maximum depth, so the destination node has been skipped and not visited.
+    ///
+    /// The current node remains the same (the parent node).
+    ///
+    /// The parent node may or may not now be fully explored, depending on whether the
+    /// explored edge was the final remaining unexplored edge leaving that node; it is
+    /// indicated by `parent_fully_explored`.
+    SkipDepth {
+        parent: AnyAtomlike,
+        edge: Bond,
+        child: AnyAtomlike,
+        child_depth: usize,
+        parent_fully_explored: bool,
     },
     /// The traversal has back-tracked to a node that was already visited but is only
     /// partially explored.
@@ -112,6 +142,7 @@ pub(crate) enum DFStep {
     BackTrack {
         left: AnyAtomlike,
         reentered: AnyAtomlike,
+        new_depth: usize,
     },
     // This NewRoot variant may be useful in future if we have traversals/iterators that
     // are allowed to jump to other networks after exhausting the initial one
@@ -146,6 +177,13 @@ struct EdgeQueueItem {
 #[derive(Clone, Debug)]
 struct NodeStackItem {
     node: AnyAtomlike,
+    depth: usize,
+    /// The queue of edges waiting to be explored.
+    ///
+    /// The queue should be sorted by their `priority` field in _descending numerical
+    /// order_, which leaves the edges sorted by their _actual_ priority in _ascending_
+    /// order. The next edge in the queue -- the one with the next-highest priority --
+    /// is then obtained by popping it off the _back_ of the queue.
     edge_queue: Vec<EdgeQueueItem>,
 }
 
@@ -155,9 +193,10 @@ struct NodeStackItem {
 /// The nodes of the graph are all the atoms and pseudoatoms, and the edges are
 /// all the strong bonds (covalent/dipolar, ionic, metallic).
 ///
-/// The graph is traversed from the root until all connected nodes and edges
-/// have been explored. As such, if the graph contains multiple disconnected
-/// networks, only a subset will be traversed.
+/// The graph is traversed from the root until all connected nodes with
+/// a depth equal to or less than the maximum depth have been visited.
+/// As such, if the graph contains multiple disconnected networks, only a subset
+/// will be traversed.
 ///
 /// Each iteration returns an instance of [`DFStep`]. Not every step explores a
 /// new edge or node – some just result in a change of the current node.
@@ -171,8 +210,14 @@ pub(crate) struct DepthFirstSearch<'m> {
     /// All visited nodes, whether partially or fully explored.
     visited_nodes: HashSet<AnyAtomlike>,
     explored_edges: HashSet<Bond>,
+    /// The stack of nodes waiting to be explored.
+    ///
+    /// The next node to be explored is taken from the back, and nodes are added by
+    /// pushing them onto the back.
     node_stack: Vec<NodeStackItem>,
     current_node: AnyAtomlike,
+    current_depth: usize,
+    max_depth: usize,
 }
 
 impl<'m> DepthFirstSearch<'m> {
@@ -182,7 +227,11 @@ impl<'m> DepthFirstSearch<'m> {
     ///
     /// Fails if the graph does not contain any atoms or pseudoatoms at all, or if
     /// the root is not a member of the graph.
-    pub(crate) fn new(graph: &'m AtomMap, root: impl Atomlike) -> MolMapResult<Self> {
+    pub(crate) fn new(
+        graph: &'m AtomMap,
+        root: impl Atomlike,
+        max_depth: usize,
+    ) -> MolMapResult<Self> {
         let root = root.as_atomlike();
         if !(match root.resolve() {
             ResolvedAtomlike::Atom(atom) => graph.contains(atom),
@@ -199,10 +248,12 @@ impl<'m> DepthFirstSearch<'m> {
             explored_edges: HashSet::with_capacity(<AtomMap as Stores<Bond>>::count(graph)),
             node_stack: Vec::with_capacity(<AtomMap as Stores<Atom>>::count(graph) / 2), // Be generous but assume at least half of nodes/atoms are pendant
             current_node: root,
+            current_depth: 0,
+            max_depth,
         };
         // Visit root, populate its queue so that we're ready to go
         traversal.visited_nodes.insert(root);
-        traversal.create_queue_on_stack(root);
+        traversal.create_queue_on_stack(root, 0);
         Ok(traversal)
     }
 }
@@ -212,7 +263,7 @@ impl<'m> DepthFirstSearch<'m> {
     /// Adds a queue to the stack for a node and populates it by discovering outgoing edges.
     ///
     /// Only strong bonds are considered edges, and previously explored edges are ignored.
-    fn create_queue_on_stack(&mut self, node: AnyAtomlike) {
+    fn create_queue_on_stack(&mut self, node: AnyAtomlike, depth: usize) {
         let mut queue: Vec<EdgeQueueItem> = Vec::with_capacity(6);
         let outward_bonds = match node.resolve() {
             ResolvedAtomlike::Atom(atom) => &self.graph.data(atom).unwrap().bonds,
@@ -293,6 +344,7 @@ impl<'m> DepthFirstSearch<'m> {
         queue.sort_by_key(|a| std::cmp::Reverse(a.priority));
         self.node_stack.push(NodeStackItem {
             node,
+            depth,
             edge_queue: queue,
         });
     }
@@ -307,22 +359,20 @@ impl<'m> DepthFirstSearch<'m> {
         let next = queue.pop().unwrap();
         let edge = next.edge;
         let entered = next.dest;
+        let entered_depth = self.current_depth + 1;
         self.explored_edges.insert(edge);
-        // Need to remove the node we just left if its queue is now empty, so
-        // that it doesn't interfere if we back-track further down the branch
         let left = self.current_node;
         let left_fully_explored = queue.is_empty();
-        if left_fully_explored {
-            self.node_stack.pop();
-        }
         // We have moved to a completely unexplored, unvisited node
         self.current_node = entered;
+        self.current_depth = entered_depth;
         self.visited_nodes.insert(entered);
-        self.create_queue_on_stack(entered);
+        self.create_queue_on_stack(entered, entered_depth);
         DFStep::Forward {
             left,
             edge,
             entered,
+            entered_depth,
             left_fully_explored,
         }
     }
@@ -340,16 +390,16 @@ impl<'m> DepthFirstSearch<'m> {
         let next = parent_queue.pop().unwrap();
         let edge = next.edge;
         let pendant = next.dest;
+        let pendant_depth = self.current_depth + 1;
         let parent_fully_explored = parent_queue.is_empty();
         self.explored_edges.insert(edge);
         // Pendant node gets visited now, but it never becomes the current node!
         self.visited_nodes.insert(pendant);
-        // Don't bother doing anything to the stack, it will get sorted in the
-        // next step if it needs to be
         DFStep::Pendant {
             parent,
             edge,
             pendant,
+            pendant_depth,
             parent_fully_explored,
         }
     }
@@ -368,6 +418,7 @@ impl<'m> DepthFirstSearch<'m> {
         let next = current_queue.pop().unwrap();
         let edge = next.edge;
         let confluence = next.dest;
+        let confluence_current_depth = self.current_depth + 1;
         self.explored_edges.insert(edge);
         // Look at the current node first (so that current_queue can be dropped and
         // we can reborrow from self) - does it have remaining edges to explore?
@@ -390,26 +441,52 @@ impl<'m> DepthFirstSearch<'m> {
         {
             confluence_on_stack.edge_queue.remove(queue_pos);
         }
+        let confluence_original_depth = confluence_on_stack.depth;
         let confluence_fully_explored = confluence_on_stack.edge_queue.is_empty();
-        // Back-tracking can cope with empty queues on the stack, so while we could
-        // remove it from the stack if it is now empty, it would be a bit inefficient,
-        // as it would cause a big shift on the stack
-        //if confluence_fully_explored {
-        //    self.stack.remove(stack_pos);
-        //}
         DFStep::CycleClosure {
             current: self.current_node,
             edge,
             confluence,
+            confluence_original_depth,
+            confluence_current_depth,
             current_fully_explored,
             confluence_fully_explored,
+        }
+    }
+
+    /// Explores the next edge in the queue in the knowledge that the depth of the
+    /// destination node exceeds the maximum depth configured for the search.
+    ///
+    /// The destination node is not visited or explored at all, but the edge is
+    /// considered explored. The current node (the parent node) is kept the same.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either the node queue or the current node's edge queue are empty.
+    fn skip_child(&mut self) -> DFStep {
+        let parent = self.current_node;
+        let parent_queue = &mut self.node_stack.last_mut().unwrap().edge_queue;
+        let next = parent_queue.pop().unwrap();
+        let edge = next.edge;
+        let child = next.dest;
+        let child_depth = self.current_depth + 1;
+        let parent_fully_explored = parent_queue.is_empty();
+        self.explored_edges.insert(edge);
+        // Child node doesn't get visited and never will be, and it never gets put
+        // into the node queue even if it isn't a pendant node
+        DFStep::SkipDepth {
+            parent,
+            edge,
+            child,
+            child_depth,
+            parent_fully_explored,
         }
     }
 
     /// Back-tracks along the stack to the last unexhausted node, or returns `None`
     /// if none remain and the stack is now empty.
     ///
-    /// Nodes with empty queues are removed from the stack.
+    /// Nodes with empty queues are removed from the stack as they are encountered.
     fn backtrack(&mut self) -> Option<DFStep> {
         while let Some(last) = self.node_stack.last() {
             if last.edge_queue.is_empty() {
@@ -418,8 +495,14 @@ impl<'m> DepthFirstSearch<'m> {
                 // Found a node that is only partially explored
                 let left = self.current_node;
                 let reentered = last.node;
+                let new_depth = last.depth;
                 self.current_node = reentered;
-                return Some(DFStep::BackTrack { left, reentered });
+                self.current_depth = new_depth;
+                return Some(DFStep::BackTrack {
+                    left,
+                    reentered,
+                    new_depth,
+                });
             }
         }
         None
@@ -461,10 +544,15 @@ impl<'m> Iterator for DepthFirstSearch<'m> {
                 let step = if self.visited_nodes.contains(&next.dest) {
                     self.close_cycle()
                 } else {
+                    // The destination node is a child (pendants are also children),
+                    // which means the depth will be higher -- check that it doesn't
+                    // exceed the max depth, because if so, we shouldn't visit it
+                    if self.current_depth == self.max_depth {
+                        self.skip_child()
                     // Is the destination node a pendant? If so, we will just visit it
                     // and return to the current node, effectively not leaving this one.
                     // Handily, we have stored the degree of the destination in the queue
-                    if next.degree == 1 {
+                    } else if next.degree == 1 {
                         self.explore_pendant()
                     } else {
                         self.step_forward()
@@ -490,7 +578,7 @@ mod tests {
         let h2 = g.add_atom(Element::H);
         let h3 = g.add_atom(Element::H);
         g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, h2, h3);
-        assert!(DepthFirstSearch::new(&g, h1).is_err());
+        assert!(DepthFirstSearch::new(&g, h1, usize::MAX).is_err());
     }
 
     #[test]
@@ -512,13 +600,14 @@ mod tests {
         let c2h5 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, h5);
         let c2h6 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, h6);
         let c1c2 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, c2);
-        let mut traversal = DepthFirstSearch::new(&g, h1).unwrap();
+        let mut traversal = DepthFirstSearch::new(&g, h1, usize::MAX).unwrap();
         assert_eq!(
             traversal.next(),
             Some(DFStep::Forward {
                 left: h1.into(),
                 edge: c1h1,
                 entered: c1.into(),
+                entered_depth: 1,
                 left_fully_explored: true
             })
         );
@@ -529,6 +618,7 @@ mod tests {
                 parent: c1.into(),
                 edge: c1h2,
                 pendant: h2.into(),
+                pendant_depth: 2,
                 parent_fully_explored: false
             })
         );
@@ -538,6 +628,7 @@ mod tests {
                 parent: c1.into(),
                 edge: c1h3,
                 pendant: h3.into(),
+                pendant_depth: 2,
                 parent_fully_explored: false
             })
         );
@@ -548,6 +639,7 @@ mod tests {
                 left: c1.into(),
                 edge: c1c2,
                 entered: c2.into(),
+                entered_depth: 2,
                 left_fully_explored: true
             })
         );
@@ -558,6 +650,7 @@ mod tests {
                 parent: c2.into(),
                 edge: c2h4,
                 pendant: h4.into(),
+                pendant_depth: 3,
                 parent_fully_explored: false
             })
         );
@@ -567,6 +660,7 @@ mod tests {
                 parent: c2.into(),
                 edge: c2h5,
                 pendant: h5.into(),
+                pendant_depth: 3,
                 parent_fully_explored: false
             })
         );
@@ -576,6 +670,7 @@ mod tests {
                 parent: c2.into(),
                 edge: c2h6,
                 pendant: h6.into(),
+                pendant_depth: 3,
                 parent_fully_explored: true
             })
         );
@@ -604,7 +699,7 @@ mod tests {
         }
         g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, c2);
         g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, c3);
-        let traversal = DepthFirstSearch::new(&g, c2).unwrap();
+        let traversal = DepthFirstSearch::new(&g, c2, usize::MAX).unwrap();
         let mut explored_edges: Vec<Bond> = Vec::new();
         let mut visited_nodes: Vec<AnyAtomlike> = vec![c2.as_atomlike()];
         let mut backtracks: Vec<usize> = Vec::new();
@@ -624,6 +719,7 @@ mod tests {
                     cycle_closures.push(i);
                 }
                 DFStep::BackTrack { .. } => backtracks.push(i),
+                DFStep::SkipDepth { .. } => unreachable!(),
             }
         }
         assert_eq!(explored_edges.len(), 10);
@@ -662,7 +758,7 @@ mod tests {
             carbons.push(c.into());
         }
         g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, carbons[0], carbons[5]);
-        let traversal = DepthFirstSearch::new(&g, carbons[0]).unwrap();
+        let traversal = DepthFirstSearch::new(&g, carbons[0], usize::MAX).unwrap();
         let mut explored_edges: Vec<Bond> = Vec::new();
         let mut visited_nodes: Vec<AnyAtomlike> = vec![carbons[0]];
         let mut backtracks: Vec<usize> = Vec::new();
@@ -682,6 +778,7 @@ mod tests {
                     cycle_closures.push(i);
                 }
                 DFStep::BackTrack { .. } => backtracks.push(i),
+                DFStep::SkipDepth { .. } => unreachable!(),
             }
         }
         assert_eq!(explored_edges.len(), 18);
@@ -705,7 +802,7 @@ mod tests {
                 g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, o, h);
             }
         }
-        let mut traversal = DepthFirstSearch::new(&g, o1).unwrap();
+        let mut traversal = DepthFirstSearch::new(&g, o1, usize::MAX).unwrap();
         for _ in &mut traversal {}
         // Check that O of second water molecule was never visited
         assert!(!traversal.visited_nodes.contains(&o2.as_atomlike()));
@@ -730,7 +827,7 @@ mod tests {
         // Connect via a hydrogen bond
         let h1 = h1.unwrap();
         g.add_bond_unchecked(BondType::Hydrogen, o2, h1);
-        let mut traversal = DepthFirstSearch::new(&g, o1).unwrap();
+        let mut traversal = DepthFirstSearch::new(&g, o1, usize::MAX).unwrap();
         for _ in &mut traversal {}
         // Check that O of second water molecule was never visited
         assert!(!traversal.visited_nodes.contains(&o2.as_atomlike()));

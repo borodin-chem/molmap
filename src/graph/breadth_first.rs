@@ -24,6 +24,10 @@
 //! However, the π-system is not a node in the graph. The carbon atoms of the Cp
 //! ring are the nodes, and each is adjacent to the iron atom, even though they
 //! are not directly connected by edges.
+//!
+//! Currently, an edge is not considered to have a depth, only nodes are. An
+//! edge that leads to a node with a depth that exceeds the max allowed depth
+//! still gets "explored", but the node is not visited.
 
 #![expect(unused)]
 
@@ -82,6 +86,11 @@ pub(crate) enum BFStep {
     /// The confluence node (the previously visited node and the destination of the
     /// edge) has not been revisited as part of this. The current node remains the same.
     ///
+    /// The confluence will either be at the same depth as the current node, or one
+    /// level deeper; the depth of the confluence is given by `confluence_depth`.
+    /// In a breadth-first search, the depth of the confluence is fixed and independent
+    /// of the path taken.
+    ///
     /// Prior to this step, the confluence node will have definitely been in the node
     /// queue, as it was only partially explored. That node may or may not now be fully
     /// explored, depending on whether the explored edge was its final remaining
@@ -92,9 +101,6 @@ pub(crate) enum BFStep {
     ///
     /// Similarly, the node from which the cycle-closing edge came may or may not now be
     /// fully explored; this is indicated by `current_fully_explored`.
-    ///
-    /// The confluence may be at the same depth as the current node, or it may be one
-    /// level deeper; the depth of the confluence is given by `confluence_depth`.
     CycleClosure {
         current: AnyAtomlike,
         edge: Bond,
@@ -102,6 +108,21 @@ pub(crate) enum BFStep {
         confluence_depth: usize,
         current_fully_explored: bool,
         confluence_fully_explored: bool,
+    },
+    /// An edge has been explored that led to a child node at a depth that exceeds the
+    /// specified maximum depth, so the destination node has been skipped and not visited.
+    ///
+    /// The current node remains the same (the parent node).
+    ///
+    /// The parent node may or may not now be fully explored, depending on whether the
+    /// explored edge was the final remaining unexplored edge leaving that node; it is
+    /// indicated by `parent_fully_explored`.
+    SkipDepth {
+        parent: AnyAtomlike,
+        edge: Bond,
+        child: AnyAtomlike,
+        child_depth: usize,
+        parent_fully_explored: bool,
     },
     /// The traversal has increased in depth by moving to a node that was already
     /// visited but is only partially explored.
@@ -179,9 +200,10 @@ struct NodeQueueItem {
 /// The nodes of the graph are all the atoms and pseudoatoms, and the edges are
 /// all the strong bonds (covalent/dipolar, ionic, metallic).
 ///
-/// The graph is traversed from the root until all connected nodes and edges
-/// have been explored. As such, if the graph contains multiple disconnected
-/// networks, only a subset will be traversed.
+/// The graph is traversed from the root until all connected nodes and edges with
+/// a depth equal to or less than the maximum depth have been explored.
+/// As such, if the graph contains multiple disconnected networks, only a subset
+/// will be traversed.
 ///
 /// Each iteration returns an instance of [`BFStep`]. Not every step explores a
 /// new edge or node – some just result in a change of the current node.
@@ -202,6 +224,7 @@ pub(crate) struct BreadthFirstSearch<'m> {
     node_queue: VecDeque<NodeQueueItem>,
     current_node: AnyAtomlike,
     current_depth: usize,
+    max_depth: usize,
 }
 
 impl<'m> BreadthFirstSearch<'m> {
@@ -211,7 +234,11 @@ impl<'m> BreadthFirstSearch<'m> {
     ///
     /// Fails if the graph does not contain any atoms or pseudoatoms at all, or if
     /// the root is not a member of the graph.
-    pub(crate) fn new(graph: &'m AtomMap, root: impl Atomlike) -> MolMapResult<Self> {
+    pub(crate) fn new(
+        graph: &'m AtomMap,
+        root: impl Atomlike,
+        max_depth: usize,
+    ) -> MolMapResult<Self> {
         let root = root.as_atomlike();
         if !(match root.resolve() {
             ResolvedAtomlike::Atom(atom) => graph.contains(atom),
@@ -229,6 +256,7 @@ impl<'m> BreadthFirstSearch<'m> {
             node_queue: VecDeque::with_capacity(<AtomMap as Stores<Atom>>::count(graph) / 2), // Be generous but assume at least half of nodes/atoms are pendant
             current_node: root,
             current_depth: 0,
+            max_depth,
         };
         // Visit root, populate its queue so that we're ready to go
         traversal.visited_nodes.insert(root);
@@ -339,7 +367,7 @@ impl<'m> BreadthFirstSearch<'m> {
     /// # Panics
     ///
     /// Panics if either the node queue or the current node's edge queue are empty.
-    fn explore_child(&mut self) -> BFStep {
+    fn visit_child(&mut self) -> BFStep {
         let parent = self.current_node;
         let parent_queue = &mut self.node_queue.front_mut().unwrap().edge_queue;
         let next = parent_queue.pop().unwrap();
@@ -352,8 +380,6 @@ impl<'m> BreadthFirstSearch<'m> {
         // once all nodes at the current depth have been fully explored
         self.visited_nodes.insert(child);
         self.create_edge_queue_in_node_queue(child, child_depth);
-        // Don't need to remove the node's item from the node queue, it will get
-        // sorted in the next step if it needs to be
         BFStep::Child {
             parent,
             edge,
@@ -381,8 +407,6 @@ impl<'m> BreadthFirstSearch<'m> {
         self.explored_edges.insert(edge);
         // Pendant node gets visited now, but it never becomes the current node!
         self.visited_nodes.insert(pendant);
-        // Don't need to remove the node's item from the node queue, it will get
-        // sorted in the next step if it needs to be
         BFStep::Pendant {
             parent,
             edge,
@@ -432,9 +456,6 @@ impl<'m> BreadthFirstSearch<'m> {
         }
         let confluence_depth = confluence_in_node_queue.depth;
         let confluence_fully_explored = confluence_in_node_queue.edge_queue.is_empty();
-        // Forward/side-tracking can cope with empty items in the node queue, so while
-        // we could remove it now if it is now empty, it would be a bit inefficient,
-        // as it would open a gap and therefore cause half the queue to shift
         BFStep::CycleClosure {
             current: self.current_node,
             edge,
@@ -442,6 +463,35 @@ impl<'m> BreadthFirstSearch<'m> {
             confluence_depth,
             current_fully_explored,
             confluence_fully_explored,
+        }
+    }
+
+    /// Explores the next edge in the queue in the knowledge that the depth of the
+    /// destination node exceeds the maximum depth configured for the search.
+    ///
+    /// The destination node is not visited or explored at all, but the edge is
+    /// considered explored. The current node (the parent node) is kept the same.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either the node queue or the current node's edge queue are empty.
+    fn skip_child(&mut self) -> BFStep {
+        let parent = self.current_node;
+        let parent_queue = &mut self.node_queue.front_mut().unwrap().edge_queue;
+        let next = parent_queue.pop().unwrap();
+        let edge = next.edge;
+        let child = next.dest;
+        let child_depth = self.current_depth + 1;
+        let parent_fully_explored = parent_queue.is_empty();
+        self.explored_edges.insert(edge);
+        // Child node doesn't get visited and never will be, and it never gets put
+        // into the node queue even if it isn't a pendant node
+        BFStep::SkipDepth {
+            parent,
+            edge,
+            child,
+            child_depth,
+            parent_fully_explored,
         }
     }
 
@@ -506,31 +556,38 @@ impl<'m> Iterator for BreadthFirstSearch<'m> {
         if self.node_queue.is_empty() {
             None
         } else {
-            // Next node in the queue should in all cases correspond to the current node
-            debug_assert!(self.node_queue.front().unwrap().node == self.current_node);
-            let current_edge_queue = &self.node_queue.front().unwrap().edge_queue;
-            if current_edge_queue.is_empty() {
+            let next_node_item = &self.node_queue.front().unwrap();
+            // Next node in the queue should in all cases correspond to the "current" node
+            debug_assert!(next_node_item.node == self.current_node);
+            if next_node_item.edge_queue.is_empty() {
                 // Nothing in the queue, so the current node is fully explored -
                 // track along queue and see if we can find one that isn't yet
                 self.track()
             } else {
                 // The current node has at least one edge to explore, and each of
                 // the helper methods we call will explore the next edge in the queue
-                let next = current_edge_queue.last().unwrap();
+                let next_edge_item = next_node_item.edge_queue.last().unwrap();
                 // The edge should not have been previously explored
-                debug_assert!(!self.explored_edges.contains(&next.edge));
+                debug_assert!(!self.explored_edges.contains(&next_edge_item.edge));
                 // Possible scenarios: Child, Pendant, and CycleClosure
                 // Cycle closure is distinguished by the fact that the node led
                 // to by the edge is one that has already been visited
-                let step = if self.visited_nodes.contains(&next.dest) {
+                let step = if self.visited_nodes.contains(&next_edge_item.dest) {
+                    // If it has been visited, it can't have a depth higher than the
+                    // max depth, so it's fine to explore the edge to it
                     self.close_cycle()
                 } else {
+                    // The destination node is a child (pendants are also children),
+                    // which means the depth will be higher -- check that it doesn't
+                    // exceed the max depth, because if so, we shouldn't visit it
+                    if self.current_depth == self.max_depth {
+                        self.skip_child()
                     // Is the destination node a pendant?
                     // Handily, we have stored the degree of the destination in the queue
-                    if next.degree == 1 {
+                    } else if next_edge_item.degree == 1 {
                         self.explore_pendant()
                     } else {
-                        self.explore_child()
+                        self.visit_child()
                     }
                 };
                 Some(step)
