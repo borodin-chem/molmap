@@ -182,15 +182,10 @@ impl Id {
 
     /// Converts a string of the form `<prefix><index>.<version>` to the corresponding ID.
     pub(crate) fn from_str(s: &str) -> MolMapResult<Self> {
-        let n_prefix_chars = match s.as_bytes() {
-            [a, b, ..] if a.is_ascii_alphabetic() && b.is_ascii_alphabetic() => 2,
-            [a, ..] if a.is_ascii_alphabetic() => 1,
-            _ => 0,
-        };
-        let (prefix, s) = s.split_at(n_prefix_chars);
-        let discriminant: u8 = EntityKind::from_prefix(prefix)
-            .ok_or(MolMapError::Parse)?
-            .into();
+        let mut chars = s.chars();
+        let prefix = chars.next().ok_or(MolMapError::Parse)?;
+        let s = chars.as_str();
+        let discriminant: u8 = prefix as u8;
         let mut split = s.split('.');
         let index: u32 = split.next().ok_or(MolMapError::Parse)?.parse()?;
         let version: u32 = split.next().ok_or(MolMapError::Parse)?.parse()?;
@@ -263,6 +258,7 @@ impl<'de> Deserialize<'de> for Id {
 
 #[cfg(test)]
 #[allow(unused)]
+#[allow(clippy::char_lit_as_u8)]
 #[allow(clippy::unusual_byte_groupings)]
 mod tests {
     use std::num::NonZeroU64;
@@ -273,13 +269,19 @@ mod tests {
 
     // Some raw keys for use when testing, so that they only need updating in
     // one place if anything changes
-    const ATOM_NULL_RAW: u64 = 0x0000001_00_FFFFFF; // The null atom key
+    // For reference:
+    // - Atom        = a = 0x61
+    // - Bond        = b = 0x62
+    // - Pseudoatom  = p = 0x70
+    // - Substituent = S = 0x53
+    // - Molecule    = M = 0x4D
+    const ATOM_NULL_RAW: u64 = 0x0000001_61_FFFFFF; // The null atom key
     const KD_NULL_RAW: u64 = 0x0000001_FF_FFFFFF; // What KeyData considers to be null
 
-    const BOND_RAW: u64 = 0x1_01_000008; // version: 1, kind: Bond, idx: 8
-    const ATOM_RAW: u64 = 0x3_00_000010; // version: 3, kind: Atom, idx: 16, (version always odd for occupied slots)
-    const PSEUDOATOM_RAW: u64 = 0x1_02_00000A; // version: 1, kind: Pseudoatom, idx: 10
-    const MOLECULE_RAW: u64 = 0x1_1F_000001; // version: 1, kind: Molecule, idx: 1
+    const BOND_RAW: u64 = 0x1_62_000008; // version: 1, kind: Bond, idx: 8
+    const ATOM_RAW: u64 = 0x3_61_000010; // version: 3, kind: Atom, idx: 16, (version always odd for occupied slots)
+    const PSEUDOATOM_RAW: u64 = 0x1_70_00000A; // version: 1, kind: Pseudoatom, idx: 10
+    const MOLECULE_RAW: u64 = 0x1_4D_000001; // version: 1, kind: Molecule, idx: 1
 
     #[test]
     fn slotmap_key_ffi_layout() {
@@ -303,7 +305,7 @@ mod tests {
     #[test]
     fn entity_getters() {
         let e = Id::from_raw(ATOM_RAW).unwrap();
-        assert_eq!(e.discriminant(), 0);
+        assert_eq!(e.discriminant(), 'a' as u8);
         assert_eq!(e.version(), 3);
         assert_eq!(e.index(), 16);
     }
@@ -311,14 +313,14 @@ mod tests {
     #[test]
     fn from_parts() {
         assert_eq!(
-            Id::from_parts(1, 3, 1).unwrap(),
-            Id(NonZeroU64::new(0x1_01_000003).unwrap()),
+            Id::from_parts('b' as u8, 3, 1).unwrap(),
+            Id(NonZeroU64::new(0x1_62_000003).unwrap()),
         )
     }
 
     #[test]
     fn from_raw() {
-        for n in [0x1_00_000001, 0x1_00_000002, 0x1_01_000003] {
+        for n in [0x1_61_000001, 0x1_61_000002, 0x1_62_000003] {
             assert_eq!(Id::from_raw(n).unwrap(), Id(NonZeroU64::new(n).unwrap()))
         }
     }
@@ -336,19 +338,19 @@ mod tests {
     fn from_key_data() {
         let k = KeyData::from_ffi(0x1_00_000001); // idx: 1, version: 1
         let id = Id::from_key_data(EntityKind::Atom, k);
-        // Atom has discriminant of 0
-        assert_eq!(id.to_raw(), 0x1_00_000001);
+        // Atom has discriminant of 'a' (0x61 in hex)
+        assert_eq!(id.to_raw(), 0x1_61_000001);
         new_key_type! { struct AtomKey; }
         let mut sm: SlotMap<AtomKey, usize> = SlotMap::with_key();
         let first = sm.insert(1); // idx: 1, version: 1
         assert_eq!(
             Id::from_key_data(EntityKind::Atom, first.data()),
-            Id::from_raw(0x1_00_000001).unwrap()
+            Id::from_raw(0x1_61_000001).unwrap()
         );
         let second = sm.insert(2); // idx: 2, version: 1
         assert_eq!(
             Id::from_key_data(EntityKind::Atom, second.data()),
-            Id::from_raw(0x1_00_000002).unwrap()
+            Id::from_raw(0x1_61_000002).unwrap()
         );
     }
 
@@ -376,8 +378,8 @@ mod tests {
     #[test]
     fn different_discriminants_same_keys() {
         // First assigned key in two different slotmaps
-        let atom = Id::from_raw(0x1_02_000001).unwrap();
-        let bond = Id::from_raw(0x1_01_000001).unwrap();
+        let atom = Id::from_raw(0x1_61_000001).unwrap();
+        let bond = Id::from_raw(0x1_62_000001).unwrap();
         assert_eq!(atom.to_raw_key(), bond.to_raw_key());
     }
 
@@ -394,7 +396,7 @@ mod tests {
     #[test]
     fn debug() {
         let atom = Id::from_raw(ATOM_RAW).unwrap();
-        assert_eq!(format!("{:?}", atom), format! {"{}=0x00/16.3", ATOM_RAW});
+        assert_eq!(format!("{:?}", atom), format! {"{}=0x61/16.3", ATOM_RAW});
     }
 
     #[test]

@@ -21,11 +21,13 @@ use id::Id;
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 #[repr(u8)]
 pub enum EntityKind {
-    Atom = 0x00,
-    Bond = 0x01,
-    Pseudoatom = 0x02,
-    Substituent = 0x10,
-    Molecule = 0x1F,
+    // Discriminants are chosen to be mnemonic ASCII letters,
+    // with lowercase for fundamentals and uppercase for collections
+    Atom = 0x61,        // a
+    Bond = 0x62,        // b
+    Pseudoatom = 0x70,  // p
+    Substituent = 0x53, // S
+    Molecule = 0x4D,    // M
 }
 
 impl EntityKind {
@@ -33,36 +35,23 @@ impl EntityKind {
     /// `None` otherwise.
     const fn from_u8(value: u8) -> Option<Self> {
         match value {
-            0x00 => Some(Self::Atom),
-            0x01 => Some(Self::Bond),
-            0x02 => Some(Self::Pseudoatom),
-            0x10 => Some(Self::Substituent),
-            0x1F => Some(Self::Molecule),
+            0x61 => Some(Self::Atom),
+            0x62 => Some(Self::Bond),
+            0x70 => Some(Self::Pseudoatom),
+            0x53 => Some(Self::Substituent),
+            0x4D => Some(Self::Molecule),
             _ => None,
         }
     }
 
     /// Returns the corresponding variant for `prefix`, if there is one.
-    pub fn from_prefix(prefix: &str) -> Option<Self> {
-        match prefix {
-            "a" => Some(Self::Atom),
-            "b" => Some(Self::Bond),
-            "p" => Some(Self::Pseudoatom),
-            "s" => Some(Self::Substituent),
-            "m" => Some(Self::Molecule),
-            _ => None,
-        }
+    pub fn from_prefix(prefix: char) -> Option<Self> {
+        Self::from_u8(prefix as u8)
     }
 
     /// Returns the corresponding prefix.
-    pub fn to_prefix(self) -> &'static str {
-        match self {
-            Self::Atom => "a",
-            Self::Bond => "b",
-            Self::Pseudoatom => "p",
-            Self::Substituent => "s",
-            Self::Molecule => "m",
-        }
+    pub fn to_prefix(self) -> char {
+        self as u8 as char
     }
 }
 
@@ -783,18 +772,45 @@ mod tests {
     use super::*;
 
     // Some raw keys for use when testing
-    const ATOM_NULL_RAW: u64 = 0x0000001_00_FFFFFF; // The null atom key
+    // For reference:
+    // - Atom        = a = 0x61
+    // - Bond        = b = 0x62
+    // - Pseudoatom  = p = 0x70
+    // - Substituent = S = 0x53
+    // - Molecule    = M = 0x4D
+    const ATOM_NULL_RAW: u64 = 0x0000001_61_FFFFFF; // The null atom key
     const KD_NULL_RAW: u64 = 0x0000001_FF_FFFFFF; // What KeyData considers to be null
 
-    const BOND_RAW: u64 = 0x1_01_000008; // version: 1, kind: Bond, idx: 8
-    const ATOM_RAW: u64 = 0x3_00_000010; // version: 3, kind: Atom, idx: 16, (version always odd for occupied slots)
-    const PSEUDOATOM_RAW: u64 = 0x1_02_00000A; // version: 1, kind: Pseudoatom, idx: 10
-    const MOLECULE_RAW: u64 = 0x1_1F_000001; // version: 1, kind: Molecule, idx: 1
+    const BOND_RAW: u64 = 0x1_62_000008; // version: 1, kind: Bond, idx: 8
+    const ATOM_RAW: u64 = 0x3_61_000010; // version: 3, kind: Atom, idx: 16, (version always odd for occupied slots)
+    const PSEUDOATOM_RAW: u64 = 0x1_70_00000A; // version: 1, kind: Pseudoatom, idx: 10
+    const MOLECULE_RAW: u64 = 0x1_4D_000001; // version: 1, kind: Molecule, idx: 1
 
     const BOND: Bond = Bond(Id::from_raw(BOND_RAW).unwrap());
     const ATOM: Atom = Atom(Id::from_raw(ATOM_RAW).unwrap());
     const PSEUDOATOM: Pseudoatom = Pseudoatom(Id::from_raw(PSEUDOATOM_RAW).unwrap());
     const MOLECULE: Molecule = Molecule(Id::from_raw(MOLECULE_RAW).unwrap());
+
+    #[test]
+    fn kind_u8_roundtrip() {
+        for n in 0..255_u8 {
+            if let Some(kind) = EntityKind::from_u8(n) {
+                assert_eq!(n, kind as u8);
+                let m: u8 = kind.into();
+                assert_eq!(n, m);
+            }
+        }
+    }
+
+    #[test]
+    fn kind_prefix_roundtrip() {
+        for n in 0..127_u8 {
+            let c = n as char;
+            if let Some(kind) = EntityKind::from_prefix(c) {
+                assert_eq!(kind.to_prefix(), c);
+            }
+        }
+    }
 
     #[test]
     fn key_kind() {
