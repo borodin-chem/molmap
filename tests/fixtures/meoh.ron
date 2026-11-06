@@ -1,0 +1,128 @@
+(
+    atoms: [
+        (
+            value: None,
+            version: 0,
+        ),
+        (
+            value: Some((
+                element: H,
+                bonds: [
+                    ((4311744513)),
+                ],
+            )),
+            version: 1,
+        ),
+        (
+            value: Some((
+                element: H,
+                bonds: [
+                    ((4311744514)),
+                ],
+            )),
+            version: 1,
+        ),
+        (
+            value: Some((
+                element: H,
+                bonds: [
+                    ((4311744515)),
+                ],
+            )),
+            version: 1,
+        ),
+        (
+            value: Some((
+                element: C,
+                bonds: [
+                    ((4311744513)),
+                    ((4311744514)),
+                    ((4311744515)),
+                    ((4311744517)),
+                ],
+            )),
+            version: 1,
+        ),
+        (
+            value: Some((
+                element: O,
+                bonds: [
+                    ((4311744516)),
+                    ((4311744517)),
+                ],
+            )),
+            version: 1,
+        ),
+        (
+            value: Some((
+                element: H,
+                bonds: [
+                    ((4311744516)),
+                ],
+            )),
+            version: 1,
+        ),
+    ],
+    pseudoatoms: [
+        (
+            value: None,
+            version: 0,
+        ),
+    ],
+    bonds: [
+        (
+            value: None,
+            version: 0,
+        ),
+        (
+            value: Some((
+                bond_type: Covalent(
+                    order: 1.0,
+                ),
+                start: ((4294967300)),
+                end: ((4294967297)),
+            )),
+            version: 1,
+        ),
+        (
+            value: Some((
+                bond_type: Covalent(
+                    order: 1.0,
+                ),
+                start: ((4294967300)),
+                end: ((4294967298)),
+            )),
+            version: 1,
+        ),
+        (
+            value: Some((
+                bond_type: Covalent(
+                    order: 1.0,
+                ),
+                start: ((4294967300)),
+                end: ((4294967299)),
+            )),
+            version: 1,
+        ),
+        (
+            value: Some((
+                bond_type: Covalent(
+                    order: 1.0,
+                ),
+                start: ((4294967301)),
+                end: ((4294967302)),
+            )),
+            version: 1,
+        ),
+        (
+            value: Some((
+                bond_type: Covalent(
+                    order: 1.0,
+                ),
+                start: ((4294967300)),
+                end: ((4294967301)),
+            )),
+            version: 1,
+        ),
+    ],
+)

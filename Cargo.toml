@@ -20,3 +20,7 @@ thiserror = "2.0.18"
 
 [features]
 serde = ["dep:serde", "slotmap/serde", "nalgebra/serde-serialize"]
+
+[dev-dependencies]
+molmap = { path = ".", features = ["serde"] } # Many tests use deserialized reference molecules
+ron = "0.12.3"
