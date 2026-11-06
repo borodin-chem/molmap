@@ -8,7 +8,7 @@
             value: Some((
                 element: H,
                 bonds: [
-                    ((4311744513)),
+                    ("b1.1"),
                 ],
             )),
             version: 1,
@@ -17,7 +17,7 @@
             value: Some((
                 element: H,
                 bonds: [
-                    ((4311744514)),
+                    ("b2.1"),
                 ],
             )),
             version: 1,
@@ -26,7 +26,7 @@
             value: Some((
                 element: H,
                 bonds: [
-                    ((4311744515)),
+                    ("b3.1"),
                 ],
             )),
             version: 1,
@@ -35,10 +35,10 @@
             value: Some((
                 element: C,
                 bonds: [
-                    ((4311744513)),
-                    ((4311744514)),
-                    ((4311744515)),
-                    ((4311744517)),
+                    ("b1.1"),
+                    ("b2.1"),
+                    ("b3.1"),
+                    ("b5.1"),
                 ],
             )),
             version: 1,
@@ -47,8 +47,8 @@
             value: Some((
                 element: O,
                 bonds: [
-                    ((4311744516)),
-                    ((4311744517)),
+                    ("b4.1"),
+                    ("b5.1"),
                 ],
             )),
             version: 1,
@@ -57,7 +57,7 @@
             value: Some((
                 element: H,
                 bonds: [
-                    ((4311744516)),
+                    ("b4.1"),
                 ],
             )),
             version: 1,
@@ -79,8 +79,8 @@
                 bond_type: Covalent(
                     order: 1.0,
                 ),
-                start: ((4294967300)),
-                end: ((4294967297)),
+                start: ("a4.1"),
+                end: ("a1.1"),
             )),
             version: 1,
         ),
@@ -89,8 +89,8 @@
                 bond_type: Covalent(
                     order: 1.0,
                 ),
-                start: ((4294967300)),
-                end: ((4294967298)),
+                start: ("a4.1"),
+                end: ("a2.1"),
             )),
             version: 1,
         ),
@@ -99,8 +99,8 @@
                 bond_type: Covalent(
                     order: 1.0,
                 ),
-                start: ((4294967300)),
-                end: ((4294967299)),
+                start: ("a4.1"),
+                end: ("a3.1"),
             )),
             version: 1,
         ),
@@ -109,8 +109,8 @@
                 bond_type: Covalent(
                     order: 1.0,
                 ),
-                start: ((4294967301)),
-                end: ((4294967302)),
+                start: ("a5.1"),
+                end: ("a6.1"),
             )),
             version: 1,
         ),
@@ -119,8 +119,8 @@
                 bond_type: Covalent(
                     order: 1.0,
                 ),
-                start: ((4294967300)),
-                end: ((4294967301)),
+                start: ("a4.1"),
+                end: ("a5.1"),
             )),
             version: 1,
         ),

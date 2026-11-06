@@ -53,17 +53,20 @@
 //! to add additional entity types but still use IDs that are compatible (i.e.
 //! non-conflicting) with these IDs.
 
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::num::NonZeroU64;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use slotmap::KeyData;
+
+use crate::{MolMapError, MolMapResult};
 
 use super::EntityKind;
 
 /// The ID of one of any kind of entity, where the kind of entity is encoded by
 /// an 8-bit discriminant.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 // It is crucial that this module remains private and that Id is not re-exported
 // as pub, as its unnameability is what ensures that Entity is a sealed trait!
 pub struct Id(NonZeroU64);
@@ -97,11 +100,20 @@ impl Id {
         (self.0.get() & !Self::DISC_MASK) as u32
     }
 
+    /// Creates the corresponding ID from the discriminant, version, and index.
+    ///
+    /// Returns `None` if `n` is zero or if the discriminant is an invalid value.
+    pub(crate) const fn from_parts(discriminant: u8, index: u32, version: u32) -> Option<Self> {
+        let n: u64 =
+            (discriminant as u64) << Self::DISC_OFFSET | (version as u64) << 32 | (index as u64);
+        Self::from_raw(n)
+    }
+
     /// Wraps a (non-zero) integer to create an ID.
     ///
     /// Returns `None` if `n` is zero or if the discriminant is an invalid value.
-    #[cfg(test)]
     #[inline]
+    #[allow(unused)]
     pub(crate) const fn from_raw(n: u64) -> Option<Self> {
         if let Some(non_zero) = NonZeroU64::new(n) {
             let id = Self(non_zero);
@@ -116,8 +128,8 @@ impl Id {
     }
 
     /// Returns the inner value with the discriminant as a normal `u64`.
-    #[cfg(test)]
     #[inline]
+    #[allow(unused)]
     pub(crate) const fn to_raw(self) -> u64 {
         self.0.get()
     }
@@ -168,6 +180,23 @@ impl Id {
         KeyData::from_ffi(ffi)
     }
 
+    /// Converts a string of the form `<prefix><index>.<version>` to the corresponding ID.
+    pub(crate) fn from_str(s: &str) -> MolMapResult<Self> {
+        let n_prefix_chars = match s.as_bytes() {
+            [a, b, ..] if a.is_ascii_alphabetic() && b.is_ascii_alphabetic() => 2,
+            [a, ..] if a.is_ascii_alphabetic() => 1,
+            _ => 0,
+        };
+        let (prefix, s) = s.split_at(n_prefix_chars);
+        let discriminant: u8 = EntityKind::from_prefix(prefix)
+            .ok_or(MolMapError::Parse)?
+            .into();
+        let mut split = s.split('.');
+        let index: u32 = split.next().ok_or(MolMapError::Parse)?.parse()?;
+        let version: u32 = split.next().ok_or(MolMapError::Parse)?.parse()?;
+        Self::from_parts(discriminant, index, version).ok_or(MolMapError::Parse)
+    }
+
     /// Checks if an ID represents the null key.
     ///
     /// Following `slotmap`, the null key is the one with the maximum index.
@@ -184,15 +213,51 @@ impl Id {
     }
 }
 
+impl Display for Id {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}.{}",
+            EntityKind::from_u8(self.discriminant())
+                .unwrap()
+                .to_prefix(),
+            self.index(),
+            self.version()
+        )
+    }
+}
+
 impl Debug for Id {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "{:#04X}/{}.{}",
+            "{}={:#04X}/{}.{}",
+            self.0,
             self.discriminant(),
             self.index(),
             self.version()
         )
+    }
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for Id {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for Id {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Id::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
 
@@ -241,6 +306,14 @@ mod tests {
         assert_eq!(e.discriminant(), 0);
         assert_eq!(e.version(), 3);
         assert_eq!(e.index(), 16);
+    }
+
+    #[test]
+    fn from_parts() {
+        assert_eq!(
+            Id::from_parts(1, 3, 1).unwrap(),
+            Id(NonZeroU64::new(0x1_01_000003).unwrap()),
+        )
     }
 
     #[test]
@@ -316,5 +389,30 @@ mod tests {
         assert_eq!(atom.kind(), EntityKind::Atom);
         assert_eq!(bond.kind(), EntityKind::Bond);
         assert_eq!(mol.kind(), EntityKind::Molecule);
+    }
+
+    #[test]
+    fn debug() {
+        let atom = Id::from_raw(ATOM_RAW).unwrap();
+        assert_eq!(format!("{:?}", atom), format! {"{}=0x00/16.3", ATOM_RAW});
+    }
+
+    #[test]
+    fn to_string() {
+        let atom = Id::from_raw(ATOM_RAW).unwrap();
+        assert_eq!(atom.to_string(), "a16.3");
+    }
+
+    #[test]
+    fn from_string() {
+        let atom = Id::from_str("a16.3").unwrap();
+        assert_eq!(atom, Id::from_raw(ATOM_RAW).unwrap());
+    }
+
+    #[test]
+    fn str_roundtrip() {
+        let pseudoatom = Id::from_raw(PSEUDOATOM_RAW).unwrap();
+        let pseudoatom2 = Id::from_str(&pseudoatom.to_string()).unwrap();
+        assert_eq!(pseudoatom, pseudoatom2);
     }
 }

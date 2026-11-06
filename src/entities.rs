@@ -41,6 +41,29 @@ impl EntityKind {
             _ => None,
         }
     }
+
+    /// Returns the corresponding variant for `prefix`, if there is one.
+    pub fn from_prefix(prefix: &str) -> Option<Self> {
+        match prefix {
+            "a" => Some(Self::Atom),
+            "b" => Some(Self::Bond),
+            "p" => Some(Self::Pseudoatom),
+            "s" => Some(Self::Substituent),
+            "m" => Some(Self::Molecule),
+            _ => None,
+        }
+    }
+
+    /// Returns the corresponding prefix.
+    pub fn to_prefix(self) -> &'static str {
+        match self {
+            Self::Atom => "a",
+            Self::Bond => "b",
+            Self::Pseudoatom => "p",
+            Self::Substituent => "s",
+            Self::Molecule => "m",
+        }
+    }
 }
 
 impl From<EntityKind> for u8 {
@@ -757,8 +780,6 @@ mod tests {
 
     use slotmap::SlotMap;
 
-    //use crate::graph::keys::BondKey;
-
     use super::*;
 
     // Some raw keys for use when testing
@@ -798,10 +819,6 @@ mod tests {
         // Removed key should be invalid
         assert!(sm.get(first).is_none());
     }
-
-    use crate::entities::id::Id;
-
-    use super::*;
 
     #[test]
     fn category_kind() {
