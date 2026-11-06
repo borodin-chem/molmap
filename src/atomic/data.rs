@@ -12,6 +12,7 @@ use crate::{Element, Pseudoelement, entities::*};
 
 /// The core data of an atom entity.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AtomData {
     pub(crate) element: Element,
     pub(crate) bonds: Vec<Bond>,
@@ -32,6 +33,7 @@ impl Stored for Atom {
 
 /// The core data of a pseudoatom entity.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PseudoatomData {
     #[allow(unused)]
     pub(crate) pseudoelement: Pseudoelement,
@@ -85,6 +87,7 @@ impl Stored for Pseudoatom {
 /// Only covalent/dipolar bonds affect the calculation of electron counts and formal
 /// charges.
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BondType {
     /// A bond formed by the sharing of electrons.
     Covalent { order: f32 },
@@ -183,6 +186,7 @@ impl BondType {
 
 /// The core data of a bond entity.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BondData {
     pub(crate) bond_type: BondType,
     pub(crate) start: AnyBondable,

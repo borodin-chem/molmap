@@ -201,6 +201,7 @@ pub(crate) trait SpatialAtomicCommon<const D: usize>: Spatial<D> + Atomic {
 
 /// An [`AtomMap`] extended to also hold the positions of its entities in `D`-dimensional space.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SpatialAtomMap<const D: usize, U> {
     graph: AtomMap,
     atom_positions: SecondaryMap<AtomKey, Point<D>>,

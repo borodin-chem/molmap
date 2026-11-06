@@ -29,6 +29,7 @@ use super::{Atomic, data::*};
 /// 3. Only one `Bond` entity can connect a given pair of bonding partners
 ///    (though that bond may be a double bond/triple bond/etc.).
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AtomMap {
     atoms: SlotMap<AtomKey, AtomData>,
     pseudoatoms: SlotMap<PseudoatomKey, PseudoatomData>,

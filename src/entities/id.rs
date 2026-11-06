@@ -63,6 +63,7 @@ use super::EntityKind;
 /// The ID of one of any kind of entity, where the kind of entity is encoded by
 /// an 8-bit discriminant.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 // It is crucial that this module remains private and that Id is not re-exported
 // as pub, as its unnameability is what ensures that Entity is a sealed trait!
 pub struct Id(NonZeroU64);

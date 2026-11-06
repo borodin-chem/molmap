@@ -44,6 +44,7 @@ use super::data::*;
 ///     - If bond deletion causes a molecule to fragment into two disconnected
 ///       parts, the fragments become separate molecules.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(dead_code)]
 pub struct MolMap {
     inner: AtomMap,

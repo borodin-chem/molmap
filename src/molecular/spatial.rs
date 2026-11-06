@@ -90,6 +90,7 @@ pub(crate) trait SpatialMolecularCommon<const D: usize>:
 
 /// A [`MolMap`] extended to also hold the positions of its entities in `D`-dimensional space.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(dead_code)]
 pub struct SpatialMolMap<const D: usize, U> {
     graph: MolMap,

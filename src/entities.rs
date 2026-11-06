@@ -308,6 +308,7 @@ macro_rules! new_entity_kind {
         paste::paste! {
             $(#[$doc])*
             #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+            #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
             pub struct $kind(pub(crate) Id);
 
             impl Keyed for $kind {
@@ -517,6 +518,7 @@ macro_rules! define_category {
             #[doc = ""]
             #[doc = "The kind of the entity remains encoded in the ID itself and can be recovered dynamically at runtime using [`Entity::kind`] or [`resolve`]."]
             #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+            #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
             pub struct [<Any $category>](pub(crate) Id);
 
             impl [<Any $category>] {
