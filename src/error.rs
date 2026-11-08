@@ -25,10 +25,10 @@ pub enum MolMapError {
     /// Occurs when a number was required not to be zero but was found to be.
     #[error("Number is not non-zero")]
     NonZero,
-    /// Occurs in the rare case that converting a `u8` to an [`EntityKind`] fails
+    /// Occurs in the case that converting a `char` or `u8` to an [`EntityKind`] fails
     /// because it does not correspond to a valid discriminant.
     #[error("Not a recognized kind of entity")]
-    UnknownEntityKind(u8),
+    UnknownEntityKind(char, u8),
     /// Returned when an attempt was made to convert a dynamic entity type to the wrong
     /// concrete entity type or to another dynamic entity type that the kind is not
     /// valid for.

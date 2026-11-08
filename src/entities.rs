@@ -8,7 +8,7 @@
 
 //! IDs of the molecular entities in the maps, and traits to categorize them.
 
-use std::iter::FusedIterator;
+use std::{iter::FusedIterator, str::FromStr};
 
 use slotmap::basic::Keys;
 
@@ -31,10 +31,9 @@ pub enum EntityKind {
 }
 
 impl EntityKind {
-    /// Returns the corresponding variant if `value` is a valid discriminant, or
-    /// `None` otherwise.
-    const fn from_u8(value: u8) -> Option<Self> {
-        match value {
+    /// Returns the corresponding variant for a valid discriminant, or `None` otherwise.
+    const fn from_u8(discriminant: u8) -> Option<Self> {
+        match discriminant {
             0x61 => Some(Self::Atom),
             0x62 => Some(Self::Bond),
             0x70 => Some(Self::Pseudoatom),
@@ -65,8 +64,19 @@ impl From<EntityKind> for u8 {
 impl TryFrom<u8> for EntityKind {
     type Error = MolMapError;
 
-    fn try_from(value: u8) -> MolMapResult<Self> {
-        Self::from_u8(value).ok_or(MolMapError::UnknownEntityKind(value))
+    fn try_from(discriminant: u8) -> MolMapResult<Self> {
+        Self::from_u8(discriminant).ok_or(MolMapError::UnknownEntityKind(
+            discriminant as char,
+            discriminant,
+        ))
+    }
+}
+
+impl TryFrom<char> for EntityKind {
+    type Error = MolMapError;
+
+    fn try_from(prefix: char) -> MolMapResult<Self> {
+        Self::from_prefix(prefix).ok_or(MolMapError::UnknownEntityKind(prefix, prefix as u8))
     }
 }
 
@@ -176,6 +186,30 @@ impl Entity for AnyEntity {
 }
 
 impl Category for AnyEntity {}
+
+impl FromStr for AnyEntity {
+    type Err = MolMapError;
+
+    /// Converts a string of the form `<prefix><index>.<version>` to the corresponding ID.
+    ///
+    /// The prefix must be a single ASCII alphabetic character that corresponds to a
+    /// kind of entity; the index and version must both be non-zero integers.
+    ///
+    /// ***Important: success of this method does not mean that the ID is valid!***
+    ///
+    /// The full serialized form of a `molmap` entity ID is `<kind><index>.<version>`,
+    /// where `<kind>` is the alphanumeric prefix corresponding to the variant of
+    /// [`EntityKind`]. For example, the first atom added to a map will have the ID
+    /// `a1.1`.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the prefix does not correspond to a kind of entity, if either of the
+    /// index and version are zero, or if the string is otherwise malformed.
+    fn from_str(s: &str) -> MolMapResult<Self> {
+        Ok(Self::new_unchecked(Id::from_str(s)?, private::Token))
+    }
+}
 
 /// An entity of any kind, but tagged to show which specific kind.
 ///
@@ -308,11 +342,11 @@ pub(crate) use internal::*;
 /// according to whether the kind is known statically or only obtainable dynamically.
 pub trait Kind: Entity + Keyed + Stored {}
 
-// Kind is essentially the public-facing form of Keyed/Stored
+// Kind exists mostly to be used as a public-facing equivalent to Keyed/Stored bounds
 // Blanket impl for whatever fulfils the conditions
 impl<E: Entity + Keyed + Stored> Kind for E {}
 
-macro_rules! new_entity_kind {
+macro_rules! new_kind {
     (
         $(#[$doc:meta])*
         $vis:vis struct $kind:ident;
@@ -383,16 +417,53 @@ macro_rules! new_entity_kind {
                     }
                 }
             }
+
+            impl FromStr for $kind {
+                type Err = MolMapError;
+
+                /// Converts a string of the form `<prefix><index>.<version>` to the corresponding ID.
+                ///
+                /// The prefix must be a single ASCII alphabetic character that corresponds to a
+                /// kind of entity; the index and version must both be non-zero integers.
+                ///
+                /// ***Important: success of this method does not mean that the ID is valid!***
+                ///
+                /// The full serialized form of a `molmap` entity ID is `<kind><index>.<version>`,
+                /// where `<kind>` is the alphanumeric prefix corresponding to the variant of
+                /// [`EntityKind`]. For example, the first atom added to a map will have the ID
+                /// `a1.1`. Calling `Atom::from_str("a1.1")` will return an instance of `Atom` with
+                /// that value.
+                ///
+                /// # Errors
+                ///
+                /// Fails if the prefix is incorrect for this kind of entity, if either of the
+                /// index and version are zero, or if the string is otherwise malformed.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// # use std::str::FromStr;
+                /// # use molmap::{entities::*, MolMapError};
+                /// let _atom1 = Atom::from_str("a1.1")?;
+                /// let _atom2: Atom = "a1.2".parse()?;
+                /// let _bond1 = Bond::from_str("b1.1")?;
+                /// assert!(Atom::from_str("b1.1").is_err());
+                /// # Ok::<(), MolMapError>(())
+                /// ```
+                fn from_str(s: &str) -> MolMapResult<Self> {
+                    Self::try_from(AnyEntity::from_str(s)?)
+                }
+            }
         }
     };
 }
 
-new_entity_kind!(
+new_kind!(
     /// Smallest particle still characterizing a chemical element.
     pub struct Atom;
 );
 
-new_entity_kind!(
+new_kind!(
     /// A chemical bond: an attraction between molecular entities.
     ///
     /// > There is a chemical bond between two atoms or groups of atoms in the case
@@ -404,7 +475,7 @@ new_entity_kind!(
     pub struct Bond;
 );
 
-new_entity_kind!(
+new_kind!(
     /// A pseudoatom: something that forms bonds and can be represented by an
     /// "element symbol" like a normal atom but represents something else.
     ///
@@ -412,7 +483,7 @@ new_entity_kind!(
     pub struct Pseudoatom;
 );
 
-new_entity_kind!(
+new_kind!(
     /// A substituent: a group of atoms, bonded internally, identified as a unit and
     /// usually part of a larger molecule. Often synonymous with "functional group" or
     /// "moiety".
@@ -432,7 +503,7 @@ new_entity_kind!(
     pub struct Substituent;
 );
 
-new_entity_kind!(
+new_kind!(
     /// A molecule: a discrete group of atoms held together by chemical bonds.
     ///
     /// > An electrically neutral entity consisting of more than one atom (_n_ > 1).
@@ -475,7 +546,7 @@ pub trait Category: Entity {
     }
 }
 
-macro_rules! define_category {
+macro_rules! new_category {
     (
         $(#[$doc:meta])*
         $category:ident {
@@ -553,6 +624,43 @@ macro_rules! define_category {
             }
 
             impl Category for [<Any $category>] {}
+
+            impl FromStr for [<Any $category>] {
+                type Err = MolMapError;
+
+                /// Converts a string of the form `<prefix><index>.<version>` to the corresponding ID.
+                ///
+                /// The prefix must be a single ASCII alphabetic character that corresponds to a
+                /// kind of entity; the index and version must both be non-zero integers.
+                ///
+                /// ***Important: success of this method does not mean that the ID is valid!***
+                ///
+                /// The full serialized form of a `molmap` entity ID is `<kind><index>.<version>`,
+                /// where `<kind>` is the alphanumeric prefix corresponding to the variant of
+                /// [`EntityKind`]. For example, the first atom added to a map will have the ID
+                /// `a1.1`.
+                ///
+                /// # Errors
+                ///
+                /// This method fails if the string is malformed and cannot be parsed, if the kind
+                /// that corresponds to the prefix does not belong to the category, or if the
+                /// prefix does not correspond to any kind at all.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// # use std::str::FromStr;
+                /// # use molmap::{entities::*, MolMapError};
+                /// assert_eq!(AnyAtomlike::from_str("a1.1")?, Atom::from_str("a1.1")?.as_atomlike());
+                /// assert!(AnyAtomlike::from_str("b1.1").is_err());
+                /// # Ok::<(), MolMapError>(())
+                /// ```
+                fn from_str(s: &str) -> MolMapResult<Self> {
+                    // Parsing will succeed for any correctly formed string, kind's membership of
+                    // category is checked by the TryFrom conversion
+                    Self::try_from(AnyEntity::from_str(s)?)
+                }
+            }
 
             // 3. The corresponding tagged ID type for exhaustive matching
             // The enum has a variant for each kind that implements the trait
@@ -667,7 +775,7 @@ macro_rules! define_category {
     };
 }
 
-define_category! {
+new_category! {
     /// An atom or something that behaves like one (a pseudoatom).
     ///
     /// Atomlike entities are the true nodes of the molecular graph.
@@ -677,7 +785,7 @@ define_category! {
     }
 }
 
-define_category! {
+new_category! {
     /// An entity that does not group other entities.
     ///
     /// Fundamental entities are the basic building blocks of a [`MolMap`].
@@ -690,7 +798,7 @@ define_category! {
     }
 }
 
-define_category! {
+new_category! {
     /// An aggregation of fundamental entities.
     Collection {
         Substituent,
@@ -698,7 +806,7 @@ define_category! {
     }
 }
 
-define_category! {
+new_category! {
     /// An entity that can form bonds.
     Bondable {
         Atom,
@@ -931,5 +1039,26 @@ mod tests {
             ResolvedAtomlike::Atom(atom) => assert_eq!(atom, ATOM),
             ResolvedAtomlike::Pseudoatom(_) => panic!(),
         }
+    }
+
+    #[test]
+    fn kinds_from_str() {
+        // Basic test of parsing
+        assert_eq!(Atom::from_str("a16.3").unwrap(), ATOM);
+        // A mismatched prefix raises an error
+        assert!(Atom::from_str("b2.1").is_err());
+        // An entirely missing prefix raises an error
+        assert!(Atom::from_str("2.1").is_err());
+        // Missing version also raises an error
+        assert!(Atom::from_str("a2").is_err());
+        // Index alone is definitely not enough
+        assert!(Atom::from_str("2").is_err());
+        // Entirely invalid prefixes also error
+        assert!(Atom::from_str("?2.1").is_err());
+        assert!(Atom::from_str("ü2.1").is_err());
+        assert!(Atom::from_str("a2,1").is_err());
+        // Index and version must be non-zero
+        assert!(Atom::from_str("a1.0").is_err());
+        assert!(Atom::from_str("a0.1").is_err());
     }
 }

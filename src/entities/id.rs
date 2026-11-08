@@ -55,6 +55,7 @@
 
 use std::fmt::{Debug, Display, Formatter};
 use std::num::NonZeroU64;
+use std::str::FromStr;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -102,11 +103,17 @@ impl Id {
 
     /// Creates the corresponding ID from the discriminant, version, and index.
     ///
-    /// Returns `None` if `n` is zero or if the discriminant is an invalid value.
+    /// Returns `None` if either of `index` or `version` are zero or if the discriminant
+    /// is an invalid value.
     pub(crate) const fn from_parts(discriminant: u8, index: u32, version: u32) -> Option<Self> {
-        let n: u64 =
-            (discriminant as u64) << Self::DISC_OFFSET | (version as u64) << 32 | (index as u64);
-        Self::from_raw(n)
+        if index == 0 || version == 0 {
+            None
+        } else {
+            let n: u64 = (discriminant as u64) << Self::DISC_OFFSET
+                | (version as u64) << 32
+                | (index as u64);
+            Self::from_raw(n)
+        }
     }
 
     /// Wraps a (non-zero) integer to create an ID.
@@ -180,18 +187,6 @@ impl Id {
         KeyData::from_ffi(ffi)
     }
 
-    /// Converts a string of the form `<prefix><index>.<version>` to the corresponding ID.
-    pub(crate) fn from_str(s: &str) -> MolMapResult<Self> {
-        let mut chars = s.chars();
-        let prefix = chars.next().ok_or(MolMapError::Parse)?;
-        let s = chars.as_str();
-        let discriminant: u8 = prefix as u8;
-        let mut split = s.split('.');
-        let index: u32 = split.next().ok_or(MolMapError::Parse)?.parse()?;
-        let version: u32 = split.next().ok_or(MolMapError::Parse)?.parse()?;
-        Self::from_parts(discriminant, index, version).ok_or(MolMapError::Parse)
-    }
-
     /// Checks if an ID represents the null key.
     ///
     /// Following `slotmap`, the null key is the one with the maximum index.
@@ -205,6 +200,38 @@ impl Id {
     /// kinds of entity.
     pub(crate) const fn kind(&self) -> EntityKind {
         EntityKind::from_u8(self.discriminant()).expect("The discriminant should never be invalid")
+    }
+}
+
+impl FromStr for Id {
+    type Err = MolMapError;
+
+    /// Converts a string of the form `<prefix><index>.<version>` to the corresponding ID.
+    ///
+    /// The prefix must be a single ASCII alphabetic character that corresponds to a
+    /// kind of entity; the index and version must both be non-zero integers.
+    ///
+    /// ***Important: success of this method does not mean that the ID is valid!***
+    ///
+    /// See also the following, which should display the same behaviour as this method
+    /// and may need their docstrings updated when this one is:
+    /// - [`crate::entities::AnyEntity::from_str`]
+    /// - The implementation of `FromStr` in the `new_kind!` macro in `crate::entities`
+    /// - The implementation of `FromStr` in the `new_category!` macro in `crate::entities`
+    ///
+    /// # Errors
+    ///
+    /// Fails if the prefix does not correspond to a kind of entity, if either of the
+    /// index and version are zero, or if the string is otherwise malformed.
+    fn from_str(s: &str) -> MolMapResult<Self> {
+        let mut chars = s.chars();
+        let prefix = chars.next().ok_or(MolMapError::Parse)?;
+        let s = chars.as_str();
+        let discriminant: u8 = prefix as u8;
+        let mut split = s.split('.');
+        let index: u32 = split.next().ok_or(MolMapError::Parse)?.parse()?;
+        let version: u32 = split.next().ok_or(MolMapError::Parse)?.parse()?;
+        Self::from_parts(discriminant, index, version).ok_or(MolMapError::Parse)
     }
 }
 
@@ -224,14 +251,7 @@ impl Display for Id {
 
 impl Debug for Id {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}={:#04X}/{}.{}",
-            self.0,
-            self.discriminant(),
-            self.index(),
-            self.version()
-        )
+        Display::fmt(self, f)
     }
 }
 
@@ -396,7 +416,7 @@ mod tests {
     #[test]
     fn debug() {
         let atom = Id::from_raw(ATOM_RAW).unwrap();
-        assert_eq!(format!("{:?}", atom), format! {"{}=0x61/16.3", ATOM_RAW});
+        assert_eq!(format!("{:?}", atom), "a16.3");
     }
 
     #[test]
