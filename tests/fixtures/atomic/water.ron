@@ -1,0 +1,16 @@
+(
+    atoms: [
+        (value: None, version: 0),
+        (value: Some((element: O, bonds: [("b1.1"), ("b2.1")])), version: 1),
+        (value: Some((element: H, bonds: [("b1.1")])), version: 1),
+        (value: Some((element: H, bonds: [("b2.1")])), version: 1),
+    ],
+    pseudoatoms: [
+        (value: None, version: 0),
+    ],
+    bonds: [
+        (value: None, version: 0),
+        (value: Some((bond_type: Covalent(order: 1.0), start: ("a1.1"), end: ("a2.1"))), version: 1),
+        (value: Some((bond_type: Covalent(order: 1.0), start: ("a1.1"), end: ("a3.1"))), version: 1),
+    ],
+)

@@ -11,29 +11,75 @@
 
 #![allow(unused)]
 
-use molmap::{atomic::*, *};
+use molmap::{atomic::*, entities::AnyAtomlike, *};
 
-fn meoh() -> AtomMap {
+fn water() -> AtomMap {
     let mut m = AtomMap::new();
-    let h1 = m.add_atom(Element::H);
-    let h2 = m.add_atom(Element::H);
-    let h3 = m.add_atom(Element::H);
-    let c1 = m.add_atom(Element::C);
-    let c1h1 = m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h1);
-    let c1h2 = m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h2);
-    let c1h3 = m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h3);
-    let o1 = m.add_atom(Element::O);
-    let h4 = m.add_atom(Element::H);
-    let o1h4 = m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, o1, h4);
+    let (o, _bonds) = m.add_atom_with_hydrogen(Element::O, 2);
+    m
+}
+
+fn methanol() -> AtomMap {
+    let mut m = AtomMap::new();
+    let (c1, _bonds) = m.add_atom_with_hydrogen(Element::C, 3);
+    let (o1, _bonds) = m.add_atom_with_hydrogen(Element::O, 1);
     let c1o1 = m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, o1);
     m
 }
 
+fn ethane() -> AtomMap {
+    let mut m = AtomMap::new();
+    let (c1, _bonds) = m.add_atom_with_hydrogen(Element::C, 3);
+    let (c2, _bonds) = m.add_atom_with_hydrogen(Element::C, 3);
+    let c1c2 = m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, c2);
+    m
+}
+
+fn propane() -> AtomMap {
+    let mut m = AtomMap::new();
+    let (c1, _bonds) = m.add_atom_with_hydrogen(Element::C, 3);
+    let (c2, _bonds) = m.add_atom_with_hydrogen(Element::C, 2);
+    let (c3, _bonds) = m.add_atom_with_hydrogen(Element::C, 3);
+    m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, c2);
+    m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, c3);
+    m
+}
+
+fn cyclohexane() -> AtomMap {
+    let mut m = AtomMap::new();
+    let mut carbons: Vec<AnyAtomlike> = Vec::new();
+    for n in 0..6 {
+        let (c, _bonds) = m.add_atom_with_hydrogen(Element::C, 2);
+        if n != 0 {
+            m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c, carbons[n - 1]);
+        }
+        carbons.push(c.into());
+    }
+    m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, carbons[0], carbons[5]);
+    m
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg = ron::ser::PrettyConfig::new();
+    let cfg = ron::ser::PrettyConfig::new().depth_limit(2);
     std::fs::write(
-        "tests/fixtures/meoh.ron",
-        ron::ser::to_string_pretty(&meoh(), cfg)?,
+        "tests/fixtures/atomic/water.ron",
+        ron::ser::to_string_pretty(&water(), cfg.clone())?,
+    )?;
+    std::fs::write(
+        "tests/fixtures/atomic/methanol.ron",
+        ron::ser::to_string_pretty(&methanol(), cfg.clone())?,
+    )?;
+    std::fs::write(
+        "tests/fixtures/atomic/ethane.ron",
+        ron::ser::to_string_pretty(&ethane(), cfg.clone())?,
+    )?;
+    std::fs::write(
+        "tests/fixtures/atomic/propane.ron",
+        ron::ser::to_string_pretty(&propane(), cfg.clone())?,
+    )?;
+    std::fs::write(
+        "tests/fixtures/atomic/cyclohexane.ron",
+        ron::ser::to_string_pretty(&cyclohexane(), cfg.clone())?,
     )?;
     Ok(())
 }

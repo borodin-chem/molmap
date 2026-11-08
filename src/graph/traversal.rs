@@ -779,47 +779,45 @@ mod tests {
 
     use super::*;
 
+    const ETHANE: &str = include_str!("../../tests/fixtures/atomic/ethane.ron");
+    const PROPANE: &str = include_str!("../../tests/fixtures/atomic/propane.ron");
+    const CYCLOHEXANE: &str = include_str!("../../tests/fixtures/atomic/cyclohexane.ron");
+
     #[test]
-    fn invalid_root() {
-        let mut m = AtomMap::new();
-        let h1 = m.add_atom(Element::H);
+    fn invalid_root() -> MolMapResult<()> {
+        let mut m: AtomMap = ron::from_str(ETHANE).unwrap();
+        let h1: Atom = "a2.1".parse()?;
         m.delete_atom(h1);
-        let h2 = m.add_atom(Element::H);
-        let h3 = m.add_atom(Element::H);
-        m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, h2, h3);
+        let new_h = m.add_atom(Element::H);
+        assert_ne!(new_h, h1);
+        assert_eq!(new_h, "a2.3".parse()?);
         assert!(Traversal::new(&m, h1, DepthFirst, usize::MAX).is_err());
+        Ok(())
     }
 
     /// Tests that specifically verify the behaviour of depth-first traversal
     mod depth_first {
+        use std::str::FromStr;
+
         use super::*;
 
         #[test]
-        fn linear() {
-            // Traverse ethane, starting at one of the hydrogen atoms
-            let mut m = AtomMap::new();
-            let c1 = m.add_atom(Element::C);
-            let h1 = m.add_atom(Element::H);
-            let h2 = m.add_atom(Element::H);
-            let h3 = m.add_atom(Element::H);
-            let c1h1 = m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h1);
-            let c1h2 = m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h2);
-            let c1h3 = m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h3);
-            let c2 = m.add_atom(Element::C);
-            let h4 = m.add_atom(Element::H);
-            let h5 = m.add_atom(Element::H);
-            let h6 = m.add_atom(Element::H);
-            let c2h4 = m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, h4);
-            let c2h5 = m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, h5);
-            let c2h6 = m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, h6);
-            let c1c2 = m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, c2);
-            let mut traversal = Traversal::new(&m, h1, DepthFirst, usize::MAX).unwrap();
+        fn linear() -> MolMapResult<()> {
+            // Traverse ethane
+            let m: AtomMap = ron::from_str(ETHANE).unwrap();
+            // All atoms in file are serialized as version 1
+            // a1 is C, a2-4 are its H, a5 is the other C, a6-8 are its H
+            // C–C bond is b7.1
+            // Start at one of the hydrogen atoms (but the second H in the file,
+            // to make it more interesting)
+            let mut traversal =
+                Traversal::new(&m, AnyAtomlike::from_str("a3.1")?, DepthFirst, usize::MAX).unwrap();
             assert_eq!(
                 traversal.next(),
                 Some(Step::VisitChild {
-                    parent: h1.into(),
-                    edge: c1h1,
-                    child: c1.into(),
+                    parent: "a3.1".parse()?,
+                    edge: "b2.1".parse()?,
+                    child: "a1.1".parse()?,
                     child_depth: 1,
                     parent_fully_explored: true,
                     moved: true,
@@ -829,9 +827,9 @@ mod tests {
             assert_eq!(
                 traversal.next(),
                 Some(Step::VisitPendant {
-                    parent: c1.into(),
-                    edge: c1h2,
-                    pendant: h2.into(),
+                    parent: "a1.1".parse()?,
+                    edge: "b1.1".parse()?,
+                    pendant: "a2.1".parse()?,
                     pendant_depth: 2,
                     parent_fully_explored: false
                 })
@@ -839,9 +837,9 @@ mod tests {
             assert_eq!(
                 traversal.next(),
                 Some(Step::VisitPendant {
-                    parent: c1.into(),
-                    edge: c1h3,
-                    pendant: h3.into(),
+                    parent: "a1.1".parse()?,
+                    edge: "b3.1".parse()?,
+                    pendant: "a4.1".parse()?,
                     pendant_depth: 2,
                     parent_fully_explored: false
                 })
@@ -850,9 +848,9 @@ mod tests {
             assert_eq!(
                 traversal.next(),
                 Some(Step::VisitChild {
-                    parent: c1.into(),
-                    edge: c1c2,
-                    child: c2.into(),
+                    parent: "a1.1".parse()?,
+                    edge: "b7.1".parse()?,
+                    child: "a5.1".parse()?,
                     child_depth: 2,
                     parent_fully_explored: true,
                     moved: true
@@ -862,9 +860,9 @@ mod tests {
             assert_eq!(
                 traversal.next(),
                 Some(Step::VisitPendant {
-                    parent: c2.into(),
-                    edge: c2h4,
-                    pendant: h4.into(),
+                    parent: "a5.1".parse()?,
+                    edge: "b4.1".parse()?,
+                    pendant: "a6.1".parse()?,
                     pendant_depth: 3,
                     parent_fully_explored: false
                 })
@@ -872,9 +870,9 @@ mod tests {
             assert_eq!(
                 traversal.next(),
                 Some(Step::VisitPendant {
-                    parent: c2.into(),
-                    edge: c2h5,
-                    pendant: h5.into(),
+                    parent: "a5.1".parse()?,
+                    edge: "b5.1".parse()?,
+                    pendant: "a7.1".parse()?,
                     pendant_depth: 3,
                     parent_fully_explored: false
                 })
@@ -882,41 +880,28 @@ mod tests {
             assert_eq!(
                 traversal.next(),
                 Some(Step::VisitPendant {
-                    parent: c2.into(),
-                    edge: c2h6,
-                    pendant: h6.into(),
+                    parent: "a5.1".parse()?,
+                    edge: "b6.1".parse()?,
+                    pendant: "a8.1".parse()?,
                     pendant_depth: 3,
                     parent_fully_explored: true
                 })
             );
             // Nothing left to traverse
             assert!(traversal.next().is_none());
+            Ok(())
         }
 
         #[test]
-        fn branched() {
+        fn branched() -> MolMapResult<()> {
             // Traverse propane, starting at the carbon in the middle of the chain
-            let mut m = AtomMap::new();
-            let c1 = m.add_atom(Element::C);
-            for _ in 0..3 {
-                let h = m.add_atom(Element::H);
-                m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h);
-            }
-            let c2 = m.add_atom(Element::C);
-            for _ in 0..2 {
-                let h = m.add_atom(Element::H);
-                m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, h);
-            }
-            let c3 = m.add_atom(Element::C);
-            for _ in 0..3 {
-                let h = m.add_atom(Element::H);
-                m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c3, h);
-            }
-            m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, c2);
-            m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, c3);
+            let m: AtomMap = ron::from_str(PROPANE).unwrap();
+            let c1: AnyAtomlike = "a1.1".parse()?;
+            let c2: AnyAtomlike = "a5.1".parse()?;
+            let c3: AnyAtomlike = "a8.1".parse()?;
             let traversal = Traversal::new(&m, c2, DepthFirst, usize::MAX).unwrap();
             let mut explored_edges: Vec<Bond> = Vec::new();
-            let mut visited_nodes: Vec<AnyAtomlike> = vec![c2.as_atomlike()];
+            let mut visited_nodes: Vec<AnyAtomlike> = vec![c2];
             let mut backtracks: Vec<usize> = Vec::new();
             let mut cycle_closures: Vec<usize> = Vec::new();
             for (i, step) in traversal.enumerate() {
@@ -945,34 +930,21 @@ mod tests {
             assert!(cycle_closures.is_empty());
             // Confirm that we did indeed visit C1 before C3
             assert!(
-                visited_nodes
-                    .iter()
-                    .position(|&x| x == c1.as_atomlike())
-                    .unwrap()
-                    < visited_nodes
-                        .iter()
-                        .position(|&x| x == c3.as_atomlike())
-                        .unwrap()
+                visited_nodes.iter().position(|&x| x == c1).unwrap()
+                    < visited_nodes.iter().position(|&x| x == c3).unwrap()
             );
+            Ok(())
         }
 
         #[test]
-        fn cyclic() {
+        fn cyclic() -> MolMapResult<()> {
             // Traverse cyclohexane
-            let mut m = AtomMap::new();
-            let mut carbons: Vec<AnyAtomlike> = Vec::new();
-            for n in 0..6 {
-                let c = m.add_atom(Element::C);
-                for _ in 0..2 {
-                    let h = m.add_atom(Element::H);
-                    m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c, h);
-                }
-                if n != 0 {
-                    m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c, carbons[n - 1]);
-                }
-                carbons.push(c.into());
-            }
-            m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, carbons[0], carbons[5]);
+            let m: AtomMap = ron::from_str(CYCLOHEXANE).unwrap();
+            let carbons: Vec<AnyAtomlike> = m
+                .entities::<Atom>()
+                .filter(|&a| m.view(a).unwrap().element() == Element::C)
+                .map(|a| a.as_atomlike())
+                .collect();
             let traversal = Traversal::new(&m, carbons[0], DepthFirst, usize::MAX).unwrap();
             let mut explored_edges: Vec<Bond> = Vec::new();
             let mut visited_nodes: Vec<AnyAtomlike> = vec![carbons[0]];
@@ -1001,7 +973,8 @@ mod tests {
             // As search is depth-first and pendant H is explored before the carbon chain,
             // the ring should only have been closed in the very last step
             // No backtracking occurs so total steps = 5 forward + (6 * 2 pendant) + 1 cycle-closing
-            assert_eq!(cycle_closures, [17])
+            assert_eq!(cycle_closures, [17]);
+            Ok(())
         }
 
         #[test]
@@ -1009,14 +982,8 @@ mod tests {
             // Ensure that only the connected network is traversed
             let mut m = AtomMap::new();
             // Two water molecules
-            let o1 = m.add_atom(Element::O);
-            let o2 = m.add_atom(Element::O);
-            for o in [o1, o2] {
-                for _ in 0..2 {
-                    let h = m.add_atom(Element::H);
-                    m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, o, h);
-                }
-            }
+            let (o1, _bonds) = m.add_atom_and_saturate(Element::O);
+            let (o2, _bonds) = m.add_atom_and_saturate(Element::O);
             let mut traversal = Traversal::new(&m, o1, DepthFirst, usize::MAX).unwrap();
             for _ in &mut traversal {}
             // Check that O of second water molecule was never visited
@@ -1027,20 +994,17 @@ mod tests {
         fn h_bond_doesnt_connect() {
             let mut m = AtomMap::new();
             // Two water molecules
-            let o1 = m.add_atom(Element::O);
-            let o2 = m.add_atom(Element::O);
-            let mut h1: Option<Atom> = None;
-            for o in [o1, o2] {
-                for _ in 0..2 {
-                    let h = m.add_atom(Element::H);
-                    if h1.is_none() {
-                        h1 = Some(h);
-                    }
-                    m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, o, h);
-                }
-            }
+            let (o1, o1_h_bonds) = m.add_atom_and_saturate(Element::O);
+            let o1h1 = o1_h_bonds.first().unwrap().to_owned();
+            let (o2, _bonds) = m.add_atom_and_saturate(Element::O);
+            let h1 = m
+                .view(o1h1)
+                .unwrap()
+                .partners()
+                .into_iter()
+                .find(|&x| x != o1.as_bondable()) // Find the bonding partner that isn't O1
+                .unwrap();
             // Connect via a hydrogen bond
-            let h1 = h1.unwrap();
             m.add_bond_unchecked(BondType::Hydrogen, o2, h1);
             let mut traversal = Traversal::new(&m, o1, DepthFirst, usize::MAX).unwrap();
             for _ in &mut traversal {}
@@ -1053,31 +1017,20 @@ mod tests {
         use super::*;
 
         #[test]
-        fn branched() {
+        fn branched() -> MolMapResult<()> {
             // Traverse propane, starting at the carbon in the middle of the chain
-            let mut m = AtomMap::new();
-            let c1 = m.add_atom(Element::C);
-            let h1 = m.add_atom(Element::H);
-            let h2 = m.add_atom(Element::H);
-            let h3 = m.add_atom(Element::H);
-            for h in [h1, h2, h3] {
-                m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h);
-            }
-            let c2 = m.add_atom(Element::C);
-            let h4 = m.add_atom(Element::H);
-            let h5 = m.add_atom(Element::H);
-            for h in [h4, h5] {
-                m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, h);
-            }
-            let c3 = m.add_atom(Element::C);
-            let h6 = m.add_atom(Element::H);
-            let h7 = m.add_atom(Element::H);
-            let h8 = m.add_atom(Element::H);
-            for h in [h6, h7, h8] {
-                m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c3, h);
-            }
-            m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, c2);
-            m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c2, c3);
+            let m: AtomMap = ron::from_str(PROPANE).unwrap();
+            let c1: AnyAtomlike = "a1.1".parse()?;
+            let h1: AnyAtomlike = "a2.1".parse()?;
+            let h2: AnyAtomlike = "a3.1".parse()?;
+            let h3: AnyAtomlike = "a4.1".parse()?;
+            let c2: AnyAtomlike = "a5.1".parse()?;
+            let h4: AnyAtomlike = "a6.1".parse()?;
+            let h5: AnyAtomlike = "a7.1".parse()?;
+            let c3: AnyAtomlike = "a8.1".parse()?;
+            let h6: AnyAtomlike = "a9.1".parse()?;
+            let h7: AnyAtomlike = "a10.1".parse()?;
+            let h8: AnyAtomlike = "a11.1".parse()?;
             let traversal = Traversal::new(&m, c2, BreadthFirst, usize::MAX).unwrap();
             let mut explored_edges: Vec<Bond> = Vec::new();
             let mut visited_nodes: Vec<AnyAtomlike> = vec![c2.as_atomlike()];
@@ -1109,25 +1062,18 @@ mod tests {
                 visited_nodes,
                 [c2, h4, h5, c1, c3, h1, h2, h3, h6, h7, h8].map(Into::into)
             );
+            Ok(())
         }
 
         #[test]
         fn cyclic() {
             // Traverse cyclohexane
-            let mut m = AtomMap::new();
-            let mut carbons: Vec<AnyAtomlike> = Vec::new();
-            for n in 0..6 {
-                let c = m.add_atom(Element::C);
-                for _ in 0..2 {
-                    let h = m.add_atom(Element::H);
-                    m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c, h);
-                }
-                if n != 0 {
-                    m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c, carbons[n - 1]);
-                }
-                carbons.push(c.into());
-            }
-            m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, carbons[0], carbons[5]);
+            let m: AtomMap = ron::from_str(CYCLOHEXANE).unwrap();
+            let carbons: Vec<AnyAtomlike> = m
+                .entities::<Atom>()
+                .filter(|&a| m.view(a).unwrap().element() == Element::C)
+                .map(|a| a.as_atomlike())
+                .collect();
             let traversal = Traversal::new(&m, carbons[0], BreadthFirst, usize::MAX).unwrap();
             let mut explored_edges: Vec<Bond> = Vec::new();
             let mut visited_nodes: Vec<AnyAtomlike> = vec![carbons[0]];
@@ -1220,20 +1166,17 @@ mod tests {
         fn h_bond_doesnt_connect() {
             let mut m = AtomMap::new();
             // Two water molecules
-            let o1 = m.add_atom(Element::O);
-            let o2 = m.add_atom(Element::O);
-            let mut h1: Option<Atom> = None;
-            for o in [o1, o2] {
-                for _ in 0..2 {
-                    let h = m.add_atom(Element::H);
-                    if h1.is_none() {
-                        h1 = Some(h);
-                    }
-                    m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, o, h);
-                }
-            }
+            let (o1, o1_h_bonds) = m.add_atom_and_saturate(Element::O);
+            let o1h1 = o1_h_bonds.first().unwrap().to_owned();
+            let (o2, _bonds) = m.add_atom_and_saturate(Element::O);
+            let h1 = m
+                .view(o1h1)
+                .unwrap()
+                .partners()
+                .into_iter()
+                .find(|&x| x != o1.as_bondable()) // Find the bonding partner that isn't O1
+                .unwrap();
             // Connect via a hydrogen bond
-            let h1 = h1.unwrap();
             m.add_bond_unchecked(BondType::Hydrogen, o2, h1);
             let mut traversal = Traversal::new(&m, o1, BreadthFirst, usize::MAX).unwrap();
             for _ in &mut traversal {}

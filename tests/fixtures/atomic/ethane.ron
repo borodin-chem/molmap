@@ -1,0 +1,26 @@
+(
+    atoms: [
+        (value: None, version: 0),
+        (value: Some((element: C, bonds: [("b1.1"), ("b2.1"), ("b3.1"), ("b7.1")])), version: 1),
+        (value: Some((element: H, bonds: [("b1.1")])), version: 1),
+        (value: Some((element: H, bonds: [("b2.1")])), version: 1),
+        (value: Some((element: H, bonds: [("b3.1")])), version: 1),
+        (value: Some((element: C, bonds: [("b4.1"), ("b5.1"), ("b6.1"), ("b7.1")])), version: 1),
+        (value: Some((element: H, bonds: [("b4.1")])), version: 1),
+        (value: Some((element: H, bonds: [("b5.1")])), version: 1),
+        (value: Some((element: H, bonds: [("b6.1")])), version: 1),
+    ],
+    pseudoatoms: [
+        (value: None, version: 0),
+    ],
+    bonds: [
+        (value: None, version: 0),
+        (value: Some((bond_type: Covalent(order: 1.0), start: ("a1.1"), end: ("a2.1"))), version: 1),
+        (value: Some((bond_type: Covalent(order: 1.0), start: ("a1.1"), end: ("a3.1"))), version: 1),
+        (value: Some((bond_type: Covalent(order: 1.0), start: ("a1.1"), end: ("a4.1"))), version: 1),
+        (value: Some((bond_type: Covalent(order: 1.0), start: ("a5.1"), end: ("a6.1"))), version: 1),
+        (value: Some((bond_type: Covalent(order: 1.0), start: ("a5.1"), end: ("a7.1"))), version: 1),
+        (value: Some((bond_type: Covalent(order: 1.0), start: ("a5.1"), end: ("a8.1"))), version: 1),
+        (value: Some((bond_type: Covalent(order: 1.0), start: ("a1.1"), end: ("a5.1"))), version: 1),
+    ],
+)
