@@ -10,8 +10,8 @@ use mendeleev::OxidationStateCategory;
 
 /// The known chemical elements.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
-//#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Element {
     H = 1,
     He,

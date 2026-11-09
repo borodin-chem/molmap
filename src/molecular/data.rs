@@ -21,6 +21,7 @@ pub enum SubstituentCentre<'a> {
 
 /// The core data of a substituent entity.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SubstituentData {
     /// The number of central atomlikes that the substituent has.
     pub(crate) centres: usize,
@@ -59,6 +60,7 @@ impl Stored for Substituent {
 
 /// The core data of a molecule entity.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MoleculeData {
     /// The substituents that the molecule contains.
     pub(crate) substituents: HashSet<Substituent>,

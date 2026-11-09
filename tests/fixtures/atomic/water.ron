@@ -1,0 +1,17 @@
+#![enable(implicit_some)]
+(
+    atoms: [
+        /*[0]*/ (value: None, version: 0),
+        /*[1]*/ (value: (element: O, bonds: [("b1.1"), ("b2.1")]), version: 1),
+        /*[2]*/ (value: (element: H, bonds: [("b1.1")]), version: 1),
+        /*[3]*/ (value: (element: H, bonds: [("b2.1")]), version: 1),
+    ],
+    pseudoatoms: [
+        /*[0]*/ (value: None, version: 0),
+    ],
+    bonds: [
+        /*[0]*/ (value: None, version: 0),
+        /*[1]*/ (value: (bond_type: Covalent(order: 1.0), start: ("a1.1"), end: ("a2.1")), version: 1),
+        /*[2]*/ (value: (bond_type: Covalent(order: 1.0), start: ("a1.1"), end: ("a3.1")), version: 1),
+    ],
+)

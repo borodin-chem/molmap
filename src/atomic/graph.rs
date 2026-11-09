@@ -29,6 +29,7 @@ use super::{Atomic, data::*};
 /// 3. Only one `Bond` entity can connect a given pair of bonding partners
 ///    (though that bond may be a double bond/triple bond/etc.).
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AtomMap {
     atoms: SlotMap<AtomKey, AtomData>,
     pseudoatoms: SlotMap<PseudoatomKey, PseudoatomData>,
@@ -351,23 +352,6 @@ mod views {
 #[allow(unused)]
 pub(crate) mod tests {
     use super::*;
-
-    /// Creates a basic graph to use as the basis for various tests.
-    pub(crate) fn meoh_graph() -> AtomMap {
-        let mut g = AtomMap::new();
-        let h1 = g.add_atom(Element::H);
-        let h2 = g.add_atom(Element::H);
-        let h3 = g.add_atom(Element::H);
-        let c1 = g.add_atom(Element::C);
-        let c1h1 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h1);
-        let c1h2 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h2);
-        let c1h3 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, h3);
-        let o1 = g.add_atom(Element::O);
-        let h4 = g.add_atom(Element::H);
-        let o1h4 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, o1, h4);
-        let c1o1 = g.add_bond_unchecked(BondType::Covalent { order: 1.0 }, c1, o1);
-        g
-    }
 
     #[test]
     fn slotmap() {

@@ -15,6 +15,7 @@
 /// [2008 IUPAC Recommendations for chemical structure diagrams](https://doi.org/10.1351/pac200880020277)
 /// are defined as named variants; others should be defined with custom definitions.
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 #[allow(non_camel_case_types)]
 pub enum Pseudoelement {

@@ -13,7 +13,7 @@ use crate::entities::*;
 /// An `Error` type for errors specific to the crate.
 #[derive(thiserror::Error, Debug)]
 pub enum MolMapError {
-    /// Returned when an ID is invalid.
+    /// Returned when an ID is not present in a map.
     #[error("The entity was not found in the map")]
     InvalidId(AnyEntity),
     /// Returned when a fundamental is not in fact a member of a specific collection.
@@ -22,10 +22,13 @@ pub enum MolMapError {
     /// General error returned when a disallowed operation is attempted.
     #[error("The operation was not allowed")]
     Disallowed(String),
-    /// Occurs in the rare case that converting a `u8` to an [`EntityKind`] fails
+    /// Occurs when a number was required not to be zero but was found to be.
+    #[error("Number is not non-zero")]
+    NonZero,
+    /// Occurs in the case that converting a `char` or `u8` to an [`EntityKind`] fails
     /// because it does not correspond to a valid discriminant.
     #[error("Not a recognized kind of entity")]
-    UnknownEntityKind(u8),
+    UnknownEntityKind(char, u8),
     /// Returned when an attempt was made to convert a dynamic entity type to the wrong
     /// concrete entity type or to another dynamic entity type that the kind is not
     /// valid for.
@@ -41,6 +44,15 @@ pub enum MolMapError {
         "The iterator is either completely empty or is missing any entities of the necessary kind for the requested operation"
     )]
     EmptyIterator,
+    /// Returned when parsing failed due to poorly formed string input.
+    #[error("String could not be parsed")]
+    Parse,
+}
+
+impl From<std::num::ParseIntError> for MolMapError {
+    fn from(_: std::num::ParseIntError) -> Self {
+        Self::Parse
+    }
 }
 
 /// A `Result` type for situations where the crate's [`MolMapError`] might be returned.

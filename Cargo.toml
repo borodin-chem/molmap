@@ -14,5 +14,13 @@ mendeleev = { version = "0.8.4", default-features = false, features = ["all_list
 nalgebra = "0.35"
 num-traits = "0.2.19"
 paste = "1.0.15"
+serde = { version = "1.0.229", optional = true, features = ["derive"] }
 slotmap = "1.1.1"
 thiserror = "2.0.18"
+
+[features]
+serde = ["dep:serde", "slotmap/serde", "nalgebra/serde-serialize"]
+
+[dev-dependencies]
+molmap = { path = ".", features = ["serde"] } # Many tests use deserialized reference molecules
+ron = "0.12.3"

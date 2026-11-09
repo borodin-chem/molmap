@@ -53,10 +53,15 @@
 //! to add additional entity types but still use IDs that are compatible (i.e.
 //! non-conflicting) with these IDs.
 
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::num::NonZeroU64;
+use std::str::FromStr;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use slotmap::KeyData;
+
+use crate::{MolMapError, MolMapResult};
 
 use super::EntityKind;
 
@@ -96,11 +101,26 @@ impl Id {
         (self.0.get() & !Self::DISC_MASK) as u32
     }
 
+    /// Creates the corresponding ID from the discriminant, version, and index.
+    ///
+    /// Returns `None` if either of `index` or `version` are zero or if the discriminant
+    /// is an invalid value.
+    pub(crate) const fn from_parts(discriminant: u8, index: u32, version: u32) -> Option<Self> {
+        if index == 0 || version == 0 {
+            None
+        } else {
+            let n: u64 = (discriminant as u64) << Self::DISC_OFFSET
+                | (version as u64) << 32
+                | (index as u64);
+            Self::from_raw(n)
+        }
+    }
+
     /// Wraps a (non-zero) integer to create an ID.
     ///
     /// Returns `None` if `n` is zero or if the discriminant is an invalid value.
-    #[cfg(test)]
     #[inline]
+    #[allow(unused)]
     pub(crate) const fn from_raw(n: u64) -> Option<Self> {
         if let Some(non_zero) = NonZeroU64::new(n) {
             let id = Self(non_zero);
@@ -115,8 +135,8 @@ impl Id {
     }
 
     /// Returns the inner value with the discriminant as a normal `u64`.
-    #[cfg(test)]
     #[inline]
+    #[allow(unused)]
     pub(crate) const fn to_raw(self) -> u64 {
         self.0.get()
     }
@@ -181,22 +201,102 @@ impl Id {
     pub(crate) const fn kind(&self) -> EntityKind {
         EntityKind::from_u8(self.discriminant()).expect("The discriminant should never be invalid")
     }
+
+    /// Returns the ID in the form `<prefix><index>`, without the version.
+    ///
+    /// This method is a counterpart to the type's implementation of `Display`
+    /// and `ToString`, which return the full `<prefix><index>.<version>` form.
+    ///
+    /// Without the correct version an ID is invalid, so this should only generally
+    /// be used in places it is no longer needed e.g. when writing to a chemical
+    /// file format.
+    #[allow(clippy::wrong_self_convention)] // Match `self.to_string()` as this is just a variation
+    pub(crate) fn to_versionless_string(&self) -> String {
+        format!("{}{}", self.kind().to_prefix(), self.index())
+    }
 }
 
-impl Debug for Id {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+impl FromStr for Id {
+    type Err = MolMapError;
+
+    /// Converts a string of the form `<prefix><index>.<version>` to the corresponding ID.
+    ///
+    /// The prefix must be a single ASCII alphabetic character that corresponds to a
+    /// kind of entity; the index and version must both be non-zero integers.
+    ///
+    /// Alternatively, the version may be omitted and the form `<prefix><index>` passed,
+    /// in which case the version is assumed to be 1.
+    ///
+    /// ***Important: success of this method does not mean that the ID is valid!***
+    ///
+    /// See also the following, which should display the same behaviour as this method
+    /// and may need their docstrings updated when this one is:
+    /// - [`crate::entities::AnyEntity::from_str`]
+    /// - The implementation of `FromStr` in the `new_kind!` macro in `crate::entities`
+    /// - The implementation of `FromStr` in the `new_category!` macro in `crate::entities`
+    ///
+    /// # Errors
+    ///
+    /// Fails if the prefix does not correspond to a kind of entity, if either of the
+    /// index and version are zero, or if the string is otherwise malformed.
+    fn from_str(s: &str) -> MolMapResult<Self> {
+        let mut chars = s.chars();
+        let prefix = chars.next().ok_or(MolMapError::Parse)?;
+        let s = chars.as_str();
+        let discriminant: u8 = prefix as u8;
+        let mut split = s.split('.');
+        let index: u32 = split.next().ok_or(MolMapError::Parse)?.parse()?;
+        let version: u32 = if let Some(version_str) = split.next() {
+            version_str.parse()?
+        } else {
+            1
+        };
+        Self::from_parts(discriminant, index, version).ok_or(MolMapError::Parse)
+    }
+}
+
+impl Display for Id {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{:#04X}/{}.{}",
-            self.discriminant(),
+            "{}{}.{}",
+            self.kind().to_prefix(),
             self.index(),
             self.version()
         )
     }
 }
 
+impl Debug for Id {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        Display::fmt(self, f)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for Id {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for Id {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Id::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
 #[cfg(test)]
 #[allow(unused)]
+#[allow(clippy::char_lit_as_u8)]
 #[allow(clippy::unusual_byte_groupings)]
 mod tests {
     use std::num::NonZeroU64;
@@ -207,13 +307,19 @@ mod tests {
 
     // Some raw keys for use when testing, so that they only need updating in
     // one place if anything changes
-    const ATOM_NULL_RAW: u64 = 0x0000001_00_FFFFFF; // The null atom key
+    // For reference:
+    // - Atom        = a = 0x61
+    // - Bond        = b = 0x62
+    // - Pseudoatom  = p = 0x70
+    // - Substituent = S = 0x53
+    // - Molecule    = M = 0x4D
+    const ATOM_NULL_RAW: u64 = 0x0000001_61_FFFFFF; // The null atom key
     const KD_NULL_RAW: u64 = 0x0000001_FF_FFFFFF; // What KeyData considers to be null
 
-    const BOND_RAW: u64 = 0x1_01_000008; // version: 1, kind: Bond, idx: 8
-    const ATOM_RAW: u64 = 0x3_00_000010; // version: 3, kind: Atom, idx: 16, (version always odd for occupied slots)
-    const PSEUDOATOM_RAW: u64 = 0x1_02_00000A; // version: 1, kind: Pseudoatom, idx: 10
-    const MOLECULE_RAW: u64 = 0x1_1F_000001; // version: 1, kind: Molecule, idx: 1
+    const BOND_RAW: u64 = 0x1_62_000008; // version: 1, kind: Bond, idx: 8
+    const ATOM_RAW: u64 = 0x3_61_000010; // version: 3, kind: Atom, idx: 16, (version always odd for occupied slots)
+    const PSEUDOATOM_RAW: u64 = 0x1_70_00000A; // version: 1, kind: Pseudoatom, idx: 10
+    const MOLECULE_RAW: u64 = 0x1_4D_000001; // version: 1, kind: Molecule, idx: 1
 
     #[test]
     fn slotmap_key_ffi_layout() {
@@ -237,14 +343,22 @@ mod tests {
     #[test]
     fn entity_getters() {
         let e = Id::from_raw(ATOM_RAW).unwrap();
-        assert_eq!(e.discriminant(), 0);
+        assert_eq!(e.discriminant(), 'a' as u8);
         assert_eq!(e.version(), 3);
         assert_eq!(e.index(), 16);
     }
 
     #[test]
+    fn from_parts() {
+        assert_eq!(
+            Id::from_parts('b' as u8, 3, 1).unwrap(),
+            Id(NonZeroU64::new(0x1_62_000003).unwrap()),
+        )
+    }
+
+    #[test]
     fn from_raw() {
-        for n in [0x1_00_000001, 0x1_00_000002, 0x1_01_000003] {
+        for n in [0x1_61_000001, 0x1_61_000002, 0x1_62_000003] {
             assert_eq!(Id::from_raw(n).unwrap(), Id(NonZeroU64::new(n).unwrap()))
         }
     }
@@ -262,19 +376,19 @@ mod tests {
     fn from_key_data() {
         let k = KeyData::from_ffi(0x1_00_000001); // idx: 1, version: 1
         let id = Id::from_key_data(EntityKind::Atom, k);
-        // Atom has discriminant of 0
-        assert_eq!(id.to_raw(), 0x1_00_000001);
+        // Atom has discriminant of 'a' (0x61 in hex)
+        assert_eq!(id.to_raw(), 0x1_61_000001);
         new_key_type! { struct AtomKey; }
         let mut sm: SlotMap<AtomKey, usize> = SlotMap::with_key();
         let first = sm.insert(1); // idx: 1, version: 1
         assert_eq!(
             Id::from_key_data(EntityKind::Atom, first.data()),
-            Id::from_raw(0x1_00_000001).unwrap()
+            Id::from_raw(0x1_61_000001).unwrap()
         );
         let second = sm.insert(2); // idx: 2, version: 1
         assert_eq!(
             Id::from_key_data(EntityKind::Atom, second.data()),
-            Id::from_raw(0x1_00_000002).unwrap()
+            Id::from_raw(0x1_61_000002).unwrap()
         );
     }
 
@@ -302,8 +416,8 @@ mod tests {
     #[test]
     fn different_discriminants_same_keys() {
         // First assigned key in two different slotmaps
-        let atom = Id::from_raw(0x1_02_000001).unwrap();
-        let bond = Id::from_raw(0x1_01_000001).unwrap();
+        let atom = Id::from_raw(0x1_61_000001).unwrap();
+        let bond = Id::from_raw(0x1_62_000001).unwrap();
         assert_eq!(atom.to_raw_key(), bond.to_raw_key());
     }
 
@@ -315,5 +429,36 @@ mod tests {
         assert_eq!(atom.kind(), EntityKind::Atom);
         assert_eq!(bond.kind(), EntityKind::Bond);
         assert_eq!(mol.kind(), EntityKind::Molecule);
+    }
+
+    #[test]
+    fn debug() {
+        let atom = Id::from_raw(ATOM_RAW).unwrap();
+        assert_eq!(format!("{:?}", atom), "a16.3");
+    }
+
+    #[test]
+    fn to_string() {
+        let atom = Id::from_raw(ATOM_RAW).unwrap();
+        assert_eq!(atom.to_string(), "a16.3");
+    }
+
+    #[test]
+    fn to_versionless_string() {
+        let atom = Id::from_raw(ATOM_RAW).unwrap();
+        assert_eq!(atom.to_versionless_string(), "a16");
+    }
+
+    #[test]
+    fn from_string() {
+        let atom = Id::from_str("a16.3").unwrap();
+        assert_eq!(atom, Id::from_raw(ATOM_RAW).unwrap());
+    }
+
+    #[test]
+    fn str_roundtrip() {
+        let pseudoatom = Id::from_raw(PSEUDOATOM_RAW).unwrap();
+        let pseudoatom2 = Id::from_str(&pseudoatom.to_string()).unwrap();
+        assert_eq!(pseudoatom, pseudoatom2);
     }
 }
