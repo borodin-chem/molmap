@@ -57,7 +57,7 @@ mod internal {
 pub(crate) use internal::*;
 
 /// An iterator over all of a given kind of entity in a map.
-pub type Iter<'m, E: Kind> = Entities<'m, E>;
+pub type Iter<'m, E> = Entities<'m, E>;
 
 /// An arena-like data structure to represent a set of chemical entities, their
 /// properties, and the relationships between them, with or without spatial positions.
