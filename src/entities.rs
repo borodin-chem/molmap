@@ -8,7 +8,9 @@
 
 //! IDs of the molecular entities in the maps, and traits to categorize them.
 
-use std::{iter::FusedIterator, str::FromStr};
+use std::fmt::{Debug, Display, Formatter};
+use std::iter::FusedIterator;
+use std::str::FromStr;
 
 use slotmap::basic::Keys;
 
@@ -157,6 +159,19 @@ pub trait Entity: Copy + Clone {
         // can do it more efficiently
         self.as_entity().resolve()
     }
+
+    /// Returns the ID in the form `<prefix><index>`, without the version.
+    ///
+    /// This method is a counterpart to the type's implementation of `Display`
+    /// and `ToString`, which return the full `<prefix><index>.<version>` form.
+    ///
+    /// Without the correct version an ID is invalid, so this should only generally
+    /// be used in places it is no longer needed e.g. when writing to a chemical
+    /// file format.
+    #[allow(clippy::wrong_self_convention)] // Match `self.to_string()` as this is just a variation
+    fn to_versionless_string(&self) -> String {
+        self.into_inner(private::Token).to_versionless_string()
+    }
 }
 
 /// An entity that may be of any kind.
@@ -195,10 +210,13 @@ impl FromStr for AnyEntity {
     /// The prefix must be a single ASCII alphabetic character that corresponds to a
     /// kind of entity; the index and version must both be non-zero integers.
     ///
+    /// Alternatively, the version may be omitted and the form `<prefix><index>` passed,
+    /// in which case the version is assumed to be 1.
+    ///
     /// ***Important: success of this method does not mean that the ID is valid!***
     ///
-    /// The full serialized form of a `molmap` entity ID is `<kind><index>.<version>`,
-    /// where `<kind>` is the alphanumeric prefix corresponding to the variant of
+    /// The full serialized form of a `molmap` entity ID is `<prefix><index>.<version>`,
+    /// where `<prefix>` is the alphanumeric prefix corresponding to the variant of
     /// [`EntityKind`]. For example, the first atom added to a map will have the ID
     /// `a1.1`.
     ///
@@ -426,10 +444,13 @@ macro_rules! new_kind {
                 /// The prefix must be a single ASCII alphabetic character that corresponds to a
                 /// kind of entity; the index and version must both be non-zero integers.
                 ///
+                /// Alternatively, the version may be omitted and the form `<prefix><index>` passed,
+                /// in which case the version is assumed to be 1.
+                ///
                 /// ***Important: success of this method does not mean that the ID is valid!***
                 ///
-                /// The full serialized form of a `molmap` entity ID is `<kind><index>.<version>`,
-                /// where `<kind>` is the alphanumeric prefix corresponding to the variant of
+                /// The full serialized form of a `molmap` entity ID is `<prefix><index>.<version>`,
+                /// where `<prefix>` is the alphanumeric prefix corresponding to the variant of
                 /// [`EntityKind`]. For example, the first atom added to a map will have the ID
                 /// `a1.1`. Calling `Atom::from_str("a1.1")` will return an instance of `Atom` with
                 /// that value.
@@ -452,6 +473,12 @@ macro_rules! new_kind {
                 /// ```
                 fn from_str(s: &str) -> MolMapResult<Self> {
                     Self::try_from(AnyEntity::from_str(s)?)
+                }
+            }
+
+            impl Display for $kind {
+                fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                    Display::fmt(&self.into_inner(private::Token), f)
                 }
             }
         }
@@ -633,10 +660,13 @@ macro_rules! new_category {
                 /// The prefix must be a single ASCII alphabetic character that corresponds to a
                 /// kind of entity; the index and version must both be non-zero integers.
                 ///
+                /// Alternatively, the version may be omitted and the form `<prefix><index>` passed,
+                /// in which case the version is assumed to be 1.
+                ///
                 /// ***Important: success of this method does not mean that the ID is valid!***
                 ///
-                /// The full serialized form of a `molmap` entity ID is `<kind><index>.<version>`,
-                /// where `<kind>` is the alphanumeric prefix corresponding to the variant of
+                /// The full serialized form of a `molmap` entity ID is `<prefix><index>.<version>`,
+                /// where `<prefix>` is the alphanumeric prefix corresponding to the variant of
                 /// [`EntityKind`]. For example, the first atom added to a map will have the ID
                 /// `a1.1`.
                 ///
@@ -659,6 +689,12 @@ macro_rules! new_category {
                     // Parsing will succeed for any correctly formed string, kind's membership of
                     // category is checked by the TryFrom conversion
                     Self::try_from(AnyEntity::from_str(s)?)
+                }
+            }
+
+            impl Display for [<Any $category>] {
+                fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                    Display::fmt(&self.into_inner(private::Token), f)
                 }
             }
 
@@ -1045,12 +1081,16 @@ mod tests {
     fn kinds_from_str() {
         // Basic test of parsing
         assert_eq!(Atom::from_str("a16.3").unwrap(), ATOM);
+        assert_eq!(Bond::from_str("b8.1").unwrap(), BOND);
         // A mismatched prefix raises an error
         assert!(Atom::from_str("b2.1").is_err());
         // An entirely missing prefix raises an error
         assert!(Atom::from_str("2.1").is_err());
-        // Missing version also raises an error
-        assert!(Atom::from_str("a2").is_err());
+        // Missing version is OK, version: 1 is assumed
+        assert_eq!(
+            Atom::from_str("a2").unwrap(),
+            Atom::from_str("a2.1").unwrap(),
+        );
         // Index alone is definitely not enough
         assert!(Atom::from_str("2").is_err());
         // Entirely invalid prefixes also error

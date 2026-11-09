@@ -811,13 +811,13 @@ mod tests {
             // Start at one of the hydrogen atoms (but the second H in the file,
             // to make it more interesting)
             let mut traversal =
-                Traversal::new(&m, AnyAtomlike::from_str("a3.1")?, DepthFirst, usize::MAX).unwrap();
+                Traversal::new(&m, AnyAtomlike::from_str("a3")?, DepthFirst, usize::MAX).unwrap();
             assert_eq!(
                 traversal.next(),
                 Some(Step::VisitChild {
-                    parent: "a3.1".parse()?,
-                    edge: "b2.1".parse()?,
-                    child: "a1.1".parse()?,
+                    parent: "a3".parse()?,
+                    edge: "b2".parse()?,
+                    child: "a1".parse()?,
                     child_depth: 1,
                     parent_fully_explored: true,
                     moved: true,
@@ -827,9 +827,9 @@ mod tests {
             assert_eq!(
                 traversal.next(),
                 Some(Step::VisitPendant {
-                    parent: "a1.1".parse()?,
-                    edge: "b1.1".parse()?,
-                    pendant: "a2.1".parse()?,
+                    parent: "a1".parse()?,
+                    edge: "b1".parse()?,
+                    pendant: "a2".parse()?,
                     pendant_depth: 2,
                     parent_fully_explored: false
                 })
@@ -837,9 +837,9 @@ mod tests {
             assert_eq!(
                 traversal.next(),
                 Some(Step::VisitPendant {
-                    parent: "a1.1".parse()?,
-                    edge: "b3.1".parse()?,
-                    pendant: "a4.1".parse()?,
+                    parent: "a1".parse()?,
+                    edge: "b3".parse()?,
+                    pendant: "a4".parse()?,
                     pendant_depth: 2,
                     parent_fully_explored: false
                 })
@@ -848,9 +848,9 @@ mod tests {
             assert_eq!(
                 traversal.next(),
                 Some(Step::VisitChild {
-                    parent: "a1.1".parse()?,
-                    edge: "b7.1".parse()?,
-                    child: "a5.1".parse()?,
+                    parent: "a1".parse()?,
+                    edge: "b7".parse()?,
+                    child: "a5".parse()?,
                     child_depth: 2,
                     parent_fully_explored: true,
                     moved: true
@@ -860,9 +860,9 @@ mod tests {
             assert_eq!(
                 traversal.next(),
                 Some(Step::VisitPendant {
-                    parent: "a5.1".parse()?,
-                    edge: "b4.1".parse()?,
-                    pendant: "a6.1".parse()?,
+                    parent: "a5".parse()?,
+                    edge: "b4".parse()?,
+                    pendant: "a6".parse()?,
                     pendant_depth: 3,
                     parent_fully_explored: false
                 })
@@ -870,9 +870,9 @@ mod tests {
             assert_eq!(
                 traversal.next(),
                 Some(Step::VisitPendant {
-                    parent: "a5.1".parse()?,
-                    edge: "b5.1".parse()?,
-                    pendant: "a7.1".parse()?,
+                    parent: "a5".parse()?,
+                    edge: "b5".parse()?,
+                    pendant: "a7".parse()?,
                     pendant_depth: 3,
                     parent_fully_explored: false
                 })
@@ -880,9 +880,9 @@ mod tests {
             assert_eq!(
                 traversal.next(),
                 Some(Step::VisitPendant {
-                    parent: "a5.1".parse()?,
-                    edge: "b6.1".parse()?,
-                    pendant: "a8.1".parse()?,
+                    parent: "a5".parse()?,
+                    edge: "b6".parse()?,
+                    pendant: "a8".parse()?,
                     pendant_depth: 3,
                     parent_fully_explored: true
                 })
@@ -896,9 +896,9 @@ mod tests {
         fn branched() -> MolMapResult<()> {
             // Traverse propane, starting at the carbon in the middle of the chain
             let m: AtomMap = ron::from_str(PROPANE).unwrap();
-            let c1: AnyAtomlike = "a1.1".parse()?;
-            let c2: AnyAtomlike = "a5.1".parse()?;
-            let c3: AnyAtomlike = "a8.1".parse()?;
+            let c1: AnyAtomlike = "a1".parse()?;
+            let c2: AnyAtomlike = "a5".parse()?;
+            let c3: AnyAtomlike = "a8".parse()?;
             let traversal = Traversal::new(&m, c2, DepthFirst, usize::MAX).unwrap();
             let mut explored_edges: Vec<Bond> = Vec::new();
             let mut visited_nodes: Vec<AnyAtomlike> = vec![c2];
@@ -1020,17 +1020,17 @@ mod tests {
         fn branched() -> MolMapResult<()> {
             // Traverse propane, starting at the carbon in the middle of the chain
             let m: AtomMap = ron::from_str(PROPANE).unwrap();
-            let c1: AnyAtomlike = "a1.1".parse()?;
-            let h1: AnyAtomlike = "a2.1".parse()?;
-            let h2: AnyAtomlike = "a3.1".parse()?;
-            let h3: AnyAtomlike = "a4.1".parse()?;
-            let c2: AnyAtomlike = "a5.1".parse()?;
-            let h4: AnyAtomlike = "a6.1".parse()?;
-            let h5: AnyAtomlike = "a7.1".parse()?;
-            let c3: AnyAtomlike = "a8.1".parse()?;
-            let h6: AnyAtomlike = "a9.1".parse()?;
-            let h7: AnyAtomlike = "a10.1".parse()?;
-            let h8: AnyAtomlike = "a11.1".parse()?;
+            let c1: AnyAtomlike = "a1".parse()?;
+            let h1: AnyAtomlike = "a2".parse()?;
+            let h2: AnyAtomlike = "a3".parse()?;
+            let h3: AnyAtomlike = "a4".parse()?;
+            let c2: AnyAtomlike = "a5".parse()?;
+            let h4: AnyAtomlike = "a6".parse()?;
+            let h5: AnyAtomlike = "a7".parse()?;
+            let c3: AnyAtomlike = "a8".parse()?;
+            let h6: AnyAtomlike = "a9".parse()?;
+            let h7: AnyAtomlike = "a10".parse()?;
+            let h8: AnyAtomlike = "a11".parse()?;
             let traversal = Traversal::new(&m, c2, BreadthFirst, usize::MAX).unwrap();
             let mut explored_edges: Vec<Bond> = Vec::new();
             let mut visited_nodes: Vec<AnyAtomlike> = vec![c2.as_atomlike()];

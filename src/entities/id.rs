@@ -201,6 +201,19 @@ impl Id {
     pub(crate) const fn kind(&self) -> EntityKind {
         EntityKind::from_u8(self.discriminant()).expect("The discriminant should never be invalid")
     }
+
+    /// Returns the ID in the form `<prefix><index>`, without the version.
+    ///
+    /// This method is a counterpart to the type's implementation of `Display`
+    /// and `ToString`, which return the full `<prefix><index>.<version>` form.
+    ///
+    /// Without the correct version an ID is invalid, so this should only generally
+    /// be used in places it is no longer needed e.g. when writing to a chemical
+    /// file format.
+    #[allow(clippy::wrong_self_convention)] // Match `self.to_string()` as this is just a variation
+    pub(crate) fn to_versionless_string(&self) -> String {
+        format!("{}{}", self.kind().to_prefix(), self.index())
+    }
 }
 
 impl FromStr for Id {
@@ -210,6 +223,9 @@ impl FromStr for Id {
     ///
     /// The prefix must be a single ASCII alphabetic character that corresponds to a
     /// kind of entity; the index and version must both be non-zero integers.
+    ///
+    /// Alternatively, the version may be omitted and the form `<prefix><index>` passed,
+    /// in which case the version is assumed to be 1.
     ///
     /// ***Important: success of this method does not mean that the ID is valid!***
     ///
@@ -230,7 +246,11 @@ impl FromStr for Id {
         let discriminant: u8 = prefix as u8;
         let mut split = s.split('.');
         let index: u32 = split.next().ok_or(MolMapError::Parse)?.parse()?;
-        let version: u32 = split.next().ok_or(MolMapError::Parse)?.parse()?;
+        let version: u32 = if let Some(version_str) = split.next() {
+            version_str.parse()?
+        } else {
+            1
+        };
         Self::from_parts(discriminant, index, version).ok_or(MolMapError::Parse)
     }
 }
@@ -240,9 +260,7 @@ impl Display for Id {
         write!(
             f,
             "{}{}.{}",
-            EntityKind::from_u8(self.discriminant())
-                .unwrap()
-                .to_prefix(),
+            self.kind().to_prefix(),
             self.index(),
             self.version()
         )
@@ -423,6 +441,12 @@ mod tests {
     fn to_string() {
         let atom = Id::from_raw(ATOM_RAW).unwrap();
         assert_eq!(atom.to_string(), "a16.3");
+    }
+
+    #[test]
+    fn to_versionless_string() {
+        let atom = Id::from_raw(ATOM_RAW).unwrap();
+        assert_eq!(atom.to_versionless_string(), "a16");
     }
 
     #[test]
