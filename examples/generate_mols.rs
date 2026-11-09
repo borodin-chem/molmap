@@ -12,6 +12,7 @@
 #![allow(unused)]
 
 use molmap::{atomic::*, entities::AnyAtomlike, *};
+use ron::extensions::Extensions;
 
 fn water() -> AtomMap {
     let mut m = AtomMap::new();
@@ -60,7 +61,10 @@ fn cyclohexane() -> AtomMap {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg = ron::ser::PrettyConfig::new().depth_limit(2);
+    let cfg = ron::ser::PrettyConfig::new()
+        .depth_limit(2) // Results in one entity per line
+        .enumerate_arrays(true) // Makes long lists of entities much easier to reference
+        .extensions(Extensions::IMPLICIT_SOME); // The slots are a tad verbose when serialized, this helps a bit
     std::fs::write(
         "tests/fixtures/atomic/water.ron",
         ron::ser::to_string_pretty(&water(), cfg.clone())?,
