@@ -56,6 +56,9 @@ mod internal {
 // Re-export for **crate-internal** use
 pub(crate) use internal::*;
 
+/// An iterator over all of a given kind of entity in a map.
+pub type Iter<'m, E> = Entities<'m, E>;
+
 /// An arena-like data structure to represent a set of chemical entities, their
 /// properties, and the relationships between them, with or without spatial positions.
 ///
@@ -136,12 +139,12 @@ pub trait Map: Sized {
     fn contains<E: Entity>(&self, entity: E) -> bool;
 
     /// Returns an iterator over all of a given kind of entity in the map.
-    fn entities<E>(&'_ self) -> Entities<'_, E>
+    fn iter<E>(&'_ self) -> Iter<'_, E>
     where
         E: Kind,
         Self::Graph: Stores<E>,
     {
-        Entities::from_keys(self.as_graph().keys())
+        Iter::from_keys(self.as_graph().keys())
     }
 
     // Getters
@@ -193,7 +196,7 @@ pub trait Map: Sized {
         Self::Graph: Stores<E>,
     {
         let ids: Entities<'m, E> = match selection.into() {
-            Selection::All => self.entities(),
+            Selection::All => self.iter(),
             Selection::Iter(iterator) => {
                 let validated: Vec<E> = iterator
                     .into_iter()

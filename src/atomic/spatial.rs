@@ -456,9 +456,9 @@ mod tests {
     #[test]
     fn add_atom() {
         let mut am: SpatialAtomMap<2, Angstrom> = SpatialAtomMap::new();
-        assert_eq!(am.entities::<Atom>().count(), 0);
+        assert_eq!(am.iter::<Atom>().count(), 0);
         let h1 = am.add_atom(Element::H, Point2::new(1.0, 2.0));
-        assert_eq!(am.entities::<Atom>().count(), 1);
+        assert_eq!(am.iter::<Atom>().count(), 1);
         // Confirm that the atom positions also have data for a single atom
         assert_eq!(am.atom_positions.len(), 1);
         // Confirm that the atom position can be accessed
@@ -472,10 +472,10 @@ mod tests {
     fn delete_atom() {
         let mut am: SpatialAtomMap<3, Relative> = SpatialAtomMap::new();
         let h1 = am.add_atom(Element::H, Point3::new(1.0, 2.0, 3.0));
-        assert_eq!(am.entities::<Atom>().count(), 1);
+        assert_eq!(am.iter::<Atom>().count(), 1);
         assert_eq!(am.atom_positions.len(), 1);
         am.view_mut(h1).unwrap().delete();
-        assert_eq!(am.entities::<Atom>().count(), 0);
+        assert_eq!(am.iter::<Atom>().count(), 0);
         // Note that stale position is still present, but can't be accessed
         assert!(am.atom_positions.contains_key(h1.to_key()));
         assert!(am.view(h1).is_none());

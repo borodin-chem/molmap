@@ -941,7 +941,7 @@ mod tests {
             // Traverse cyclohexane
             let m: AtomMap = ron::from_str(CYCLOHEXANE).unwrap();
             let carbons: Vec<AnyAtomlike> = m
-                .entities::<Atom>()
+                .iter::<Atom>()
                 .filter(|&a| m.view(a).unwrap().element() == Element::C)
                 .map(|a| a.as_atomlike())
                 .collect();
@@ -1070,7 +1070,7 @@ mod tests {
             // Traverse cyclohexane
             let m: AtomMap = ron::from_str(CYCLOHEXANE).unwrap();
             let carbons: Vec<AnyAtomlike> = m
-                .entities::<Atom>()
+                .iter::<Atom>()
                 .filter(|&a| m.view(a).unwrap().element() == Element::C)
                 .map(|a| a.as_atomlike())
                 .collect();

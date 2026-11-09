@@ -51,7 +51,7 @@ pub use error::{MolMapError, MolMapResult};
 pub use geometry::{Point, Point2, Point3, Vector, Vector2, Vector3};
 pub use molecular::{MolMap, MolMap2, MolMap3};
 pub use pseudoelement::Pseudoelement;
-pub use traits::{Map, Spatial};
+pub use traits::{Iter, Map, Spatial};
 pub use view::{View, ViewMut, Views};
 
 // Foreign re-exports
