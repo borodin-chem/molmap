@@ -8,7 +8,13 @@
 
 //! View methods universal to all maps.
 
-use crate::{Element, Map, View, entities::*, traits::Stores};
+use crate::{
+    bonding::BondType,
+    elements::Element,
+    entities::*,
+    traits::{Map, Stores},
+    view::View,
+};
 
 use super::{Atomic, data::*};
 

@@ -8,9 +8,13 @@
 
 //! View methods that apply to all molecular maps.
 
-use crate::{Map, View, ViewMut, entities::*, molecular::Molecular, traits::Stores};
+use crate::{
+    entities::*,
+    traits::{Map, Stores},
+    view::{View, ViewMut},
+};
 
-use super::data::*;
+use super::{Molecular, data::*};
 
 impl<'m, M> View<'m, M, Substituent>
 where

@@ -13,9 +13,11 @@ use std::marker::PhantomData;
 use slotmap::SecondaryMap;
 
 use crate::{
-    Map, MolMapResult, Point, Spatial, Vector,
     atomic::{AtomMap, Atomic, SpatialAtomicCommon},
     entities::*,
+    error::MolMapResult,
+    geometry::{Point, Vector},
+    traits::{Map, Spatial},
     units::{Angstrom, Relative, Unit},
 };
 

@@ -11,9 +11,12 @@
 use slotmap::SlotMap;
 
 use crate::{
-    Element, Map, MolMapError, MolMapResult, Pseudoelement, ViewMut,
+    bonding::BondType,
+    elements::{Element, Pseudoelement},
     entities::*,
-    traits::{Graph, Stores, StoresMut},
+    error::{MolMapError, MolMapResult},
+    traits::{Graph, Map, Stores, StoresMut},
+    view::ViewMut,
 };
 
 use super::{Atomic, data::*};

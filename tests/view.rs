@@ -1,7 +1,8 @@
 use molmap::{
+    Element, Map,
     atomic::{AtomMap, AtomMap2},
-    entities::{Atom, Selection::All},
-    *,
+    entities::Atom,
+    iter::{Selection::All, Views},
 };
 
 #[test]

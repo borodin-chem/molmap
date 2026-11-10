@@ -10,18 +10,19 @@
 //
 // - Use `where` clauses for methods on maps with multiple generic entities, use
 //   `impl Trait` when there is a single target that happens to be generic
+// - Internal code should not import from the crate root, only from a level 1
+//   module, or its own module via `super` (which is the preference for things
+//   from the same module)
 
 #![warn(unreachable_pub)]
 
-// Private modules
-// ---------------
-mod element;
-mod error;
-mod pseudoelement;
-mod view;
-
-pub(crate) mod geometry;
+// ------------------
+// Crate-internal API
+// ------------------
+pub(crate) mod bonding;
+pub(crate) mod error;
 pub(crate) mod traits;
+pub(crate) mod view;
 
 // ----------
 // Public API
@@ -29,33 +30,23 @@ pub(crate) mod traits;
 
 // Publicly accessible modules
 // ---------------------------
-
 // General
+pub mod elements;
 pub mod entities;
+pub mod geometry;
 pub mod graph;
+pub mod iter;
 pub mod parse;
 pub mod units;
-
 // Layers
 pub mod atomic;
-//pub mod crystalline;
 pub mod molecular;
+//pub mod crystalline;
 //pub mod reaction;
 
 // Top-level items
 // ---------------
-pub use atomic::data::BondType;
-pub use element::Element;
-pub use entities::{Atom, Bond, Molecule, Pseudoatom, Substituent};
+// Only stuff that is universal to the whole crate and isn't exposed publicly elsewhere
 pub use error::{MolMapError, MolMapResult};
-pub use geometry::{Point, Point2, Point3, Vector, Vector2, Vector3};
-pub use molecular::{MolMap, MolMap2, MolMap3};
-pub use pseudoelement::Pseudoelement;
-pub use traits::{Iter, Map, Spatial};
-pub use view::{View, ViewMut, Views};
-
-// Foreign re-exports
-// ------------------
-// Foreign crates or things from them
-// Re-exporting nalgebra makes it easier for others to use
-pub use nalgebra;
+pub use traits::{Map, Spatial};
+pub use view::{View, ViewMut};

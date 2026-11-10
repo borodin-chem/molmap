@@ -14,10 +14,12 @@ use nalgebra as na;
 use slotmap::SecondaryMap;
 
 use crate::{
-    BondType, Element, Map, MolMapError, MolMapResult, Point, Pseudoelement, Spatial, Vector,
+    bonding::BondType,
+    elements::{Element, Pseudoelement},
     entities::*,
-    geometry,
-    traits::Stores,
+    error::{MolMapError, MolMapResult},
+    geometry::{self, Point, Vector},
+    traits::{Map, Spatial, Stores},
     units::{Angstrom, Relative, Unit},
 };
 
@@ -447,7 +449,7 @@ pub type AtomMap3 = SpatialAtomMap<3, Angstrom>;
 #[allow(unused)]
 mod tests {
     use crate::{
-        Point2, Point3,
+        geometry::{Point2, Point3},
         units::{Angstrom, Relative},
     };
 
