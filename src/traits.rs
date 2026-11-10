@@ -12,7 +12,12 @@
 
 use slotmap::SlotMap;
 
-use crate::{View, ViewMut, Views, entities::*, error::*, units::Unit};
+use crate::{
+    MolMapError, MolMapResult, View, ViewMut,
+    entities::*,
+    iter::{Entities, Iter, Selection, Views},
+    units::Unit,
+};
 
 /// Traits that must remain unnameable from outside the crate.
 #[allow(unreachable_pub)]
@@ -55,9 +60,6 @@ mod internal {
 }
 // Re-export for **crate-internal** use
 pub(crate) use internal::*;
-
-/// An iterator over all of a given kind of entity in a map.
-pub type Iter<'m, E> = Entities<'m, E>;
 
 /// An arena-like data structure to represent a set of chemical entities, their
 /// properties, and the relationships between them, with or without spatial positions.

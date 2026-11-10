@@ -9,10 +9,7 @@
 //! IDs of the molecular entities in the maps, and traits to categorize them.
 
 use std::fmt::{Debug, Display, Formatter};
-use std::iter::FusedIterator;
 use std::str::FromStr;
-
-use slotmap::basic::Keys;
 
 use crate::{MolMapError, MolMapResult};
 
@@ -88,7 +85,7 @@ mod private {
     pub struct Token;
 }
 
-/// A constituent member of a [`MolMap`] with associated data and relationships
+/// A constituent member of a map with associated data and relationships
 /// to other entities.
 ///
 /// The usage of the term "entity" in `molmap` only in some cases aligns with the
@@ -241,80 +238,6 @@ pub enum ResolvedEntity {
     Pseudoatom(Pseudoatom) = EntityKind::Pseudoatom as u8,
     Substituent(Substituent) = EntityKind::Substituent as u8,
     Molecule(Molecule) = EntityKind::Molecule as u8,
-}
-
-/// A union type for iterators over entity IDs from various sources.
-enum EntitiesSource<'m, E: Kind> {
-    Keys(Keys<'m, E::Key, E::Data>),
-    Vec(std::vec::IntoIter<E>),
-}
-
-impl<'m, E: Kind> Iterator for EntitiesSource<'m, E> {
-    type Item = E;
-
-    fn next(&mut self) -> Option<E> {
-        match self {
-            Self::Keys(keys) => keys.next().map(E::from_key),
-            Self::Vec(ids) => ids.next(),
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        match self {
-            Self::Keys(keys) => keys.size_hint(),
-            Self::Vec(ids) => ids.size_hint(),
-        }
-    }
-}
-
-impl<'m, E: Kind> ExactSizeIterator for EntitiesSource<'m, E> {}
-
-impl<'m, E: Kind> FusedIterator for EntitiesSource<'m, E> {}
-
-/// An iterator over entity IDs.
-pub struct Entities<'m, E: Kind>(EntitiesSource<'m, E>);
-
-impl<'m, E: Kind> Entities<'m, E> {
-    pub(crate) fn from_keys(keys: Keys<'m, E::Key, E::Data>) -> Self {
-        Self(EntitiesSource::Keys(keys))
-    }
-
-    pub(crate) fn from_vec(vec: Vec<E>) -> Self {
-        Self(EntitiesSource::Vec(vec.into_iter()))
-    }
-}
-
-impl<'m, E: Kind> Iterator for Entities<'m, E> {
-    type Item = E;
-
-    fn next(&mut self) -> Option<E> {
-        self.0.next()
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
-    }
-}
-
-impl<'m, E: Kind> ExactSizeIterator for Entities<'m, E> {}
-
-impl<'m, E: Kind> FusedIterator for Entities<'m, E> {}
-
-/// A selected set or subset of entities of a given kind.
-pub enum Selection<'m, E: Kind> {
-    All,
-    Iter(Box<dyn Iterator<Item = E> + 'm>),
-}
-
-impl<'m, E, I> From<I> for Selection<'m, E>
-where
-    E: Kind,
-    I: IntoIterator<Item = E>,
-    I::IntoIter: 'm,
-{
-    fn from(iterable: I) -> Self {
-        Selection::Iter(Box::new(iterable.into_iter()))
-    }
 }
 
 /// Items that must remain unnameable from outside the crate.
@@ -486,12 +409,15 @@ macro_rules! new_kind {
 }
 
 new_kind!(
-    /// Smallest particle still characterizing a chemical element.
+    /// A building block of matter, consisting of a positively charged nucleus and
+    /// a surrounding cloud of negatively charged electrons.
+    ///
+    /// The smallest particle still characterizing a chemical element.
     pub struct Atom;
 );
 
 new_kind!(
-    /// A chemical bond: an attraction between molecular entities.
+    /// A chemical bond; an attraction between molecular entities.
     ///
     /// > There is a chemical bond between two atoms or groups of atoms in the case
     /// > that the forces acting between them are such as to lead to the formation
@@ -503,17 +429,17 @@ new_kind!(
 );
 
 new_kind!(
-    /// A pseudoatom: something that forms bonds and can be represented by an
-    /// "element symbol" like a normal atom but represents something else.
+    /// Something that forms bonds and can be represented by an "element symbol" (its
+    /// [`Pseudoelement`](crate::elements::Pseudoelement)) similar to an [`Atom`],
+    /// but represents a group of atoms rather than a single one.
     ///
     /// It may have an unknown composition like R, or a known structure like Ph.
     pub struct Pseudoatom;
 );
 
 new_kind!(
-    /// A substituent: a group of atoms, bonded internally, identified as a unit and
-    /// usually part of a larger molecule. Often synonymous with "functional group" or
-    /// "moiety".
+    /// A group of atoms, bonded internally, identified as a unit and usually part of a
+    /// larger molecule. Often synonymous with "functional group" or "moiety".
     ///
     /// Substituents are the smallest collections in a `MolMap` and represent the units
     /// that chemists tend to actually think in terms of, rather than individual atoms.
@@ -531,7 +457,7 @@ new_kind!(
 );
 
 new_kind!(
-    /// A molecule: a discrete group of atoms held together by chemical bonds.
+    /// A discrete group of atoms held together by chemical bonds.
     ///
     /// > An electrically neutral entity consisting of more than one atom (_n_ > 1).
     /// > Rigorously, a molecule, in which n > 1 must correspond to a depression on the

@@ -34,7 +34,7 @@ use std::collections::{HashSet, VecDeque};
 use crate::{
     atomic::{AtomMap, Atomic},
     entities::*,
-    error::*,
+    error::{MolMapError, MolMapResult},
     traits::{Map, Stores},
 };
 
@@ -775,7 +775,7 @@ impl<'m, S: Strategy> Iterator for Traversal<'m, S> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{BondType, Element};
+    use crate::{bonding::BondType, elements::Element};
 
     use super::*;
 

@@ -8,8 +8,6 @@
 
 //! Immutable and mutable views of an entity in a specific map.
 
-use std::iter::FusedIterator;
-
 use crate::entities::*;
 
 // The view structs simply hold an immutable or mutable reference to the parent map,
@@ -79,44 +77,3 @@ where
         }
     }
 }
-
-/// An iterator that yields an immutable view of each of a set of entities in turn.
-pub struct Views<'m, M, E>
-where
-    E: Kind,
-{
-    pub(crate) map: &'m M,
-    pub(crate) ids: Entities<'m, E>,
-}
-
-impl<'m, M, E> Views<'m, M, E>
-where
-    E: Kind,
-{
-    pub fn ids(self) -> Entities<'m, E> {
-        self.ids
-    }
-}
-
-impl<'m, M, E> Iterator for Views<'m, M, E>
-where
-    E: Kind,
-{
-    type Item = View<'m, M, E>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(id) = self.ids.next() {
-            Some(View { map: self.map, id })
-        } else {
-            None
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.ids.size_hint()
-    }
-}
-
-impl<'m, M, E> ExactSizeIterator for Views<'m, M, E> where E: Kind {}
-
-impl<'m, M, E> FusedIterator for Views<'m, M, E> where E: Kind {}

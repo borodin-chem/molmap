@@ -11,14 +11,16 @@
 use slotmap::{SecondaryMap, SlotMap};
 
 use crate::{
-    BondType, Element, Map, MolMapError, MolMapResult, Pseudoelement, ViewMut,
     atomic::{AtomMap, Atomic},
+    bonding::BondType,
+    elements::{Element, Pseudoelement},
     entities::*,
-    molecular::Molecular,
-    traits::{Graph, Stores, StoresMut},
+    error::{MolMapError, MolMapResult},
+    traits::{Graph, Map, Stores, StoresMut},
+    view::ViewMut,
 };
 
-use super::data::*;
+use super::{Molecular, data::*};
 
 /// A map in which the atomic entities and bonds are organized into substituents
 /// and molecules.

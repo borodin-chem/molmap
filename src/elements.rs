@@ -1,0 +1,408 @@
+// SPDX-FileCopyrightText: 2026 Matthew Milner <matterhorn103@proton.me>
+//
+// SPDX-License-Identifier: MPL-2.0
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+//! The chemical elements, as well as "pseudoelements" (abbreviations for common
+//! substituents).
+
+pub use element::Element;
+pub use pseudoelement::Pseudoelement;
+
+/// The most common elements re-exported as bare names, for convenient glob import.
+///
+/// Note that the `Ac` found here is [`Pseudoelement::Ac`] i.e. acetyl,
+/// _not_ [`Element::Ac`] (actinium).
+pub mod common {
+    pub use super::{Element, Pseudoelement};
+    pub use Element::{B, Br, C, Ca, Cl, F, H, I, K, Li, Mg, N, Na, O, P, S, Si};
+    pub use Pseudoelement::{Ac, Et, Me, Ph, iPr, tBu};
+}
+
+mod element {
+
+    use mendeleev::OxidationStateCategory;
+
+    /// The known chemical elements.
+    #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+    #[repr(u8)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    pub enum Element {
+        H = 1,
+        He,
+        Li,
+        Be,
+        B,
+        C,
+        N,
+        O,
+        F,
+        Ne,
+        Na,
+        Mg,
+        Al,
+        Si,
+        P,
+        S,
+        Cl,
+        Ar,
+        K,
+        Ca,
+        Sc,
+        Ti,
+        V,
+        Cr,
+        Mn,
+        Fe,
+        Co,
+        Ni,
+        Cu,
+        Zn,
+        Ga,
+        Ge,
+        As,
+        Se,
+        Br,
+        Kr,
+        Rb,
+        Sr,
+        Y,
+        Zr,
+        Nb,
+        Mo,
+        Tc,
+        Ru,
+        Rh,
+        Pd,
+        Ag,
+        Cd,
+        In,
+        Sn,
+        Sb,
+        Te,
+        I,
+        Xe,
+        Cs,
+        Ba,
+        La,
+        Ce,
+        Pr,
+        Nd,
+        Pm,
+        Sm,
+        Eu,
+        Gd,
+        Tb,
+        Dy,
+        Ho,
+        Er,
+        Tm,
+        Yb,
+        Lu,
+        Hf,
+        Ta,
+        W,
+        Re,
+        Os,
+        Ir,
+        Pt,
+        Au,
+        Hg,
+        Tl,
+        Pb,
+        Bi,
+        Po,
+        At,
+        Rn,
+        Fr,
+        Ra,
+        Ac,
+        Th,
+        Pa,
+        U,
+        Np,
+        Pu,
+        Am,
+        Cm,
+        Bk,
+        Cf,
+        Es,
+        Fm,
+        Md,
+        No,
+        Lr,
+        Rf,
+        Db,
+        Sg,
+        Bh,
+        Hs,
+        Mt,
+        Ds,
+        Rg,
+        Cn,
+        Nh,
+        Fl,
+        Mc,
+        Lv,
+        Ts,
+        Og,
+    }
+
+    impl Element {
+        /// Returns the equivalent variant of the `mendeleev` crate's `Element` type.
+        const fn into_mendeleev(self) -> mendeleev::Element {
+            match self {
+                Self::H => mendeleev::Element::H,
+                Self::He => mendeleev::Element::He,
+                Self::Li => mendeleev::Element::Li,
+                Self::Be => mendeleev::Element::Be,
+                Self::B => mendeleev::Element::B,
+                Self::C => mendeleev::Element::C,
+                Self::N => mendeleev::Element::N,
+                Self::O => mendeleev::Element::O,
+                Self::F => mendeleev::Element::F,
+                Self::Ne => mendeleev::Element::Ne,
+                Self::Na => mendeleev::Element::Na,
+                Self::Mg => mendeleev::Element::Mg,
+                Self::Al => mendeleev::Element::Al,
+                Self::Si => mendeleev::Element::Si,
+                Self::P => mendeleev::Element::P,
+                Self::S => mendeleev::Element::S,
+                Self::Cl => mendeleev::Element::Cl,
+                Self::Ar => mendeleev::Element::Ar,
+                Self::K => mendeleev::Element::K,
+                Self::Ca => mendeleev::Element::Ca,
+                Self::Sc => mendeleev::Element::Sc,
+                Self::Ti => mendeleev::Element::Ti,
+                Self::V => mendeleev::Element::V,
+                Self::Cr => mendeleev::Element::Cr,
+                Self::Mn => mendeleev::Element::Mn,
+                Self::Fe => mendeleev::Element::Fe,
+                Self::Co => mendeleev::Element::Co,
+                Self::Ni => mendeleev::Element::Ni,
+                Self::Cu => mendeleev::Element::Cu,
+                Self::Zn => mendeleev::Element::Zn,
+                Self::Ga => mendeleev::Element::Ga,
+                Self::Ge => mendeleev::Element::Ge,
+                Self::As => mendeleev::Element::As,
+                Self::Se => mendeleev::Element::Se,
+                Self::Br => mendeleev::Element::Br,
+                Self::Kr => mendeleev::Element::Kr,
+                Self::Rb => mendeleev::Element::Rb,
+                Self::Sr => mendeleev::Element::Sr,
+                Self::Y => mendeleev::Element::Y,
+                Self::Zr => mendeleev::Element::Zr,
+                Self::Nb => mendeleev::Element::Nb,
+                Self::Mo => mendeleev::Element::Mo,
+                Self::Tc => mendeleev::Element::Tc,
+                Self::Ru => mendeleev::Element::Ru,
+                Self::Rh => mendeleev::Element::Rh,
+                Self::Pd => mendeleev::Element::Pd,
+                Self::Ag => mendeleev::Element::Ag,
+                Self::Cd => mendeleev::Element::Cd,
+                Self::In => mendeleev::Element::In,
+                Self::Sn => mendeleev::Element::Sn,
+                Self::Sb => mendeleev::Element::Sb,
+                Self::Te => mendeleev::Element::Te,
+                Self::I => mendeleev::Element::I,
+                Self::Xe => mendeleev::Element::Xe,
+                Self::Cs => mendeleev::Element::Cs,
+                Self::Ba => mendeleev::Element::Ba,
+                Self::La => mendeleev::Element::La,
+                Self::Ce => mendeleev::Element::Ce,
+                Self::Pr => mendeleev::Element::Pr,
+                Self::Nd => mendeleev::Element::Nd,
+                Self::Pm => mendeleev::Element::Pm,
+                Self::Sm => mendeleev::Element::Sm,
+                Self::Eu => mendeleev::Element::Eu,
+                Self::Gd => mendeleev::Element::Gd,
+                Self::Tb => mendeleev::Element::Tb,
+                Self::Dy => mendeleev::Element::Dy,
+                Self::Ho => mendeleev::Element::Ho,
+                Self::Er => mendeleev::Element::Er,
+                Self::Tm => mendeleev::Element::Tm,
+                Self::Yb => mendeleev::Element::Yb,
+                Self::Lu => mendeleev::Element::Lu,
+                Self::Hf => mendeleev::Element::Hf,
+                Self::Ta => mendeleev::Element::Ta,
+                Self::W => mendeleev::Element::W,
+                Self::Re => mendeleev::Element::Re,
+                Self::Os => mendeleev::Element::Os,
+                Self::Ir => mendeleev::Element::Ir,
+                Self::Pt => mendeleev::Element::Pt,
+                Self::Au => mendeleev::Element::Au,
+                Self::Hg => mendeleev::Element::Hg,
+                Self::Tl => mendeleev::Element::Tl,
+                Self::Pb => mendeleev::Element::Pb,
+                Self::Bi => mendeleev::Element::Bi,
+                Self::Po => mendeleev::Element::Po,
+                Self::At => mendeleev::Element::At,
+                Self::Rn => mendeleev::Element::Rn,
+                Self::Fr => mendeleev::Element::Fr,
+                Self::Ra => mendeleev::Element::Ra,
+                Self::Ac => mendeleev::Element::Ac,
+                Self::Th => mendeleev::Element::Th,
+                Self::Pa => mendeleev::Element::Pa,
+                Self::U => mendeleev::Element::U,
+                Self::Np => mendeleev::Element::Np,
+                Self::Pu => mendeleev::Element::Pu,
+                Self::Am => mendeleev::Element::Am,
+                Self::Cm => mendeleev::Element::Cm,
+                Self::Bk => mendeleev::Element::Bk,
+                Self::Cf => mendeleev::Element::Cf,
+                Self::Es => mendeleev::Element::Es,
+                Self::Fm => mendeleev::Element::Fm,
+                Self::Md => mendeleev::Element::Md,
+                Self::No => mendeleev::Element::No,
+                Self::Lr => mendeleev::Element::Lr,
+                Self::Rf => mendeleev::Element::Rf,
+                Self::Db => mendeleev::Element::Db,
+                Self::Sg => mendeleev::Element::Sg,
+                Self::Bh => mendeleev::Element::Bh,
+                Self::Hs => mendeleev::Element::Hs,
+                Self::Mt => mendeleev::Element::Mt,
+                Self::Ds => mendeleev::Element::Ds,
+                Self::Rg => mendeleev::Element::Rg,
+                Self::Cn => mendeleev::Element::Cn,
+                Self::Nh => mendeleev::Element::Nh,
+                Self::Fl => mendeleev::Element::Fl,
+                Self::Mc => mendeleev::Element::Mc,
+                Self::Lv => mendeleev::Element::Lv,
+                Self::Ts => mendeleev::Element::Ts,
+                Self::Og => mendeleev::Element::Og,
+            }
+        }
+
+        /// Provides a default valency for the element based on the primary oxidation state.
+        pub fn default_valency(&self) -> u8 {
+            // Don't think this will turn out reliable enough but it will do for now.
+            // Mendeleev returns the common oxidation states from most negative to most
+            // positive, so the number returned will be the absolute value of the most
+            // negative oxidation state.
+            // Essentially, if the element typically forms a hydride we will return
+            // the number of hydrogen atoms in the highest order hydride; if an
+            // element only has positive or neutral oxidation states then the lowest
+            // will be returned, which for metals generally corresponds to the most
+            // common chloride.
+            self.into_mendeleev()
+                .oxidation_states(OxidationStateCategory::Main)
+                .first()
+                .cloned()
+                .unwrap_or_default() // If something has no listed ox states (e.g. He) just return 0
+                .unsigned_abs()
+        }
+
+        /// Returns the element's symbol.
+        pub fn symbol(&self) -> &str {
+            self.into_mendeleev().symbol()
+        }
+
+        pub const fn atomic_number(&self) -> u8 {
+            *self as u8
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn atomic_number() {
+            assert_eq!(Element::H.atomic_number(), 1);
+            assert_eq!(Element::C.atomic_number(), 6);
+            assert_eq!(Element::N.atomic_number(), 7);
+            assert_eq!(Element::O.atomic_number(), 8);
+            assert_eq!(Element::Fe.atomic_number(), 26);
+        }
+
+        #[test]
+        fn symbol() {
+            assert_eq!(Element::He.symbol(), "He");
+            assert_eq!(Element::Ag.symbol(), "Ag");
+            assert_eq!(Element::Xe.symbol(), "Xe");
+            assert_eq!(Element::Pu.symbol(), "Pu");
+        }
+
+        #[test]
+        fn default_valency_matches_smiles_plus() {
+            assert_eq!(Element::B.default_valency(), 3);
+            assert_eq!(Element::C.default_valency(), 4);
+            assert_eq!(Element::N.default_valency(), 3);
+            assert_eq!(Element::O.default_valency(), 2);
+            assert_eq!(Element::F.default_valency(), 1);
+            assert_eq!(Element::Cl.default_valency(), 1);
+            assert_eq!(Element::Br.default_valency(), 1);
+            assert_eq!(Element::I.default_valency(), 1);
+            assert_eq!(Element::P.default_valency(), 3); // SMILES+ doesn't have a default, determined by inspection
+            assert_eq!(Element::S.default_valency(), 2); // SMILES+ doesn't have a default, determined by inspection
+        }
+
+        #[test]
+        fn default_valency_expectations() {
+            assert_eq!(Element::He.default_valency(), 0);
+            assert_eq!(Element::Na.default_valency(), 1);
+            assert_eq!(Element::Ca.default_valency(), 2);
+            assert_eq!(Element::Al.default_valency(), 3);
+            assert_eq!(Element::Si.default_valency(), 4);
+            assert_eq!(Element::Fe.default_valency(), 2);
+            assert_eq!(Element::Au.default_valency(), 3);
+            assert_eq!(Element::U.default_valency(), 6);
+        }
+    }
+}
+
+mod pseudoelement {
+    /// The "element" of a pseudoatom, represented in a chemical formula by a symbol
+    /// like a real element, but representing a group of atoms.
+    ///
+    /// While there are a significant number of such [symbols in common use](https://en.wikipedia.org/wiki/Skeletal_formula#Pseudoelement_symbols),
+    /// and many are widely accepted and thus essentially unambiguous in what they
+    /// refer to, only the few listed explicitly in the
+    /// [2008 IUPAC Recommendations for chemical structure diagrams](https://doi.org/10.1351/pac200880020277)
+    /// are defined as named variants; others should be defined with custom definitions.
+    #[derive(Clone, PartialEq, Eq, Debug)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[non_exhaustive]
+    #[allow(non_camel_case_types)]
+    pub enum Pseudoelement {
+        Me,  // methyl
+        Et,  // ethyl
+        Pr,  // propyl
+        iPr, // isopropyl
+        Bu,  // butyl
+        iBu, // isobutyl
+        sBu, // sec-butyl
+        tBu, // tert-butyl
+        Ac,  // acetyl
+        Ph,  // phenyl
+        Ms,  // mesyl
+        Ts,  // tosyl
+        Cp,  // cyclopentadienyl
+             //Defined(Definition),
+    }
+
+    impl Pseudoelement {
+        /// Returns the pseudoelement's symbol as UTF-8, without formatting.
+        pub fn symbol(&self) -> &str {
+            match self {
+                Pseudoelement::Me => "Me",
+                Pseudoelement::Et => "Et",
+                Pseudoelement::Pr => "Pr",
+                Pseudoelement::iPr => "iPr",
+                Pseudoelement::Bu => "Bu",
+                Pseudoelement::iBu => "iBu",
+                Pseudoelement::sBu => "s-Bu",
+                Pseudoelement::tBu => "t-Bu",
+                Pseudoelement::Ac => "Ac",
+                Pseudoelement::Ph => "Ph",
+                Pseudoelement::Ms => "Ms",
+                Pseudoelement::Ts => "Ts",
+                Pseudoelement::Cp => "Cp",
+                //Pseudoelement::Defined(definition_id) => todo!(),
+            }
+        }
+    }
+}

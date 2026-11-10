@@ -4,6 +4,14 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+//! Points and vectors in Euclidean space, using types from `nalgebra`.
+//!
+//! The module includes a re-export of `nalgebra` itself, in case it is
+//! necessary to use `molmap` together with some other crate that depends on an
+//! incompatible version of `nalgebra`.
+
+pub use nalgebra;
+
 use nalgebra as na;
 
 /// A point in `D`-dimensional space.
