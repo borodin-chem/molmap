@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! View methods that apply to all molecular maps.
+//! View methods that apply to all molecular maps, and aliases for views into a [`MolMap`] or [`SpatialMolMap`].
 
 use crate::{
     entities::*,
@@ -15,6 +15,52 @@ use crate::{
 };
 
 use super::{Molecular, data::*};
+
+/// Aliases for views into a [`MolMap`].
+pub mod graph {
+    use super::super::MolMap;
+    use super::*;
+
+    macro_rules! generate_views {
+    ($kind:ident) => {
+        paste::paste! {
+            #[doc = concat!("An immutable view of an individual ", stringify!([<$kind:lower>]), " in a [`MolMap`].")]
+            pub type [<$kind View>]<'m> = View<'m, MolMap, $kind>;
+
+            #[doc = concat!("A mutable view of an individual ", stringify!([<$kind:lower>]), " in a [`MolMap`].")]
+            pub type [<$kind ViewMut>]<'m> = ViewMut<'m, MolMap, $kind>;
+        }
+    };
+}
+    generate_views!(Atom);
+    generate_views!(Bond);
+    generate_views!(Pseudoatom);
+    generate_views!(Substituent);
+    generate_views!(Molecule);
+}
+
+/// Aliases for views into a [`SpatialMolMap`].
+pub mod spatial {
+    use super::super::SpatialMolMap;
+    use super::*;
+
+    macro_rules! generate_views {
+        ($kind:ident) => {
+            paste::paste! {
+                #[doc = concat!("An immutable view of an individual ", stringify!([<$kind:lower>]), " in a [`SpatialMolMap`].")]
+                pub type [<$kind View>]<'m, const D: usize, U> = View<'m, SpatialMolMap<D, U>, $kind>;
+
+                #[doc = concat!("A mutable view of an individual ", stringify!([<$kind:lower>]), " in a [`SpatialMolMap`].")]
+                pub type [<$kind ViewMut>]<'m, const D: usize, U> = ViewMut<'m, SpatialMolMap<D, U>, $kind>;
+            }
+        };
+    }
+    generate_views!(Atom);
+    generate_views!(Bond);
+    generate_views!(Pseudoatom);
+    generate_views!(Substituent);
+    generate_views!(Molecule);
+}
 
 impl<'m, M> View<'m, M, Substituent>
 where

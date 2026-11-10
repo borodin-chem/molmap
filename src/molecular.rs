@@ -11,7 +11,6 @@
 
 mod graph;
 mod spatial;
-mod views;
 
 /// Traits specific to the molecular layer.
 mod traits {
@@ -43,6 +42,8 @@ pub use crate::elements::{Element, Pseudoelement};
 pub use graph::MolMap;
 pub use spatial::{MolMap2, MolMap3, SpatialMolMap};
 pub use traits::Molecular;
+
+pub mod views;
 
 /// Entity types and traits relevant when using a [`MolMap`].
 pub mod entities {

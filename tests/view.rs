@@ -1,8 +1,10 @@
 use molmap::{
-    Element, Map,
+    Map,
     atomic::{AtomMap, AtomMap2},
+    elements::Element,
     entities::Atom,
-    iter::{Selection::All, Views},
+    geometry::Point2,
+    iter::Selection::All,
 };
 
 #[test]

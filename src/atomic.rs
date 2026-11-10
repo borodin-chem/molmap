@@ -10,7 +10,6 @@
 
 mod graph;
 mod spatial;
-mod views;
 
 /// Traits specific to the atomic layer.
 mod traits {
@@ -46,6 +45,8 @@ pub use crate::elements::{Element, Pseudoelement};
 pub use graph::AtomMap;
 pub use spatial::{AtomMap2, AtomMap3, SpatialAtomMap};
 pub use traits::Atomic;
+
+pub mod views;
 
 /// Entity types and traits relevant when using an [`AtomMap`].
 pub mod entities {

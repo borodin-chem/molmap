@@ -6,17 +6,59 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! View methods universal to all maps.
+//! View methods universal to all maps, and aliases for views into an [`AtomMap`] or [`SpatialAtomMap`].
 
 use crate::{
     bonding::BondType,
     elements::Element,
     entities::*,
     traits::{Map, Stores},
-    view::View,
+    view::{View, ViewMut},
 };
 
 use super::{Atomic, data::*};
+
+/// Aliases for views into an [`AtomMap`].
+pub mod graph {
+    use super::super::AtomMap;
+    use super::*;
+
+    macro_rules! generate_views {
+    ($kind:ident) => {
+        paste::paste! {
+            #[doc = concat!("An immutable view of an individual ", stringify!([<$kind:lower>]), " in an [`AtomMap`].")]
+            pub type [<$kind View>]<'m> = View<'m, AtomMap, $kind>;
+
+            #[doc = concat!("A mutable view of an individual ", stringify!([<$kind:lower>]), " in an [`AtomMap`].")]
+            pub type [<$kind ViewMut>]<'m> = ViewMut<'m, AtomMap, $kind>;
+        }
+    };
+}
+    generate_views!(Atom);
+    generate_views!(Bond);
+    generate_views!(Pseudoatom);
+}
+
+/// Aliases for views into a [`SpatialAtomMap`].
+pub mod spatial {
+    use super::super::SpatialAtomMap;
+    use super::*;
+
+    macro_rules! generate_views {
+        ($kind:ident) => {
+            paste::paste! {
+                #[doc = concat!("An immutable view of an individual ", stringify!([<$kind:lower>]), " in a [`SpatialAtomMap`].")]
+                pub type [<$kind View>]<'m, const D: usize, U> = View<'m, SpatialAtomMap<D, U>, $kind>;
+
+                #[doc = concat!("A mutable view of an individual ", stringify!([<$kind:lower>]), " in a [`SpatialAtomMap`].")]
+                pub type [<$kind ViewMut>]<'m, const D: usize, U> = ViewMut<'m, SpatialAtomMap<D, U>, $kind>;
+            }
+        };
+    }
+    generate_views!(Atom);
+    generate_views!(Bond);
+    generate_views!(Pseudoatom);
+}
 
 impl<'m, M> View<'m, M, Atom>
 where
