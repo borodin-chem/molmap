@@ -13,12 +13,12 @@ use crate::MolMapError;
 /// A parser between a chemical notation or file format and at least one map type.
 ///
 /// Parsers may provide read or write functionality, or both, by implementing the
-/// [`Reader`] and [`Writer`] traits.
+/// [`Read`] and [`Write`] traits.
 ///
 /// Parsers may offer configuration options, which can be provided by the user at
 /// construction in the form of a custom type. However, parsers must always make it
 /// possible to obtain an instance with the default configuration by implementing
-/// `Default`.
+/// [`Default`].
 pub trait Parser: Default {
     /// The type used to (optionally) configure the parser.
     ///
@@ -26,12 +26,6 @@ pub trait Parser: Default {
     /// user-specified options. If a parser cannot be configured, `Config` should just
     /// be `()`.
     type Config;
-
-    /// The error type returned when parsing fails.
-    ///
-    /// Parsers may simply return [`MolMapError`] if they wish, or some custom error
-    /// type if they wish to provide finer-grained diagnostics.
-    type Error: Into<MolMapError>;
 
     /// Initializes a parser with the given configuration.
     fn with_config(config: Self::Config) -> Self;
@@ -50,13 +44,17 @@ pub trait Parser: Default {
 /// For example, a parser that converts SMILES to a [`MolMap`] makes sense, but one
 /// that parses to a [`MolMap3`] does not, as the parser would have to apply some
 /// algorithm for 3D structure generation from the molecular graph.
-pub trait Read: Parser {
-    type Output;
+pub trait Read<M>: Parser {
+    /// The error type returned when parsing fails.
+    ///
+    /// Parsers may simply return [`MolMapError`] if they wish, or some custom error
+    /// type if they wish to provide finer-grained diagnostics.
+    type Error: Into<MolMapError>;
 
-    /// Parses the format from a `std::io` reader.
+    /// Parses the format from a [`std::io`] reader.
     ///
     /// For text formats the input should be valid UTF-8.
-    fn read<R: std::io::Read>(&self, reader: R) -> Result<Self::Output, Self::Error>;
+    fn read<R: std::io::Read>(&self, reader: R) -> Result<M, Self::Error>;
 }
 
 /// A parser that can produce multiple maps from a single input.
@@ -67,24 +65,30 @@ pub trait Read: Parser {
 ///
 /// For example, a parser that just reads the optimized geometry from a quantum
 /// chemical calculation output might implement [`Read`], but a parser that reads
-/// the geometries from all steps of the calculation could implement [`MultiRead`].
+/// the geometries from all steps of the calculation could implement [`ReadMulti`].
 ///
 /// See the main [`Read`] trait for implementation guidelines.
-pub trait MultiRead: Parser {
-    type Output;
-    type Iter: Iterator<Item = Self::Output>;
+pub trait ReadMulti<M>: Parser {
+    /// The iterator over maps produced by parsing.
+    type Iter: Iterator<Item = M>;
 
-    /// Parses the format from a `std::io` reader.
+    /// The error type returned when parsing fails.
+    ///
+    /// Parsers may simply return [`MolMapError`] if they wish, or some custom error
+    /// type if they wish to provide finer-grained diagnostics.
+    type Error: Into<MolMapError>;
+
+    /// Parses the format from a [`std::io`] reader.
     ///
     /// The maps are returned as an iterator over the output map type.
     ///
     /// For text formats the input should be valid UTF-8.
-    fn read<R: std::io::Read>(&self, reader: R) -> Result<Self::Iter, Self::Error>;
+    fn read_multiple<R: std::io::Read>(&self, reader: R) -> Result<Self::Iter, Self::Error>;
 }
 
 /// A parser that writes a chemical notation or file format based on a map.
 ///
-/// Parsers are not obliged to support all features of the `Map` type – and
+/// Parsers are not obliged to support all features of the map type – and
 /// indeed this may not even be possible for the output format in question – but
 /// should make their scope clear.
 ///
@@ -94,14 +98,20 @@ pub trait MultiRead: Parser {
 /// This applies especially when multiple interpretations or algorithms are
 /// possible.
 ///
-/// For example, a parser that generates a SMILES string from any `MolMap` makes
-/// sense, as all `MolMap` types hold the details of the molecular graph that are
-/// necessary for SMILES generation, but one that writes an XYZ file from a
-/// [`MolMap`] does not, as the parser would have to apply some algorithm for 3D
-/// structure generation from the molecular graph.
+/// For example, a parser that generates a SMILES string from any [`Map`] makes
+/// sense, as all `Map` types hold the details of the molecular graph that are
+/// necessary for SMILES generation, but one that writes an XYZ file from an
+/// [`AtomMap`] does not, as the parser would have to apply some algorithm for 3D
+/// structure generation.
 pub trait Write<M>: Parser {
-    /// Parses the format to a `std::io` writer.
-    fn write<W: std::io::Write>(&self, writer: W, map: M) -> Result<(), Self::Error>;
+    /// The error type returned when parsing fails.
+    ///
+    /// Parsers may simply return [`MolMapError`] if they wish, or some custom error
+    /// type if they wish to provide finer-grained diagnostics.
+    type Error: Into<MolMapError>;
+
+    /// Parses the format to a [`std::io`] writer.
+    fn write<W: std::io::Write>(&self, writer: W, map: &M) -> Result<(), Self::Error>;
 }
 
 /// A parser that can write multiple maps to the same output.
@@ -111,12 +121,18 @@ pub trait Write<M>: Parser {
 /// be combined.
 ///
 /// See the main [`Write`] trait for implementation guidelines.
-pub trait MultiWrite<M, I>: Parser
+pub trait WriteMulti<'m, M: 'm, I>: Parser
 where
-    I: Iterator<Item = M>,
+    I: IntoIterator<Item = &'m M>,
 {
-    /// Parses the format to a `std::io` writer.
+    /// The error type returned when parsing fails.
+    ///
+    /// Parsers may simply return [`MolMapError`] if they wish, or some custom error
+    /// type if they wish to provide finer-grained diagnostics.
+    type Error: Into<MolMapError>;
+
+    /// Parses the format to a [`std::io`] writer.
     ///
     /// The maps are supplied as an iterator over the output map type.
-    fn write<W: std::io::Write>(&self, writer: W, maps: I) -> Result<(), Self::Error>;
+    fn write_multiple<W: std::io::Write>(&self, writer: W, maps: I) -> Result<(), Self::Error>;
 }
