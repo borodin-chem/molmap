@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 //
-// This Source Code Form is subject to the terms of the Mozilla pub(crate)lic
+// This Source Code Form is subject to the terms of the Mozilla public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
@@ -29,7 +29,7 @@
 //! edge that leads to a node with a depth that exceeds the max allowed depth
 //! still gets "explored", but the node is not visited.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::{
     atomic::{AtomMap, Atomic},
@@ -255,6 +255,9 @@ trait TraversalQueue {
     /// Returns `true` if there are no nodes in the queue.
     fn is_empty(&self) -> bool;
 
+    /// Returns the number of nodes in the queue.
+    fn len(&self) -> usize;
+
     /// Returns a reference to the node at the front of the queue.
     fn front(&self) -> Option<&NodeQueueItem>;
 
@@ -288,6 +291,10 @@ impl TraversalQueue for DepthFirstStack {
 
     fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
     }
 
     fn front(&self) -> Option<&NodeQueueItem> {
@@ -328,6 +335,10 @@ impl TraversalQueue for BreadthFirstQueue {
 
     fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
     }
 
     fn front(&self) -> Option<&NodeQueueItem> {
@@ -435,11 +446,29 @@ pub struct Traversal<'m, S: Strategy> {
 impl<'m, S: Strategy> Traversal<'m, S> {
     /// Initializes a traversal of the graph from the indicated atom or pseudoatom.
     ///
+    /// The traversal has an implicit maximum depth of `usize::MAX` and is therefore
+    /// almost guaranteed to continue until the entire graph has been explored.
+    ///
     /// # Errors
     ///
     /// Fails if the graph does not contain any atoms or pseudoatoms at all, or if
     /// the root is not a member of the graph.
-    pub fn new<M, E>(
+    pub fn new<M, E>(map: &'m M, root: E, strategy: S) -> MolMapResult<Self>
+    where
+        M: Map + Atomic,
+        E: Atomlike,
+    {
+        Self::with_max_depth(map, root, strategy, usize::MAX)
+    }
+
+    /// Initializes a traversal of the graph from the indicated atom or pseudoatom
+    /// that stops when the specified depth is exceeded.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the graph does not contain any atoms or pseudoatoms at all, or if
+    /// the root is not a member of the graph.
+    pub fn with_max_depth<M, E>(
         map: &'m M,
         root: E,
         #[expect(unused)] strategy: S,
@@ -474,13 +503,18 @@ impl<'m, S: Strategy> Traversal<'m, S> {
     }
 
     /// Returns the node at the front of the queue.
-    fn current_node(&self) -> Option<AnyAtomlike> {
+    pub(crate) fn current_node(&self) -> Option<AnyAtomlike> {
         self.node_queue.front().map(|x| x.node)
     }
 
     /// Returns the depth of the node at the front of the queue.
-    fn current_depth(&self) -> Option<usize> {
+    pub(crate) fn current_depth(&self) -> Option<usize> {
         self.node_queue.front().map(|x| x.depth)
+    }
+
+    /// Returns the current length of the node queue.
+    pub(crate) fn queued_nodes(&self) -> usize {
+        self.node_queue.len()
     }
 
     /// Creates an edge queue for a node, populates it by discovering outgoing edges,
@@ -580,6 +614,11 @@ impl<'m, S: Strategy> Traversal<'m, S> {
         self.explored_edges.insert(edge);
         // We have visited (and maybe moved to) a completely unexplored, unvisited node
         self.visited_nodes.insert(child);
+        // Node is a pendant if there is only one edge in
+        // IMPORTANT NOTE TO MAINTAINERS: this will no longer hold when bonding
+        // bonding systems are introduced, as it won't be guaranteed that one bond
+        // out means only one edge in. It will be necessary to check if the pendant
+        // is a member of a bonding system.
         if explored_edge.degree == 1 {
             Step::VisitPendant {
                 parent,
@@ -773,6 +812,126 @@ impl<'m, S: Strategy> Iterator for Traversal<'m, S> {
     }
 }
 
+/// Calculates the shortest distance from one node to the other using a
+/// bidirectional breadth-first search.
+///
+/// Returns `None` if `a` and `b` are not connected at all.
+///
+/// Also returns `None` if either traversal initialization fails (see
+/// [`Traversal::new`]).
+///
+/// The traversal that is advanced at each step is always the one with the fewest
+/// nodes in the queue, which helps to reduce the time required for negative
+/// results.
+#[allow(unused)]
+pub(crate) fn shortest_distance<M>(map: &M, a: AnyAtomlike, b: AnyAtomlike) -> Option<usize>
+where
+    M: Map + Atomic,
+{
+    // Note to future readers
+    // The traversals themselves are currently just basic breadth-first searches as
+    // implemented above. In particular, that means that children are prioritized in
+    // the order: pendant H > C > other H > other elements (in element order).
+    // One way that this shortest-path algorithm might be made more efficient would
+    // be to instead prioritize children based on the index part of the ID - as in,
+    // pursue a path that brings the index of the current node closer to that of the
+    // goal node.
+    // For maps where the indices are entirely random this would have no benefit,
+    // but in reality of course they have usually been assigned or handed out at
+    // least semi-systematically.
+    // It should only affect the priority within each depth level, though.
+    if a == b {
+        return Some(0);
+    }
+    let mut fwds = Traversal::new(map, a, BreadthFirst).ok()?;
+    let mut bwds = Traversal::new(map, b, BreadthFirst).ok()?;
+    // Keep track of the distance to each visited node
+    let mut visited_fwds: HashMap<AnyAtomlike, usize> = HashMap::new();
+    let mut visited_bwds: HashMap<AnyAtomlike, usize> = HashMap::new();
+    // Put the roots themselves to be in the records so that they come up if queried
+    visited_fwds.insert(a, 0);
+    visited_bwds.insert(b, 0);
+    let mut shortest = None;
+    loop {
+        let (next_is_fwds, next) = {
+            // We iterate the traversal with the fewest nodes queued to try and
+            // keep the trees from expanding any more than necessary
+            let first_try_fwds = fwds.queued_nodes() < bwds.queued_nodes();
+            let first_try = if first_try_fwds {
+                fwds.next()
+            } else {
+                bwds.next()
+            };
+            if let Some(n) = first_try {
+                (first_try_fwds, n)
+            } else {
+                // If either queue is empty, the nodes are clearly not connected
+                // (Or, we continued trying to find a shorter path after we already found one)
+                break shortest;
+            }
+        };
+        match next {
+            Step::VisitChild {
+                child, child_depth, ..
+            } => {
+                // If we have arrived at the goal then we can stop immediately
+                if child == a || child == b {
+                    break Some(child_depth);
+                }
+                // Depending on what order we do things in it seems plausible that it won't
+                // always be the first path found that is the shortest?
+                let depth_in_other_direction = if next_is_fwds {
+                    visited_fwds.insert(child, child_depth);
+                    visited_bwds.get(&child)
+                } else {
+                    visited_bwds.insert(child, child_depth);
+                    visited_fwds.get(&child)
+                };
+                if let Some(other_depth) = depth_in_other_direction {
+                    // Found a common node!
+                    let total_distance = child_depth + other_depth;
+                    if let Some(record) = shortest {
+                        if total_distance < record {
+                            // New shortest path found
+                            shortest = Some(total_distance);
+                        } else {
+                            // If this path is considerably longer than the record then it's
+                            // probably safe to assume that the record will stand forever,
+                            // no matter how long we search for, so we can halt the search.
+                            // That does of course leave us to ask what should be considered
+                            // as "considerably longer"...
+                            if total_distance - record > 2 {
+                                break Some(record);
+                            }
+                        }
+                    } else {
+                        shortest = Some(total_distance);
+                    }
+                } else {
+                    continue;
+                }
+            }
+            Step::VisitPendant {
+                pendant,
+                pendant_depth,
+                ..
+            } => {
+                // Don't need to record it, as the only way in is from a parent
+                // that would then also be common to both trees
+                // Only way the pendant is relevant is if it happens to be the
+                // other root
+                if pendant == a || pendant == b {
+                    break Some(pendant_depth);
+                }
+            }
+            Step::CloseCycle { .. } => continue, // Not interesting - confluence visited before and this path is longer
+            Step::SideTrack { .. } | Step::ForwardTrack { .. } => continue,
+            Step::BackTrack { .. } => unreachable!(), // Breadth-first doesn't backtrack
+            Step::SkipTooDeep { .. } => break None, // Shouldn't happen ever anyway, but just in case!
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{bonding::BondType, elements::Element};
@@ -791,7 +950,7 @@ mod tests {
         let new_h = m.add_atom(Element::H);
         assert_ne!(new_h, h1);
         assert_eq!(new_h, "a2.3".parse()?);
-        assert!(Traversal::new(&m, h1, DepthFirst, usize::MAX).is_err());
+        assert!(Traversal::new(&m, h1, DepthFirst).is_err());
         Ok(())
     }
 
@@ -802,7 +961,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn linear() -> MolMapResult<()> {
+        fn simple_ethane() -> MolMapResult<()> {
             // Traverse ethane
             let m: AtomMap = ron::from_str(ETHANE).unwrap();
             // All atoms in file are serialized as version 1
@@ -811,7 +970,7 @@ mod tests {
             // Start at one of the hydrogen atoms (but the second H in the file,
             // to make it more interesting)
             let mut traversal =
-                Traversal::new(&m, AnyAtomlike::from_str("a3")?, DepthFirst, usize::MAX).unwrap();
+                Traversal::new(&m, AnyAtomlike::from_str("a3")?, DepthFirst).unwrap();
             assert_eq!(
                 traversal.next(),
                 Some(Step::VisitChild {
@@ -893,13 +1052,13 @@ mod tests {
         }
 
         #[test]
-        fn branched() -> MolMapResult<()> {
+        fn simple_propane() -> MolMapResult<()> {
             // Traverse propane, starting at the carbon in the middle of the chain
             let m: AtomMap = ron::from_str(PROPANE).unwrap();
             let c1: AnyAtomlike = "a1".parse()?;
             let c2: AnyAtomlike = "a5".parse()?;
             let c3: AnyAtomlike = "a8".parse()?;
-            let traversal = Traversal::new(&m, c2, DepthFirst, usize::MAX).unwrap();
+            let traversal = Traversal::new(&m, c2, DepthFirst).unwrap();
             let mut explored_edges: Vec<Bond> = Vec::new();
             let mut visited_nodes: Vec<AnyAtomlike> = vec![c2];
             let mut backtracks: Vec<usize> = Vec::new();
@@ -945,7 +1104,7 @@ mod tests {
                 .filter(|&a| m.view(a).unwrap().element() == Element::C)
                 .map(|a| a.as_atomlike())
                 .collect();
-            let traversal = Traversal::new(&m, carbons[0], DepthFirst, usize::MAX).unwrap();
+            let traversal = Traversal::new(&m, carbons[0], DepthFirst).unwrap();
             let mut explored_edges: Vec<Bond> = Vec::new();
             let mut visited_nodes: Vec<AnyAtomlike> = vec![carbons[0]];
             let mut backtracks: Vec<usize> = Vec::new();
@@ -984,7 +1143,7 @@ mod tests {
             // Two water molecules
             let (o1, _bonds) = m.add_atom_and_saturate(Element::O);
             let (o2, _bonds) = m.add_atom_and_saturate(Element::O);
-            let mut traversal = Traversal::new(&m, o1, DepthFirst, usize::MAX).unwrap();
+            let mut traversal = Traversal::new(&m, o1, DepthFirst).unwrap();
             for _ in &mut traversal {}
             // Check that O of second water molecule was never visited
             assert!(!traversal.visited_nodes.contains(&o2.as_atomlike()));
@@ -1006,7 +1165,7 @@ mod tests {
                 .unwrap();
             // Connect via a hydrogen bond
             m.add_bond_unchecked(BondType::Hydrogen, o2, h1);
-            let mut traversal = Traversal::new(&m, o1, DepthFirst, usize::MAX).unwrap();
+            let mut traversal = Traversal::new(&m, o1, DepthFirst).unwrap();
             for _ in &mut traversal {}
             // Check that O of second water molecule was never visited
             assert!(!traversal.visited_nodes.contains(&o2.as_atomlike()));
@@ -1017,7 +1176,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn branched() -> MolMapResult<()> {
+        fn simple() -> MolMapResult<()> {
             // Traverse propane, starting at the carbon in the middle of the chain
             let m: AtomMap = ron::from_str(PROPANE).unwrap();
             let c1: AnyAtomlike = "a1".parse()?;
@@ -1031,7 +1190,7 @@ mod tests {
             let h6: AnyAtomlike = "a9".parse()?;
             let h7: AnyAtomlike = "a10".parse()?;
             let h8: AnyAtomlike = "a11".parse()?;
-            let traversal = Traversal::new(&m, c2, BreadthFirst, usize::MAX).unwrap();
+            let traversal = Traversal::new(&m, c2, BreadthFirst).unwrap();
             let mut explored_edges: Vec<Bond> = Vec::new();
             let mut visited_nodes: Vec<AnyAtomlike> = vec![c2.as_atomlike()];
             let mut cycle_closures: Vec<usize> = Vec::new();
@@ -1074,7 +1233,7 @@ mod tests {
                 .filter(|&a| m.view(a).unwrap().element() == Element::C)
                 .map(|a| a.as_atomlike())
                 .collect();
-            let traversal = Traversal::new(&m, carbons[0], BreadthFirst, usize::MAX).unwrap();
+            let traversal = Traversal::new(&m, carbons[0], BreadthFirst).unwrap();
             let mut explored_edges: Vec<Bond> = Vec::new();
             let mut visited_nodes: Vec<AnyAtomlike> = vec![carbons[0]];
             let mut depths: Vec<usize> = vec![0];
@@ -1156,7 +1315,7 @@ mod tests {
                     m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, o, h);
                 }
             }
-            let mut traversal = Traversal::new(&m, o1, BreadthFirst, usize::MAX).unwrap();
+            let mut traversal = Traversal::new(&m, o1, BreadthFirst).unwrap();
             for _ in &mut traversal {}
             // Check that O of second water molecule was never visited
             assert!(!traversal.visited_nodes.contains(&o2.as_atomlike()));
@@ -1178,10 +1337,118 @@ mod tests {
                 .unwrap();
             // Connect via a hydrogen bond
             m.add_bond_unchecked(BondType::Hydrogen, o2, h1);
-            let mut traversal = Traversal::new(&m, o1, BreadthFirst, usize::MAX).unwrap();
+            let mut traversal = Traversal::new(&m, o1, BreadthFirst).unwrap();
             for _ in &mut traversal {}
             // Check that O of second water molecule was never visited
             assert!(!traversal.visited_nodes.contains(&o2.as_atomlike()));
+        }
+    }
+
+    mod shortest_path {
+        use super::*;
+
+        #[test]
+        fn simple() -> MolMapResult<()> {
+            let m: AtomMap = ron::from_str(PROPANE).unwrap();
+            let h1: AnyAtomlike = "a2".parse()?;
+            let c1: AnyAtomlike = "a1".parse()?;
+            let c2: AnyAtomlike = "a5".parse()?;
+            let c3: AnyAtomlike = "a8".parse()?;
+            let h10: AnyAtomlike = "a11".parse()?;
+            // Distance between an atom and itself is zero
+            assert_eq!(shortest_distance(&m, c1, c1).unwrap(), 0);
+            // Distance between the two terminal carbons
+            assert_eq!(shortest_distance(&m, c1, c3).unwrap(), 2);
+            // Between central and terminal
+            assert_eq!(shortest_distance(&m, c1, c2).unwrap(), 1);
+            // Between terminal C and one of its Hs
+            assert_eq!(shortest_distance(&m, c1, h1).unwrap(), 1);
+            // Between central C and one of the terminal C's Hs
+            assert_eq!(shortest_distance(&m, c2, h1).unwrap(), 2);
+            // Geminal Hs
+            assert_eq!(shortest_distance(&m, h1, "a3".parse()?).unwrap(), 2);
+            // Vicinal Hs
+            assert_eq!(shortest_distance(&m, h10, "a6".parse()?).unwrap(), 3);
+            // Between hydrogens at either end
+            assert_eq!(shortest_distance(&m, h1, h10).unwrap(), 4);
+            Ok(())
+        }
+
+        #[test]
+        fn disconnected() -> MolMapResult<()> {
+            let mut m: AtomMap = ron::from_str(PROPANE).unwrap();
+            let h1: AnyAtomlike = "a2".parse()?;
+            let c1: AnyAtomlike = "a1".parse()?;
+            let c2: AnyAtomlike = "a5".parse()?;
+            let c3: AnyAtomlike = "a8".parse()?;
+            let h10: AnyAtomlike = "a11".parse()?;
+            // Delete the C1-C2 bond
+            m.delete_bond("b9".parse()?);
+            // Now repeat the tests above; should get different results
+            // Distance between an atom and itself is still zero
+            assert_eq!(shortest_distance(&m, c1, c1).unwrap(), 0);
+            // C1 and C2 are of course now disconnected
+            assert!(shortest_distance(&m, c1, c2).is_none());
+            // The two terminal carbons are also now disconnected
+            assert!(shortest_distance(&m, c1, c3).is_none());
+            // C2 and C3 are not, however
+            assert_eq!(shortest_distance(&m, c2, c3).unwrap(), 1);
+            // Can still get distance between terminal C and one of its Hs
+            assert_eq!(shortest_distance(&m, c1, h1).unwrap(), 1);
+            // Between central C and one of C1's Hs also fails though
+            assert!(shortest_distance(&m, c2, h1).is_none());
+            // Likewise between hydrogens at either end
+            assert!(shortest_distance(&m, h1, h10).is_none());
+            Ok(())
+        }
+
+        #[test]
+        fn cyclic() -> MolMapResult<()> {
+            let mut m: AtomMap = ron::from_str(CYCLOHEXANE).unwrap();
+            let carbons: Vec<AnyAtomlike> = m
+                .iter::<Atom>()
+                .filter(|&a| m.view(a).unwrap().element() == Element::C)
+                .map(|a| a.as_atomlike())
+                .collect();
+            // C-C distances
+            assert_eq!(shortest_distance(&m, carbons[0], carbons[1]).unwrap(), 1); // Adjacent C
+            assert_eq!(shortest_distance(&m, carbons[0], carbons[2]).unwrap(), 2);
+            assert_eq!(shortest_distance(&m, carbons[0], carbons[3]).unwrap(), 3); // Opposite
+            assert_eq!(shortest_distance(&m, carbons[0], carbons[4]).unwrap(), 2);
+            assert_eq!(shortest_distance(&m, carbons[0], carbons[5]).unwrap(), 1); // Adjacent again
+            // C-H distances
+            assert_eq!(
+                shortest_distance(&m, carbons[0], "a2".parse()?).unwrap(), // H on that C
+                1
+            );
+            assert_eq!(
+                shortest_distance(&m, carbons[0], "a11".parse()?).unwrap(), // H on far side
+                4
+            );
+            // H-H distances
+            assert_eq!(
+                shortest_distance(&m, "a2".parse()?, "a3".parse()?).unwrap(), // Geminal
+                2
+            );
+            assert_eq!(
+                shortest_distance(&m, "a2".parse()?, "a5".parse()?).unwrap(), // Vicinal
+                3
+            );
+            assert_eq!(
+                shortest_distance(&m, "a2".parse()?, "a11".parse()?).unwrap(), // Hs on opposite Cs
+                5
+            );
+            // If we break the C0-C1 bond, they are still connected but much greater distance
+            m.delete_bond("b5".parse()?);
+            assert_eq!(
+                m.view::<Atom>(carbons[0].try_into()?)
+                    .unwrap()
+                    .bonds()
+                    .len(),
+                3
+            );
+            assert_eq!(shortest_distance(&m, carbons[0], carbons[1]).unwrap(), 5);
+            Ok(())
         }
     }
 }
