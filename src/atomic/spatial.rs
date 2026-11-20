@@ -17,7 +17,7 @@ use crate::{
     bonding::BondType,
     elements::{Element, Pseudoelement},
     entities::*,
-    error::{MolMapError, MolMapResult},
+    error::Error,
     geometry::{self, Point, Vector},
     traits::{Map, Spatial, Stores},
     units::{Angstrom, Relative, Unit},
@@ -118,13 +118,13 @@ pub(crate) trait SpatialAtomicCommon<const D: usize>: Spatial<D> + Atomic {
     /// Fails if either atomlike has no stored position (usually meaning that it is not
     /// in the map).
     #[expect(unused)]
-    fn interatomlike_line(&self, a: impl Atomlike, b: impl Atomlike) -> MolMapResult<Vector<D>> {
+    fn interatomlike_line(&self, a: impl Atomlike, b: impl Atomlike) -> Result<Vector<D>, Error> {
         let pos_a = self
             .atomlike_position(b)
-            .ok_or(MolMapError::InvalidId(b.as_entity()))?;
+            .ok_or(Error::InvalidId(b.as_entity()))?;
         let pos_b = self
             .atomlike_position(a)
-            .ok_or(MolMapError::InvalidId(a.as_entity()))?;
+            .ok_or(Error::InvalidId(a.as_entity()))?;
         Ok(pos_b - pos_a)
     }
 
@@ -133,11 +133,11 @@ pub(crate) trait SpatialAtomicCommon<const D: usize>: Spatial<D> + Atomic {
     /// # Errors
     ///
     /// Fails if the bond is not in the map.
-    fn bond_origin(&self, bond: Bond) -> MolMapResult<&Point<D>> {
+    fn bond_origin(&self, bond: Bond) -> Result<&Point<D>, Error> {
         let bond_data = self
             .as_atomic()
             .data(bond)
-            .ok_or(MolMapError::InvalidId(bond.into()))?;
+            .ok_or(Error::InvalidId(bond.into()))?;
         let origin = self.bondable_position(bond_data.start).expect("If the bond exists, the bonding partners must exist, and any existing atom must have a position");
         Ok(origin)
     }
@@ -147,11 +147,11 @@ pub(crate) trait SpatialAtomicCommon<const D: usize>: Spatial<D> + Atomic {
     /// # Errors
     ///
     /// Fails if the bond is not in the map.
-    fn bond_terminus(&self, bond: Bond) -> MolMapResult<&Point<D>> {
+    fn bond_terminus(&self, bond: Bond) -> Result<&Point<D>, Error> {
         let bond_data = self
             .as_atomic()
             .data(bond)
-            .ok_or(MolMapError::InvalidId(bond.into()))?;
+            .ok_or(Error::InvalidId(bond.into()))?;
         let terminus = self.bondable_position(bond_data.end).expect("If the bond exists, the bonding partners must exist, and any existing atom must have a position");
         Ok(terminus)
     }
@@ -161,7 +161,7 @@ pub(crate) trait SpatialAtomicCommon<const D: usize>: Spatial<D> + Atomic {
     /// # Errors
     ///
     /// Fails if the bond is not in the map.
-    fn bond_midpoint(&self, bond: Bond) -> MolMapResult<Point<D>> {
+    fn bond_midpoint(&self, bond: Bond) -> Result<Point<D>, Error> {
         let origin = self.bond_origin(bond)?;
         let terminus = self.bond_terminus(bond)?;
         let midpoint = na::center(origin, terminus);
@@ -173,7 +173,7 @@ pub(crate) trait SpatialAtomicCommon<const D: usize>: Spatial<D> + Atomic {
     /// # Errors
     ///
     /// Fails if the bond is not in the map.
-    fn bond_vector(&self, bond: Bond) -> MolMapResult<Vector<D>> {
+    fn bond_vector(&self, bond: Bond) -> Result<Vector<D>, Error> {
         let origin = self.bond_origin(bond)?;
         let terminus = self.bond_terminus(bond)?;
         Ok(terminus - origin)
@@ -184,20 +184,23 @@ pub(crate) trait SpatialAtomicCommon<const D: usize>: Spatial<D> + Atomic {
     ///
     /// # Errors
     ///
-    /// Fails (returning [`MolMapError::InvalidId`]) if any of the atomlikes are not in
+    /// Fails (returning [`molmap::Error::InvalidId`]) if any of the atomlikes are not in
     /// the map.
     ///
-    /// Fails (returning [`MolMapError::EmptyIterator`]) if the provided iterator is
+    /// Fails (returning [`molmap::Error::EmptyIterator`]) if the provided iterator is
     /// empty.
-    fn centroid(&self, atomlikes: impl IntoIterator<Item = AnyAtomlike>) -> MolMapResult<Point<D>> {
+    fn centroid(
+        &self,
+        atomlikes: impl IntoIterator<Item = AnyAtomlike>,
+    ) -> Result<Point<D>, Error> {
         let positions = atomlikes
             .into_iter()
             .map(|x| {
                 self.atomlike_position(x)
-                    .ok_or(MolMapError::InvalidId(x.as_entity()))
+                    .ok_or(Error::InvalidId(x.as_entity()))
             })
-            .collect::<MolMapResult<Vec<&Point<D>>>>()?;
-        geometry::mean_point(positions).ok_or(MolMapError::EmptyIterator)
+            .collect::<Result<Vec<&Point<D>>, Error>>()?;
+        geometry::mean_point(positions).ok_or(Error::EmptyIterator)
     }
 }
 
@@ -313,15 +316,15 @@ impl<const D: usize, U: Unit> SpatialAtomMap<D, U> {
     /// # Errors
     ///
     /// Fails if either of `start` and `end` are invalid.
-    pub fn add_bond<A, B>(&mut self, bond_type: BondType, start: A, end: B) -> MolMapResult<Bond>
+    pub fn add_bond<A, B>(&mut self, bond_type: BondType, start: A, end: B) -> Result<Bond, Error>
     where
         A: Bondable,
         B: Bondable,
     {
         if !self.contains(start) {
-            return Err(MolMapError::InvalidId(start.as_entity()));
+            return Err(Error::InvalidId(start.as_entity()));
         } else if !self.contains(end) {
-            return Err(MolMapError::InvalidId(end.as_entity()));
+            return Err(Error::InvalidId(end.as_entity()));
         };
         Ok(self.graph.add_bond_unchecked(bond_type, start, end))
     }
@@ -331,7 +334,7 @@ impl<const D: usize, U: Unit> SpatialAtomMap<D, U> {
     /// # Errors
     ///
     /// Fails if either of `start` and `end` are invalid.
-    pub fn add_single_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    pub fn add_single_bond<A, B>(&mut self, start: A, end: B) -> Result<Bond, Error>
     where
         A: Bondable,
         B: Bondable,
@@ -344,7 +347,7 @@ impl<const D: usize, U: Unit> SpatialAtomMap<D, U> {
     /// # Errors
     ///
     /// Fails if either of `start` and `end` are invalid.
-    pub fn add_double_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    pub fn add_double_bond<A, B>(&mut self, start: A, end: B) -> Result<Bond, Error>
     where
         A: Bondable,
         B: Bondable,

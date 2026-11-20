@@ -61,7 +61,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use slotmap::KeyData;
 
-use crate::{MolMapError, MolMapResult};
+use crate::error::Error;
 
 use super::EntityKind;
 
@@ -217,7 +217,7 @@ impl Id {
 }
 
 impl FromStr for Id {
-    type Err = MolMapError;
+    type Err = Error;
 
     /// Converts a string of the form `<prefix><index>.<version>` to the corresponding ID.
     ///
@@ -239,19 +239,19 @@ impl FromStr for Id {
     ///
     /// Fails if the prefix does not correspond to a kind of entity, if either of the
     /// index and version are zero, or if the string is otherwise malformed.
-    fn from_str(s: &str) -> MolMapResult<Self> {
+    fn from_str(s: &str) -> Result<Self, Error> {
         let mut chars = s.chars();
-        let prefix = chars.next().ok_or(MolMapError::Parse)?;
+        let prefix = chars.next().ok_or(Error::Parse)?;
         let s = chars.as_str();
         let discriminant: u8 = prefix as u8;
         let mut split = s.split('.');
-        let index: u32 = split.next().ok_or(MolMapError::Parse)?.parse()?;
+        let index: u32 = split.next().ok_or(Error::Parse)?.parse()?;
         let version: u32 = if let Some(version_str) = split.next() {
             version_str.parse()?
         } else {
             1
         };
-        Self::from_parts(discriminant, index, version).ok_or(MolMapError::Parse)
+        Self::from_parts(discriminant, index, version).ok_or(Error::Parse)
     }
 }
 

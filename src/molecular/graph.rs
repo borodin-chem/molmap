@@ -15,7 +15,7 @@ use crate::{
     bonding::BondType,
     elements::{Element, Pseudoelement},
     entities::*,
-    error::{MolMapError, MolMapResult},
+    error::Error,
     traits::{Graph, Map, Stores, StoresMut},
     view::ViewMut,
 };
@@ -261,15 +261,15 @@ impl MolMap {
     /// # Errors
     ///
     /// Fails if either of `start` and `end` are invalid.
-    pub fn add_bond<A, B>(&mut self, bond_type: BondType, start: A, end: B) -> MolMapResult<Bond>
+    pub fn add_bond<A, B>(&mut self, bond_type: BondType, start: A, end: B) -> Result<Bond, Error>
     where
         A: Bondable,
         B: Bondable,
     {
         if !self.contains(start) {
-            return Err(MolMapError::InvalidId(start.as_entity()));
+            return Err(Error::InvalidId(start.as_entity()));
         } else if !self.contains(end) {
-            return Err(MolMapError::InvalidId(end.as_entity()));
+            return Err(Error::InvalidId(end.as_entity()));
         };
         Ok(self.add_bond_unchecked(bond_type, start, end))
     }
@@ -279,7 +279,7 @@ impl MolMap {
     /// # Errors
     ///
     /// Fails if either of `start` and `end` are invalid.
-    pub fn add_single_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    pub fn add_single_bond<A, B>(&mut self, start: A, end: B) -> Result<Bond, Error>
     where
         A: Bondable,
         B: Bondable,
@@ -292,7 +292,7 @@ impl MolMap {
     /// # Errors
     ///
     /// Fails if either of `start` and `end` are invalid.
-    pub fn add_double_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    pub fn add_double_bond<A, B>(&mut self, start: A, end: B) -> Result<Bond, Error>
     where
         A: Bondable,
         B: Bondable,
@@ -474,10 +474,10 @@ impl MolMap {
         &self,
         substituent: Substituent,
         fundamental: impl Fundamental,
-    ) -> MolMapResult<bool> {
+    ) -> Result<bool, Error> {
         let sub_data = self
             .data(substituent)
-            .ok_or(MolMapError::InvalidId(substituent.into()))?;
+            .ok_or(Error::InvalidId(substituent.into()))?;
         let is_member = match Fundamental::to_resolved(fundamental) {
             ResolvedFundamental::Atom(atom) => sub_data.atomlikes.contains(&atom.as_atomlike()),
             ResolvedFundamental::Pseudoatom(pseudoatom) => {
@@ -497,10 +497,10 @@ impl MolMap {
         &self,
         molecule: Molecule,
         fundamental: impl Fundamental,
-    ) -> MolMapResult<bool> {
+    ) -> Result<bool, Error> {
         let mol_data = self
             .data(molecule)
-            .ok_or(MolMapError::InvalidId(molecule.into()))?;
+            .ok_or(Error::InvalidId(molecule.into()))?;
         let is_member = match Fundamental::to_resolved(fundamental) {
             ResolvedFundamental::Atom(atom) => mol_data.substituents.iter().any(|sub| {
                 self.data(*sub)
@@ -537,10 +537,10 @@ impl MolMap {
     pub(crate) fn substituent_members(
         &self,
         substituent: Substituent,
-    ) -> MolMapResult<impl Iterator<Item = AnyFundamental>> {
+    ) -> Result<impl Iterator<Item = AnyFundamental>, Error> {
         let sub_data = self
             .data(substituent)
-            .ok_or(MolMapError::InvalidId(substituent.into()))?;
+            .ok_or(Error::InvalidId(substituent.into()))?;
         let mut members: Vec<AnyFundamental> = sub_data
             .atomlikes
             .iter()
@@ -558,10 +558,10 @@ impl MolMap {
     pub(crate) fn molecule_members(
         &self,
         molecule: Molecule,
-    ) -> MolMapResult<impl Iterator<Item = AnyFundamental>> {
+    ) -> Result<impl Iterator<Item = AnyFundamental>, Error> {
         let mol_data = self
             .data(molecule)
-            .ok_or(MolMapError::InvalidId(molecule.into()))?;
+            .ok_or(Error::InvalidId(molecule.into()))?;
         let mut members: Vec<AnyFundamental> =
             mol_data.bonds.iter().map(|x| x.as_fundamental()).collect();
         for sub in &mol_data.substituents {
@@ -967,10 +967,10 @@ impl MolMap {
     pub(crate) fn substituent_centres(
         &self,
         substituent: Substituent,
-    ) -> MolMapResult<SubstituentCentre<'_>> {
+    ) -> Result<SubstituentCentre<'_>, Error> {
         let sub_data = self
             .data(substituent)
-            .ok_or(MolMapError::InvalidId(substituent.into()))?;
+            .ok_or(Error::InvalidId(substituent.into()))?;
         let centre = match sub_data.centres {
             0 => SubstituentCentre::None,
             1 => SubstituentCentre::Single(
@@ -999,7 +999,7 @@ impl MolMap {
     //     &mut self,
     //     substituent: Substituent,
     //     new_centre: impl Atomlike,
-    // ) -> MolMapResult<()> {
+    // ) -> Result<()> {
     //     // First confirm that the new centre is actually a member of the substituent
     //     let sub_data = self
     //         .data(substituent)
@@ -1008,7 +1008,7 @@ impl MolMap {
     //         .members
     //         .contains(&new_centre.as_atomlike().as_fundamental())
     //     {
-    //         return Err(MolMapError::Membership(
+    //         return Err(Membership(
     //             new_centre.as_atomlike().as_fundamental(),
     //         ));
     //     }
@@ -1039,7 +1039,7 @@ impl MolMap {
     //         }
     //     };
     //     if already_bonded {
-    //         Err(MolMapError::Disallowed(String::from(
+    //         Err(Disallowed(String::from(
     //             "Substituent already has at least one bond to its centre(s)",
     //         )))
     //     } else {
@@ -1064,7 +1064,7 @@ impl MolMap {
     //     &mut self,
     //     substituent: Substituent,
     //     new_centre: impl Atomlike,
-    // ) -> MolMapResult<()> {
+    // ) -> Result<()> {
     //     // First confirm that the new centre is actually a member of the substituent
     //     let sub_data = self
     //         .data_mut(substituent)
@@ -1073,7 +1073,7 @@ impl MolMap {
     //         .members
     //         .contains(&new_centre.as_atomlike().as_fundamental())
     //     {
-    //         return Err(MolMapError::Membership(
+    //         return Err(Membership(
     //             new_centre.as_atomlike().as_fundamental(),
     //         ));
     //     }
@@ -1140,9 +1140,9 @@ mod views {
         // /// # Errors
         // ///
         // /// Returns an error if the fundamental is invalid.
-        // pub fn insert(self, fundamental: impl Fundamental) -> MolMapResult<bool> {
+        // pub fn insert(self, fundamental: impl Fundamental) -> Result<bool> {
         //     if !self.map.contains(fundamental) {
-        //         return Err(MolMapError::InvalidId(fundamental.as_entity()));
+        //         return Err(InvalidId(fundamental.as_entity()));
         //     };
         //     Ok(self
         //         .map
@@ -1160,7 +1160,7 @@ mod views {
         // /// Returns an error if any of the fundamentals are invalid, in which case the
         // /// map will remain unchanged; the returned error will hold the ID of the first
         // /// invalid fundamental encountered.
-        // pub fn extend<E, I>(self, fundamentals: I) -> MolMapResult<()>
+        // pub fn extend<E, I>(self, fundamentals: I) -> Result<()>
         // where
         //     E: Entity + Into<AnyFundamental>,
         //     I: IntoIterator<Item = E>,
@@ -1169,7 +1169,7 @@ mod views {
         //     let fundamentals = fundamentals.into_iter();
         //     for f in fundamentals.clone() {
         //         if !self.map.contains(f) {
-        //             return Err(MolMapError::InvalidId(f.as_entity()));
+        //             return Err(InvalidId(f.as_entity()));
         //         }
         //     }
         //     for f in fundamentals {
@@ -1240,9 +1240,9 @@ mod views {
         // /// # Errors
         // ///
         // /// Returns an error if the fundamental is invalid.
-        // pub fn insert(self, fundamental: impl Fundamental) -> MolMapResult<bool> {
+        // pub fn insert(self, fundamental: impl Fundamental) -> Result<bool> {
         //     if !self.map.contains(fundamental) {
-        //         return Err(MolMapError::InvalidId(fundamental.as_entity()));
+        //         return Err(InvalidId(fundamental.as_entity()));
         //     };
         //     Ok(self
         //         .map
@@ -1260,7 +1260,7 @@ mod views {
         // /// Returns an error if any of the fundamentals are invalid, in which case the
         // /// map will remain unchanged; the returned error will hold the ID of the first
         // /// invalid fundamental encountered.
-        // pub fn extend<E, I>(self, fundamentals: I) -> MolMapResult<()>
+        // pub fn extend<E, I>(self, fundamentals: I) -> Result<()>
         // where
         //     E: Entity + Into<AnyFundamental>,
         //     I: IntoIterator<Item = E>,
@@ -1269,7 +1269,7 @@ mod views {
         //     let fundamentals = fundamentals.into_iter();
         //     for f in fundamentals.clone() {
         //         if !self.map.contains(f) {
-        //             return Err(MolMapError::InvalidId(f.as_entity()));
+        //             return Err(InvalidId(f.as_entity()));
         //         }
         //     }
         //     for f in fundamentals {

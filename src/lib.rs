@@ -57,6 +57,6 @@ pub mod molecular;
 // Top-level items
 // ---------------
 // Only stuff that is universal to the whole crate and isn't exposed publicly elsewhere
-pub use error::{MolMapError, MolMapResult};
+pub use error::Error;
 pub use traits::{Map, Spatial};
 pub use view::{View, ViewMut};

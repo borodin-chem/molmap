@@ -8,7 +8,7 @@
 
 //! Traits implemented by parsers of chemical notations or file formats.
 
-use crate::MolMapError;
+use crate::error::Error;
 
 /// A parser between a chemical notation or file format and at least one map type.
 ///
@@ -47,9 +47,9 @@ pub trait Parser: Default {
 pub trait Read<M>: Parser {
     /// The error type returned when parsing fails.
     ///
-    /// Parsers may simply return [`MolMapError`] if they wish, or some custom error
+    /// Parsers may simply return [`molmap::Error`] if they wish, or some custom error
     /// type if they wish to provide finer-grained diagnostics.
-    type Error: Into<MolMapError>;
+    type Error: Into<Error>;
 
     /// Parses the format from a [`std::io`] reader.
     ///
@@ -74,9 +74,9 @@ pub trait ReadMulti<M>: Parser {
 
     /// The error type returned when parsing fails.
     ///
-    /// Parsers may simply return [`MolMapError`] if they wish, or some custom error
+    /// Parsers may simply return [`molmap::Error`] if they wish, or some custom error
     /// type if they wish to provide finer-grained diagnostics.
-    type Error: Into<MolMapError>;
+    type Error: Into<Error>;
 
     /// Parses the format from a [`std::io`] reader.
     ///
@@ -106,9 +106,9 @@ pub trait ReadMulti<M>: Parser {
 pub trait Write<M>: Parser {
     /// The error type returned when parsing fails.
     ///
-    /// Parsers may simply return [`MolMapError`] if they wish, or some custom error
+    /// Parsers may simply return [`molmap::Error`] if they wish, or some custom error
     /// type if they wish to provide finer-grained diagnostics.
-    type Error: Into<MolMapError>;
+    type Error: Into<Error>;
 
     /// Parses the format to a [`std::io`] writer.
     fn write<W: std::io::Write>(&self, writer: W, map: &M) -> Result<(), Self::Error>;
@@ -127,9 +127,9 @@ where
 {
     /// The error type returned when parsing fails.
     ///
-    /// Parsers may simply return [`MolMapError`] if they wish, or some custom error
+    /// Parsers may simply return [`molmap::Error`] if they wish, or some custom error
     /// type if they wish to provide finer-grained diagnostics.
-    type Error: Into<MolMapError>;
+    type Error: Into<Error>;
 
     /// Parses the format to a [`std::io`] writer.
     ///

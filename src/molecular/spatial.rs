@@ -15,7 +15,7 @@ use slotmap::SecondaryMap;
 use crate::{
     atomic::{AtomMap, Atomic, SpatialAtomicCommon},
     entities::*,
-    error::MolMapResult,
+    error::Error,
     geometry::{Point, Vector},
     traits::{Map, Spatial},
     units::{Angstrom, Relative, Unit},
@@ -46,7 +46,7 @@ pub(crate) trait SpatialMolecularCommon<const D: usize>:
         &self,
         substituent: Substituent,
         centres_only: bool,
-    ) -> MolMapResult<Point<D>> {
+    ) -> Result<Point<D>, Error> {
         let centroid = if centres_only {
             match self.as_molecular().substituent_centres(substituent)? {
                 // Early return if substituent is empty/has no centre (should be the same thing)
@@ -78,7 +78,7 @@ pub(crate) trait SpatialMolecularCommon<const D: usize>:
     /// # Errors
     ///
     /// Fails if the molecule is not in the map.
-    fn molecule_centroid(&self, molecule: Molecule) -> MolMapResult<Point<D>> {
+    fn molecule_centroid(&self, molecule: Molecule) -> Result<Point<D>, Error> {
         let members = self
             .as_molecular()
             .molecule_members(molecule)?

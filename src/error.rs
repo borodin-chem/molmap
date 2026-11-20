@@ -12,7 +12,7 @@ use crate::entities::*;
 
 /// An `Error` type for errors specific to the crate.
 #[derive(thiserror::Error, Debug)]
-pub enum MolMapError {
+pub enum Error {
     /// Returned when an ID is not present in a map.
     #[error("The entity was not found in the map")]
     InvalidId(AnyEntity),
@@ -49,11 +49,8 @@ pub enum MolMapError {
     Parse,
 }
 
-impl From<std::num::ParseIntError> for MolMapError {
+impl From<std::num::ParseIntError> for Error {
     fn from(_: std::num::ParseIntError) -> Self {
         Self::Parse
     }
 }
-
-/// A `Result` type for situations where the crate's [`MolMapError`] might be returned.
-pub type MolMapResult<T> = core::result::Result<T, MolMapError>;
