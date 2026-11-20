@@ -34,7 +34,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use crate::{
     atomic::{AtomMap, Atomic},
     entities::*,
-    error::{MolMapError, MolMapResult},
+    error::Error,
     traits::{Map, Stores},
 };
 
@@ -456,7 +456,7 @@ impl<'m, S: Strategy> Traversal<'m, S> {
     ///
     /// Fails if the graph does not contain any atoms or pseudoatoms at all, or if
     /// the root is not a member of the graph.
-    pub fn new<M>(map: &'m M, root: impl Atomlike, _strategy: S) -> MolMapResult<Self>
+    pub fn new<M>(map: &'m M, root: impl Atomlike, _strategy: S) -> Result<Self, Error>
     where
         M: Map + Atomic,
     {
@@ -475,13 +475,13 @@ impl<'m, S: Strategy> Traversal<'m, S> {
         root: impl Atomlike,
         _strategy: S,
         max_depth: usize,
-    ) -> MolMapResult<Self>
+    ) -> Result<Self, Error>
     where
         M: Map + Atomic,
     {
         let graph = map.as_atomic();
         if !graph.contains(root) {
-            return Err(MolMapError::InvalidId(root.as_atomlike().into()));
+            return Err(Error::InvalidId(root.as_atomlike().into()));
         }
         let mut traversal = Self {
             graph,
@@ -873,14 +873,14 @@ impl<'m> BidirectionalSearch<'m> {
     ///
     /// Fails if the graph does not contain any atoms or pseudoatoms at all, or if
     /// either root is not a member of the graph.
-    pub fn new<M>(map: &'m M, initial: impl Atomlike, goal: impl Atomlike) -> MolMapResult<Self>
+    pub fn new<M>(map: &'m M, initial: impl Atomlike, goal: impl Atomlike) -> Result<Self, Error>
     where
         M: Map + Atomic,
     {
         let initial = initial.as_atomlike();
         let goal = goal.as_atomlike();
         if initial == goal {
-            Err(MolMapError::Disallowed(String::from(
+            Err(Error::Disallowed(String::from(
                 "Cannot conduct a bidirectional search where the initial node and goal node are the same node!",
             )))
         } else {
@@ -1066,7 +1066,7 @@ where
 ///
 /// Fails if the search initialization fails (see [`BidirectionalSearch::new`]).
 #[allow(unused)]
-pub fn are_connected<M>(map: &M, initial: impl Atomlike, goal: impl Atomlike) -> MolMapResult<bool>
+pub fn are_connected<M>(map: &M, initial: impl Atomlike, goal: impl Atomlike) -> Result<bool, Error>
 where
     M: Map + Atomic,
 {
@@ -1096,7 +1096,7 @@ mod tests {
     const CYCLOHEXANE: &str = include_str!("../../tests/fixtures/atomic/cyclohexane.ron");
 
     #[test]
-    fn invalid_root() -> MolMapResult<()> {
+    fn invalid_root() -> Result<(), Error> {
         let mut m: AtomMap = ron::from_str(ETHANE).unwrap();
         let h1: Atom = "a2.1".parse()?;
         m.delete_atom(h1);
@@ -1114,7 +1114,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn simple_ethane() -> MolMapResult<()> {
+        fn simple_ethane() -> Result<(), Error> {
             // Traverse ethane
             let m: AtomMap = ron::from_str(ETHANE).unwrap();
             // All atoms in file are serialized as version 1
@@ -1205,7 +1205,7 @@ mod tests {
         }
 
         #[test]
-        fn simple_propane() -> MolMapResult<()> {
+        fn simple_propane() -> Result<(), Error> {
             // Traverse propane, starting at the carbon in the middle of the chain
             let m: AtomMap = ron::from_str(PROPANE).unwrap();
             let c1: AnyAtomlike = "a1".parse()?;
@@ -1249,7 +1249,7 @@ mod tests {
         }
 
         #[test]
-        fn cyclic() -> MolMapResult<()> {
+        fn cyclic() -> Result<(), Error> {
             // Traverse cyclohexane
             let m: AtomMap = ron::from_str(CYCLOHEXANE).unwrap();
             let carbons: Vec<AnyAtomlike> = m
@@ -1329,7 +1329,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn simple_propane() -> MolMapResult<()> {
+        fn simple_propane() -> Result<(), Error> {
             // Traverse propane, starting at the carbon in the middle of the chain
             let m: AtomMap = ron::from_str(PROPANE).unwrap();
             let c1: AnyAtomlike = "a1".parse()?;
@@ -1501,7 +1501,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn simple_propane() -> MolMapResult<()> {
+        fn simple_propane() -> Result<(), Error> {
             let m: AtomMap = ron::from_str(PROPANE).unwrap();
             let h1: AnyAtomlike = "a2".parse()?;
             let c1: AnyAtomlike = "a1".parse()?;
@@ -1531,7 +1531,7 @@ mod tests {
         }
 
         #[test]
-        fn disconnected_propane() -> MolMapResult<()> {
+        fn disconnected_propane() -> Result<(), Error> {
             let mut m: AtomMap = ron::from_str(PROPANE).unwrap();
             let h1: AnyAtomlike = "a2".parse()?;
             let c1: AnyAtomlike = "a1".parse()?;
@@ -1559,7 +1559,7 @@ mod tests {
         }
 
         #[test]
-        fn cyclic() -> MolMapResult<()> {
+        fn cyclic() -> Result<(), Error> {
             let mut m: AtomMap = ron::from_str(CYCLOHEXANE).unwrap();
             let carbons: Vec<AnyAtomlike> = m
                 .iter::<Atom>()
@@ -1612,7 +1612,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn simple_propane() -> MolMapResult<()> {
+        fn simple_propane() -> Result<(), Error> {
             let m: AtomMap = ron::from_str(PROPANE).unwrap();
             let h1: AnyAtomlike = "a2".parse()?;
             let c1: AnyAtomlike = "a1".parse()?;
@@ -1633,7 +1633,7 @@ mod tests {
         }
 
         #[test]
-        fn disconnected_propane() -> MolMapResult<()> {
+        fn disconnected_propane() -> Result<(), Error> {
             let mut m: AtomMap = ron::from_str(PROPANE).unwrap();
             let h1: AnyAtomlike = "a2".parse()?;
             let c1: AnyAtomlike = "a1".parse()?;
@@ -1661,7 +1661,7 @@ mod tests {
         }
 
         #[test]
-        fn unconnected_h2o() -> MolMapResult<()> {
+        fn unconnected_h2o() -> Result<(), Error> {
             // Two separate water molecules
             let mut m = AtomMap::new();
             let o1 = m.add_atom(Element::O);
@@ -1677,7 +1677,7 @@ mod tests {
         }
 
         #[test]
-        fn h_bond_doesnt_connect_h2o() -> MolMapResult<()> {
+        fn h_bond_doesnt_connect_h2o() -> Result<(), Error> {
             let mut m = AtomMap::new();
             // Two water molecules
             let (o1, o1_h_bonds) = m.add_atom_and_saturate(Element::O);

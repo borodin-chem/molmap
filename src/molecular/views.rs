@@ -107,7 +107,7 @@ where
     /////
     ///// Fails if the requested centre is not already a member of the substituent,
     ///// or if there are already bonds to the current centre(s).
-    //pub fn set_centre(self, new_centre: impl Atomlike) -> MolMapResult<()> {
+    //pub fn set_centre(self, new_centre: impl Atomlike) -> Result<()> {
     //    self.map
     //        .graph_mut()
     //        .set_substituent_centre(self.id, new_centre)
@@ -119,7 +119,7 @@ where
     ///// # Errors
     /////
     ///// Fails if the requested centre is not already a member of the substituent.
-    //pub fn add_centre(self, new_centre: impl Atomlike) -> MolMapResult<()> {
+    //pub fn add_centre(self, new_centre: impl Atomlike) -> Result<()> {
     //    self.map
     //        .graph_mut()
     //        .add_substituent_centre(self.id, new_centre)

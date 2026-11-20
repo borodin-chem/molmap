@@ -14,7 +14,7 @@ use crate::{
     bonding::BondType,
     elements::{Element, Pseudoelement},
     entities::*,
-    error::{MolMapError, MolMapResult},
+    error::Error,
     traits::{Graph, Map, Stores, StoresMut},
     view::ViewMut,
 };
@@ -206,15 +206,15 @@ impl AtomMap {
     /// # Errors
     ///
     /// Fails if either of `start` and `end` are invalid.
-    pub fn add_bond<A, B>(&mut self, bond_type: BondType, start: A, end: B) -> MolMapResult<Bond>
+    pub fn add_bond<A, B>(&mut self, bond_type: BondType, start: A, end: B) -> Result<Bond, Error>
     where
         A: Bondable,
         B: Bondable,
     {
         if !self.contains(start) {
-            return Err(MolMapError::InvalidId(start.as_entity()));
+            return Err(Error::InvalidId(start.as_entity()));
         } else if !self.contains(end) {
-            return Err(MolMapError::InvalidId(end.as_entity()));
+            return Err(Error::InvalidId(end.as_entity()));
         };
         Ok(self.add_bond_unchecked(bond_type, start, end))
     }
@@ -224,7 +224,7 @@ impl AtomMap {
     /// # Errors
     ///
     /// Fails if either of `start` and `end` are invalid.
-    pub fn add_single_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    pub fn add_single_bond<A, B>(&mut self, start: A, end: B) -> Result<Bond, Error>
     where
         A: Bondable,
         B: Bondable,
@@ -237,7 +237,7 @@ impl AtomMap {
     /// # Errors
     ///
     /// Fails if either of `start` and `end` are invalid.
-    pub fn add_double_bond<A, B>(&mut self, start: A, end: B) -> MolMapResult<Bond>
+    pub fn add_double_bond<A, B>(&mut self, start: A, end: B) -> Result<Bond, Error>
     where
         A: Bondable,
         B: Bondable,

@@ -11,7 +11,7 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 
-use crate::{MolMapError, MolMapResult};
+use crate::error::Error;
 
 mod id;
 use id::Id;
@@ -61,21 +61,19 @@ impl From<EntityKind> for u8 {
 }
 
 impl TryFrom<u8> for EntityKind {
-    type Error = MolMapError;
+    type Error = Error;
 
-    fn try_from(discriminant: u8) -> MolMapResult<Self> {
-        Self::from_u8(discriminant).ok_or(MolMapError::UnknownEntityKind(
-            discriminant as char,
-            discriminant,
-        ))
+    fn try_from(discriminant: u8) -> Result<Self, Self::Error> {
+        Self::from_u8(discriminant)
+            .ok_or(Error::UnknownEntityKind(discriminant as char, discriminant))
     }
 }
 
 impl TryFrom<char> for EntityKind {
-    type Error = MolMapError;
+    type Error = Error;
 
-    fn try_from(prefix: char) -> MolMapResult<Self> {
-        Self::from_prefix(prefix).ok_or(MolMapError::UnknownEntityKind(prefix, prefix as u8))
+    fn try_from(prefix: char) -> Result<Self, Self::Error> {
+        Self::from_prefix(prefix).ok_or(Error::UnknownEntityKind(prefix, prefix as u8))
     }
 }
 
@@ -200,7 +198,7 @@ impl Entity for AnyEntity {
 impl Category for AnyEntity {}
 
 impl FromStr for AnyEntity {
-    type Err = MolMapError;
+    type Err = Error;
 
     /// Converts a string of the form `<prefix><index>.<version>` to the corresponding ID.
     ///
@@ -221,7 +219,7 @@ impl FromStr for AnyEntity {
     ///
     /// Fails if the prefix does not correspond to a kind of entity, if either of the
     /// index and version are zero, or if the string is otherwise malformed.
-    fn from_str(s: &str) -> MolMapResult<Self> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self::new_unchecked(Id::from_str(s)?, private::Token))
     }
 }
@@ -344,13 +342,13 @@ macro_rules! new_kind {
             }
 
             impl TryFrom<AnyEntity> for $kind {
-                type Error = MolMapError;
+                type Error = Error;
 
                 fn try_from(entity: AnyEntity) -> Result<Self, Self::Error> {
                     match entity.kind() {
                         EntityKind::$kind => Ok(Self(entity.0)),
                         _ => {
-                            Err(crate::error::MolMapError::IncorrectEntityKind(
+                            Err(Error::IncorrectEntityKind(
                                 entity.kind(),
                                 entity,
                             ))
@@ -360,7 +358,7 @@ macro_rules! new_kind {
             }
 
             impl FromStr for $kind {
-                type Err = MolMapError;
+                type Err = Error;
 
                 /// Converts a string of the form `<prefix><index>.<version>` to the corresponding ID.
                 ///
@@ -387,14 +385,14 @@ macro_rules! new_kind {
                 ///
                 /// ```
                 /// # use std::str::FromStr;
-                /// # use molmap::{entities::*, MolMapError};
+                /// # use molmap::{entities::*, Error};
                 /// let _atom1 = Atom::from_str("a1.1")?;
                 /// let _atom2: Atom = "a1.2".parse()?;
                 /// let _bond1 = Bond::from_str("b1.1")?;
                 /// assert!(Atom::from_str("b1.1").is_err());
-                /// # Ok::<(), MolMapError>(())
+                /// # Ok::<(), Error>(())
                 /// ```
-                fn from_str(s: &str) -> MolMapResult<Self> {
+                fn from_str(s: &str) -> Result<Self, Self::Err> {
                     Self::try_from(AnyEntity::from_str(s)?)
                 }
             }
@@ -484,17 +482,14 @@ new_kind!(
 pub trait Category: Entity {
     /// Attempts to convert the dynamic entity type to a concrete one, failing if the
     /// entity is not of the corresponding kind.
-    fn downcast<E: Kind>(self) -> MolMapResult<E> {
+    fn downcast<E: Kind>(self) -> Result<E, Error> {
         if self.kind() == E::KIND {
             Ok(E::new_unchecked(
                 self.into_inner(private::Token),
                 private::Token,
             ))
         } else {
-            Err(crate::error::MolMapError::IncorrectEntityKind(
-                self.kind(),
-                self.as_entity(),
-            ))
+            Err(Error::IncorrectEntityKind(self.kind(), self.as_entity()))
         }
     }
 }
@@ -579,7 +574,7 @@ macro_rules! new_category {
             impl Category for [<Any $category>] {}
 
             impl FromStr for [<Any $category>] {
-                type Err = MolMapError;
+                type Err = Error;
 
                 /// Converts a string of the form `<prefix><index>.<version>` to the corresponding ID.
                 ///
@@ -606,12 +601,12 @@ macro_rules! new_category {
                 ///
                 /// ```
                 /// # use std::str::FromStr;
-                /// # use molmap::{entities::*, MolMapError};
+                /// # use molmap::{entities::*, Error};
                 /// assert_eq!(AnyAtomlike::from_str("a1.1")?, Atom::from_str("a1.1")?.as_atomlike());
                 /// assert!(AnyAtomlike::from_str("b1.1").is_err());
-                /// # Ok::<(), MolMapError>(())
+                /// # Ok::<(), Error>(())
                 /// ```
-                fn from_str(s: &str) -> MolMapResult<Self> {
+                fn from_str(s: &str) -> Result<Self, Self::Err> {
                     // Parsing will succeed for any correctly formed string, kind's membership of
                     // category is checked by the TryFrom conversion
                     Self::try_from(AnyEntity::from_str(s)?)
@@ -702,7 +697,7 @@ macro_rules! new_category {
 
             $(
                 impl TryFrom<[<Any $category>]> for $kind {
-                    type Error = MolMapError;
+                    type Error = Error;
 
                     fn try_from(entity: [<Any $category>]) -> Result<Self, Self::Error> {
                         entity.downcast()
@@ -719,13 +714,13 @@ macro_rules! new_category {
             }
 
             impl TryFrom<AnyEntity> for [<Any $category>] {
-                type Error = MolMapError;
+                type Error = Error;
 
                 fn try_from(entity: AnyEntity) -> Result<Self, Self::Error> {
                     match entity.kind() {
                         $(EntityKind::$kind => Ok(Self(entity.0)),)+
                         _ => {
-                            Err(crate::error::MolMapError::IncorrectEntityKind(
+                            Err(Error::IncorrectEntityKind(
                                 entity.kind(),
                                 entity.into(),
                             ))
@@ -817,7 +812,7 @@ macro_rules! impl_subset {
             }
 
             impl TryFrom<[<Any $B>]> for [<Any $A>] {
-                type Error = MolMapError;
+                type Error = Error;
 
                 fn try_from(entity: [<Any $B>]) -> Result<Self, Self::Error> {
                     [<Any $A>]::try_from(entity.as_entity())

@@ -12,7 +12,7 @@ use std::iter::FusedIterator;
 
 use slotmap::basic::Keys;
 
-use crate::{View, entities::Kind};
+use crate::{entities::Kind, view::View};
 
 /// A union type for iterators over entity IDs from various sources.
 enum EntitiesSource<'m, E: Kind> {

@@ -13,10 +13,11 @@
 use slotmap::SlotMap;
 
 use crate::{
-    MolMapError, MolMapResult, View, ViewMut,
     entities::*,
+    error::Error,
     iter::{Entities, Iter, Selection, Views},
     units::Unit,
+    view::{View, ViewMut},
 };
 
 /// Traits that must remain unnameable from outside the crate.
@@ -192,7 +193,7 @@ pub trait Map: Sized {
     fn views<'m, E>(
         &'m self,
         selection: impl Into<Selection<'m, E>>,
-    ) -> MolMapResult<Views<'m, Self, E>>
+    ) -> Result<Views<'m, Self, E>, Error>
     where
         E: Kind,
         Self::Graph: Stores<E>,
@@ -206,11 +207,11 @@ pub trait Map: Sized {
                         if self.contains(e) {
                             Ok(e)
                         } else {
-                            Err(MolMapError::InvalidId(e.as_entity()))
+                            Err(Error::InvalidId(e.as_entity()))
                         }
                     })
                     // An iterator of Result<T, U> can be collected into Result<Vec<T>, U>
-                    .collect::<MolMapResult<Vec<E>>>()?;
+                    .collect::<Result<Vec<E>, Error>>()?;
                 Entities::from_vec(validated)
             }
         };
