@@ -41,10 +41,10 @@ pub(crate) mod view;
 // Publicly accessible modules
 // ---------------------------
 // General
+pub mod algorithms;
 pub mod elements;
 pub mod entities;
 pub mod geometry;
-pub mod graph;
 pub mod iter;
 pub mod parse;
 pub mod units;

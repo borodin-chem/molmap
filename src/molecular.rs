@@ -9,24 +9,9 @@
 //! Maps in which the atomic entities and bonds are organized into substituents
 //! and molecules.
 
+mod common;
 mod graph;
 mod spatial;
-
-/// Traits specific to the molecular layer.
-mod traits {
-    use super::MolMap;
-    use crate::Map;
-
-    /// A map in which the atomic entities and bonds are organized into substituents
-    /// and molecules.
-    pub trait Molecular: Map {
-        /// Returns the molecular graph without any spatial positions.
-        fn into_molecular(self) -> MolMap;
-
-        /// Provides read-only access to the molecular graph.
-        fn as_molecular(&self) -> &MolMap;
-    }
-}
 
 pub(crate) mod data;
 #[expect(unused)]
@@ -39,13 +24,11 @@ pub(crate) use spatial::SpatialMolecularCommon;
 // glob import and get basically everything they need to work with a MolMap
 pub use crate::bonding::BondType;
 pub use crate::elements::{Element, Pseudoelement};
+pub use common::Molecular;
 pub use graph::MolMap;
 pub use spatial::{MolMap2, MolMap3, SpatialMolMap};
-pub use traits::Molecular;
 
-pub mod views;
-
-/// Entity types and traits relevant when using a [`MolMap`].
+/// Entity types and traits relevant when using a `MolMap` or `SpatialMolMap`.
 pub mod entities {
     // In-line entity kinds so that the mod doc page gives a neat overview of them
     #[doc(inline)]
@@ -62,4 +45,55 @@ pub mod entities {
     pub use crate::entities::{
         ResolvedAtomlike, ResolvedBondable, ResolvedCollection, ResolvedEntity, ResolvedFundamental,
     };
+}
+
+/// Views into a `MolMap` or `SpatialMolMap`.
+pub mod views {
+    use crate::view::{View, ViewMut};
+
+    use super::{entities::*, *};
+
+    /// Views into a `MolMap`.
+    pub mod graph {
+        use super::*;
+
+        macro_rules! generate_views {
+        ($kind:ident) => {
+            paste::paste! {
+                #[doc = concat!("An immutable view of an individual ", stringify!([<$kind:lower>]), " in a [`MolMap`].")]
+                pub type [<$kind View>]<'m> = View<'m, MolMap, $kind>;
+
+                #[doc = concat!("A mutable view of an individual ", stringify!([<$kind:lower>]), " in a [`MolMap`].")]
+                pub type [<$kind ViewMut>]<'m> = ViewMut<'m, MolMap, $kind>;
+            }
+        };
+    }
+        generate_views!(Atom);
+        generate_views!(Bond);
+        generate_views!(Pseudoatom);
+        generate_views!(Substituent);
+        generate_views!(Molecule);
+    }
+
+    /// Views into a `SpatialMolMap`.
+    pub mod spatial {
+        use super::*;
+
+        macro_rules! generate_views {
+            ($kind:ident) => {
+                paste::paste! {
+                    #[doc = concat!("An immutable view of an individual ", stringify!([<$kind:lower>]), " in a [`SpatialMolMap`].")]
+                    pub type [<$kind View>]<'m, const D: usize, U> = View<'m, SpatialMolMap<D, U>, $kind>;
+
+                    #[doc = concat!("A mutable view of an individual ", stringify!([<$kind:lower>]), " in a [`SpatialMolMap`].")]
+                    pub type [<$kind ViewMut>]<'m, const D: usize, U> = ViewMut<'m, SpatialMolMap<D, U>, $kind>;
+                }
+            };
+        }
+        generate_views!(Atom);
+        generate_views!(Bond);
+        generate_views!(Pseudoatom);
+        generate_views!(Substituent);
+        generate_views!(Molecule);
+    }
 }
