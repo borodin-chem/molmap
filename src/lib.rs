@@ -8,8 +8,18 @@
 
 // Notes for contributors:
 //
-// - Use `where` clauses for methods on maps with multiple generic entities, use
-//   `impl Trait` when there is a single target that happens to be generic
+// - For collections of IDs of multiple kinds of entity of a category `Category`,
+//   use the corresponding `AnyCategory` type rather than `dyn Category`
+// - For function parameters that take an entity ID, and the entity may be one
+//   of multiple kinds of entity of a category `Category`, take a generic
+//   parameter for convenience, and use `impl Category` syntax rather than a
+//   named generic parameter
+// - For generic function parameters that facilitate a wider range of input
+//   types via simple conversions e.g. `Into`, `IntoIterator`, also prefer the
+//   anonymous `impl Trait` style
+// - Exceptions to the above are situations where the function's return type
+//   should be linked to one of the input types
+// - Use named generic parameters for all other cases
 // - Internal code should not import from the crate root, only from a level 1
 //   module, or its own module via `super` (which is the preference for things
 //   from the same module)

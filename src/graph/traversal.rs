@@ -226,7 +226,7 @@ struct NodeQueueItem {
     edge_queue: VecDeque<EdgeQueueItem>,
 }
 
-trait Strategy {
+trait Strategy: Copy {
     type Queue: TraversalQueue;
 
     /// Whether a visited child node becomes the new current node.
@@ -386,6 +386,7 @@ fn default_edge_sort(graph: &AtomMap, node_item: &mut NodeQueueItem) {
     })
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct DepthFirst;
 
 impl Strategy for DepthFirst {
@@ -398,6 +399,7 @@ impl Strategy for DepthFirst {
     }
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct BreadthFirst;
 
 impl Strategy for BreadthFirst {
@@ -421,12 +423,13 @@ impl Strategy for BreadthFirst {
 /// As such, if the graph contains multiple disconnected networks, only a subset
 /// will be traversed.
 ///
-/// Each iteration returns an instance of [`DFStep`]. Not every step explores a
+/// Each iteration returns an instance of [`Step`]. Not every step explores a
 /// new edge or node – some just result in a change of the current node.
 ///
-/// At a given node, bonds to pendant (terminal) hydrogen atoms will be explored
-/// first, followed by carbon atoms, then other atoms by ascending atomic number,
-/// then pseudoatoms.
+/// The order in which the children of a given node are visited depends on `S`.
+/// Using the default [`DepthFirst`] and [`BreadthFirst`] strategies, bonds to
+/// pendant (terminal) hydrogen atoms are explored first, followed by carbon
+/// atoms, then other atoms by ascending atomic number, then pseudoatoms.
 #[derive(Debug)]
 #[allow(private_bounds)]
 pub struct Traversal<'m, S: Strategy> {
@@ -453,12 +456,11 @@ impl<'m, S: Strategy> Traversal<'m, S> {
     ///
     /// Fails if the graph does not contain any atoms or pseudoatoms at all, or if
     /// the root is not a member of the graph.
-    pub fn new<M, E>(map: &'m M, root: E, strategy: S) -> MolMapResult<Self>
+    pub fn new<M>(map: &'m M, root: impl Atomlike, _strategy: S) -> MolMapResult<Self>
     where
         M: Map + Atomic,
-        E: Atomlike,
     {
-        Self::with_max_depth(map, root, strategy, usize::MAX)
+        Self::with_max_depth(map, root, _strategy, usize::MAX)
     }
 
     /// Initializes a traversal of the graph from the indicated atom or pseudoatom
@@ -468,23 +470,18 @@ impl<'m, S: Strategy> Traversal<'m, S> {
     ///
     /// Fails if the graph does not contain any atoms or pseudoatoms at all, or if
     /// the root is not a member of the graph.
-    pub fn with_max_depth<M, E>(
+    pub fn with_max_depth<M>(
         map: &'m M,
-        root: E,
-        #[expect(unused)] strategy: S,
+        root: impl Atomlike,
+        _strategy: S,
         max_depth: usize,
     ) -> MolMapResult<Self>
     where
         M: Map + Atomic,
-        E: Atomlike,
     {
         let graph = map.as_atomic();
-        let root = root.as_atomlike();
-        if !(match root.resolve() {
-            ResolvedAtomlike::Atom(atom) => graph.contains(atom),
-            ResolvedAtomlike::Pseudoatom(pseudoatom) => graph.contains(pseudoatom),
-        }) {
-            return Err(MolMapError::InvalidId(root.into()));
+        if !graph.contains(root) {
+            return Err(MolMapError::InvalidId(root.as_atomlike().into()));
         }
         let mut traversal = Self {
             graph,
@@ -497,6 +494,7 @@ impl<'m, S: Strategy> Traversal<'m, S> {
             max_depth,
         };
         // Visit root, populate its queue so that we're ready to go
+        let root = root.as_atomlike();
         traversal.visited_nodes.insert(root);
         traversal.queue_node(root, 0);
         Ok(traversal)
@@ -812,124 +810,279 @@ impl<'m, S: Strategy> Iterator for Traversal<'m, S> {
     }
 }
 
+/// The result of a step in a bidirectional traversal.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum BidirectionalStep {
+    /// A node has been visited after tracing a path to it from the initial node.
+    VisitForwards {
+        parent: AnyAtomlike,
+        child: AnyAtomlike,
+        child_depth: usize,
+    },
+    /// A node has been visited after tracing a path to it from the goal node.
+    VisitBackwards {
+        parent: AnyAtomlike,
+        child: AnyAtomlike,
+        child_depth: usize,
+    },
+    /// A node has been identified that can be reached from both starting nodes.
+    MeetAtCommon {
+        parent: AnyAtomlike,
+        common: AnyAtomlike,
+        distance: usize,
+    },
+}
+
+/// A traversal of the molecular graph from two root nodes simultaneously, usually
+/// with the goal of finding a path, or the shortest path, between them.
+///
+/// Each iteration returns a [`BidirectionalStep`]. The distance to the visited node
+/// is always returned along with its parent, so that a caller can at the end deduce
+/// the full path taken along the shortest path.
+///
+/// Iteration ends once at least one of the traversals is exhausted; unless the
+/// search was deliberately continued after a common node was identified, this
+/// indicates that there is no path connecting the initial and goal nodes.
+///
+/// The traversal that is advanced at each step is always the one with the fewest
+/// nodes in the queue, which helps to reduce the time required for negative
+/// results.
+///
+/// See [`Traversal`] for more details on how each individual traversal works.
+#[allow(private_bounds)]
+pub struct BidirectionalSearch<'m> {
+    initial: AnyAtomlike,
+    goal: AnyAtomlike,
+    fwds: Traversal<'m, BreadthFirst>,
+    bwds: Traversal<'m, BreadthFirst>,
+    // Keep track of the distance to each visited node
+    visited_fwds: HashMap<AnyAtomlike, usize>,
+    visited_bwds: HashMap<AnyAtomlike, usize>,
+}
+
+#[allow(private_bounds)]
+impl<'m> BidirectionalSearch<'m> {
+    /// Initializes a bidirectional search between the indicated atoms or pseudoatoms.
+    ///
+    /// The traversals have an implicit maximum depth of `usize::MAX` and are therefore
+    /// almost guaranteed to find a connecting path, if there is one.
+    ///
+    /// # Errors
+    ///
+    /// Fails if `initial == goal`.
+    ///
+    /// Fails if the graph does not contain any atoms or pseudoatoms at all, or if
+    /// either root is not a member of the graph.
+    pub fn new<M>(map: &'m M, initial: impl Atomlike, goal: impl Atomlike) -> MolMapResult<Self>
+    where
+        M: Map + Atomic,
+    {
+        let initial = initial.as_atomlike();
+        let goal = goal.as_atomlike();
+        if initial == goal {
+            Err(MolMapError::Disallowed(String::from(
+                "Cannot conduct a bidirectional search where the initial node and goal node are the same node!",
+            )))
+        } else {
+            let mut search = Self {
+                initial,
+                goal,
+                fwds: Traversal::new(map, initial, BreadthFirst)?,
+                bwds: Traversal::new(map, goal, BreadthFirst)?,
+                visited_fwds: HashMap::new(),
+                visited_bwds: HashMap::new(),
+            };
+            // Put the roots themselves to be in the records so that they come up if queried
+            search.visited_fwds.insert(initial, 0);
+            search.visited_bwds.insert(goal, 0);
+            Ok(search)
+        }
+    }
+}
+
+impl<'m> Iterator for BidirectionalSearch<'m> {
+    type Item = BidirectionalStep;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // Note to future readers
+        // The traversals themselves are currently just basic breadth-first searches as
+        // implemented above. In particular, that means that children are prioritized in
+        // the order: pendant H > C > other H > other elements (in element order).
+        // One way that this shortest-path algorithm might be made more efficient would
+        // be to instead prioritize children based on the index part of the ID - as in,
+        // pursue a path that brings the index of the current node closer to that of the
+        // goal node.
+        // For maps where the indices are entirely random this would have no benefit,
+        // but in reality of course they have usually been assigned or handed out at
+        // least semi-systematically.
+        // It should only affect the priority within each depth level, though.
+
+        // Keep iterating until we get to an interesting step
+        loop {
+            let (next_is_fwds, next) = {
+                // We iterate the traversal with the fewest nodes queued to try and
+                // keep the trees from expanding any more than necessary
+                let first_try_fwds = self.fwds.queued_nodes() < self.bwds.queued_nodes();
+                let first_try = if first_try_fwds {
+                    self.fwds.next()
+                } else {
+                    self.bwds.next()
+                };
+                if let Some(n) = first_try {
+                    (first_try_fwds, n)
+                } else {
+                    // If either queue is empty, the nodes are clearly not connected
+                    // (Or, the caller continued the search going until the network was fully explored)
+                    break None;
+                }
+            };
+            match next {
+                Step::VisitChild {
+                    parent,
+                    child,
+                    child_depth,
+                    ..
+                } => {
+                    let depth_in_other_direction = if next_is_fwds {
+                        self.visited_fwds.insert(child, child_depth);
+                        self.visited_bwds.get(&child)
+                    } else {
+                        self.visited_bwds.insert(child, child_depth);
+                        self.visited_fwds.get(&child)
+                    };
+                    if let Some(other_depth) = depth_in_other_direction {
+                        // Found a common node!
+                        let total_distance = child_depth + other_depth;
+                        break Some(BidirectionalStep::MeetAtCommon {
+                            parent,
+                            common: child,
+                            distance: total_distance,
+                        });
+                    } else {
+                        if next_is_fwds {
+                            break Some(BidirectionalStep::VisitForwards {
+                                parent,
+                                child,
+                                child_depth,
+                            });
+                        } else {
+                            break Some(BidirectionalStep::VisitBackwards {
+                                parent,
+                                child,
+                                child_depth,
+                            });
+                        }
+                    }
+                }
+                Step::VisitPendant {
+                    parent,
+                    pendant,
+                    pendant_depth,
+                    ..
+                } => {
+                    // Don't need to record it, as the only way in is from a parent
+                    // that would then also be common to both trees
+                    // Only way the pendant is relevant is if it happens to be the
+                    // other root
+                    if pendant == self.initial || pendant == self.goal {
+                        break Some(BidirectionalStep::MeetAtCommon {
+                            parent,
+                            common: pendant,
+                            distance: pendant_depth,
+                        });
+                    }
+                }
+                Step::CloseCycle { .. } => continue, // Not interesting - confluence visited before and this path is longer
+                Step::SideTrack { .. } | Step::ForwardTrack { .. } | Step::BackTrack { .. } => {
+                    continue;
+                }
+                Step::SkipTooDeep { .. } => break None, // Shouldn't happen ever anyway, but just in case!
+            }
+        }
+    }
+}
+
 /// Calculates the shortest distance from one node to the other using a
 /// bidirectional breadth-first search.
 ///
 /// Returns `None` if `a` and `b` are not connected at all.
 ///
-/// Also returns `None` if either traversal initialization fails (see
-/// [`Traversal::new`]).
+/// Also returns `None` if the search initialization fails (see
+/// [`BidirectionalSearch::new`]).
 ///
 /// The traversal that is advanced at each step is always the one with the fewest
 /// nodes in the queue, which helps to reduce the time required for negative
 /// results.
 #[allow(unused)]
-pub(crate) fn shortest_distance<M>(map: &M, a: AnyAtomlike, b: AnyAtomlike) -> Option<usize>
+pub fn shortest_distance<M>(map: &M, initial: impl Atomlike, goal: impl Atomlike) -> Option<usize>
 where
     M: Map + Atomic,
 {
-    // Note to future readers
-    // The traversals themselves are currently just basic breadth-first searches as
-    // implemented above. In particular, that means that children are prioritized in
-    // the order: pendant H > C > other H > other elements (in element order).
-    // One way that this shortest-path algorithm might be made more efficient would
-    // be to instead prioritize children based on the index part of the ID - as in,
-    // pursue a path that brings the index of the current node closer to that of the
-    // goal node.
-    // For maps where the indices are entirely random this would have no benefit,
-    // but in reality of course they have usually been assigned or handed out at
-    // least semi-systematically.
-    // It should only affect the priority within each depth level, though.
-    if a == b {
+    let initial = initial.as_atomlike();
+    let goal = goal.as_atomlike();
+    if initial == goal {
         return Some(0);
     }
-    let mut fwds = Traversal::new(map, a, BreadthFirst).ok()?;
-    let mut bwds = Traversal::new(map, b, BreadthFirst).ok()?;
-    // Keep track of the distance to each visited node
-    let mut visited_fwds: HashMap<AnyAtomlike, usize> = HashMap::new();
-    let mut visited_bwds: HashMap<AnyAtomlike, usize> = HashMap::new();
-    // Put the roots themselves to be in the records so that they come up if queried
-    visited_fwds.insert(a, 0);
-    visited_bwds.insert(b, 0);
+    let mut search = BidirectionalSearch::new(map, initial, goal).ok()?;
     let mut shortest = None;
-    loop {
-        let (next_is_fwds, next) = {
-            // We iterate the traversal with the fewest nodes queued to try and
-            // keep the trees from expanding any more than necessary
-            let first_try_fwds = fwds.queued_nodes() < bwds.queued_nodes();
-            let first_try = if first_try_fwds {
-                fwds.next()
-            } else {
-                bwds.next()
-            };
-            if let Some(n) = first_try {
-                (first_try_fwds, n)
-            } else {
-                // If either queue is empty, the nodes are clearly not connected
-                // (Or, we continued trying to find a shorter path after we already found one)
-                break shortest;
-            }
-        };
-        match next {
-            Step::VisitChild {
-                child, child_depth, ..
+    for step in search {
+        match step {
+            BidirectionalStep::MeetAtCommon {
+                parent,
+                common,
+                distance,
             } => {
-                // If we have arrived at the goal then we can stop immediately
-                if child == a || child == b {
-                    break Some(child_depth);
-                }
-                // Depending on what order we do things in it seems plausible that it won't
-                // always be the first path found that is the shortest?
-                let depth_in_other_direction = if next_is_fwds {
-                    visited_fwds.insert(child, child_depth);
-                    visited_bwds.get(&child)
-                } else {
-                    visited_bwds.insert(child, child_depth);
-                    visited_fwds.get(&child)
-                };
-                if let Some(other_depth) = depth_in_other_direction {
-                    // Found a common node!
-                    let total_distance = child_depth + other_depth;
-                    if let Some(record) = shortest {
-                        if total_distance < record {
-                            // New shortest path found
-                            shortest = Some(total_distance);
-                        } else {
-                            // If this path is considerably longer than the record then it's
-                            // probably safe to assume that the record will stand forever,
-                            // no matter how long we search for, so we can halt the search.
-                            // That does of course leave us to ask what should be considered
-                            // as "considerably longer"...
-                            if total_distance - record > 2 {
-                                break Some(record);
-                            }
-                        }
+                if let Some(record) = shortest {
+                    if distance < record {
+                        // New shortest path found
+                        shortest = Some(distance);
                     } else {
-                        shortest = Some(total_distance);
+                        // If this path is considerably longer than the record then it's
+                        // probably safe to assume that the record will stand forever,
+                        // no matter how long we search for, so we can halt the search.
+                        // That does of course leave us to ask what should be considered
+                        // as "considerably longer"...
+                        if distance - record > 2 {
+                            return Some(record);
+                        }
                     }
                 } else {
+                    shortest = Some(distance);
                     continue;
                 }
             }
-            Step::VisitPendant {
-                pendant,
-                pendant_depth,
-                ..
-            } => {
-                // Don't need to record it, as the only way in is from a parent
-                // that would then also be common to both trees
-                // Only way the pendant is relevant is if it happens to be the
-                // other root
-                if pendant == a || pendant == b {
-                    break Some(pendant_depth);
-                }
-            }
-            Step::CloseCycle { .. } => continue, // Not interesting - confluence visited before and this path is longer
-            Step::SideTrack { .. } | Step::ForwardTrack { .. } => continue,
-            Step::BackTrack { .. } => unreachable!(), // Breadth-first doesn't backtrack
-            Step::SkipTooDeep { .. } => break None, // Shouldn't happen ever anyway, but just in case!
+            _ => continue,
         }
     }
+    shortest
+}
+
+/// Determines if two nodes are connected using a bidirectional breadth-first search.
+///
+/// Similar to [`shortest_distance`], but returns `true` as soon as a path is found
+/// without bothering to ensure that it is the shortest path.
+///
+/// # Errors
+///
+/// Fails if the search initialization fails (see [`BidirectionalSearch::new`]).
+#[allow(unused)]
+pub fn are_connected<M>(map: &M, initial: impl Atomlike, goal: impl Atomlike) -> MolMapResult<bool>
+where
+    M: Map + Atomic,
+{
+    let initial = initial.as_atomlike();
+    let goal = goal.as_atomlike();
+    if initial == goal {
+        return Ok(true);
+    }
+    let mut search = BidirectionalSearch::new(map, initial, goal)?;
+    for step in search {
+        match step {
+            BidirectionalStep::MeetAtCommon { .. } => return Ok(true),
+            _ => continue,
+        }
+    }
+    Ok(false)
 }
 
 #[cfg(test)]
@@ -1137,7 +1290,7 @@ mod tests {
         }
 
         #[test]
-        fn disconnected() {
+        fn unconnected_h2o() {
             // Ensure that only the connected network is traversed
             let mut m = AtomMap::new();
             // Two water molecules
@@ -1150,7 +1303,7 @@ mod tests {
         }
 
         #[test]
-        fn h_bond_doesnt_connect() {
+        fn h_bond_doesnt_connect_h2o() {
             let mut m = AtomMap::new();
             // Two water molecules
             let (o1, o1_h_bonds) = m.add_atom_and_saturate(Element::O);
@@ -1176,7 +1329,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn simple() -> MolMapResult<()> {
+        fn simple_propane() -> MolMapResult<()> {
             // Traverse propane, starting at the carbon in the middle of the chain
             let m: AtomMap = ron::from_str(PROPANE).unwrap();
             let c1: AnyAtomlike = "a1".parse()?;
@@ -1303,7 +1456,7 @@ mod tests {
         }
 
         #[test]
-        fn disconnected() {
+        fn unconnected_h2o() {
             // Ensure that only the connected network is traversed
             let mut m = AtomMap::new();
             // Two water molecules
@@ -1322,7 +1475,7 @@ mod tests {
         }
 
         #[test]
-        fn h_bond_doesnt_connect() {
+        fn h_bond_doesnt_connect_h2o() {
             let mut m = AtomMap::new();
             // Two water molecules
             let (o1, o1_h_bonds) = m.add_atom_and_saturate(Element::O);
@@ -1348,7 +1501,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn simple() -> MolMapResult<()> {
+        fn simple_propane() -> MolMapResult<()> {
             let m: AtomMap = ron::from_str(PROPANE).unwrap();
             let h1: AnyAtomlike = "a2".parse()?;
             let c1: AnyAtomlike = "a1".parse()?;
@@ -1366,16 +1519,19 @@ mod tests {
             // Between central C and one of the terminal C's Hs
             assert_eq!(shortest_distance(&m, c2, h1).unwrap(), 2);
             // Geminal Hs
-            assert_eq!(shortest_distance(&m, h1, "a3".parse()?).unwrap(), 2);
+            assert_eq!(shortest_distance(&m, h1, "a3".parse::<Atom>()?).unwrap(), 2);
             // Vicinal Hs
-            assert_eq!(shortest_distance(&m, h10, "a6".parse()?).unwrap(), 3);
+            assert_eq!(
+                shortest_distance(&m, h10, "a6".parse::<Atom>()?).unwrap(),
+                3
+            );
             // Between hydrogens at either end
             assert_eq!(shortest_distance(&m, h1, h10).unwrap(), 4);
             Ok(())
         }
 
         #[test]
-        fn disconnected() -> MolMapResult<()> {
+        fn disconnected_propane() -> MolMapResult<()> {
             let mut m: AtomMap = ron::from_str(PROPANE).unwrap();
             let h1: AnyAtomlike = "a2".parse()?;
             let c1: AnyAtomlike = "a1".parse()?;
@@ -1418,24 +1574,24 @@ mod tests {
             assert_eq!(shortest_distance(&m, carbons[0], carbons[5]).unwrap(), 1); // Adjacent again
             // C-H distances
             assert_eq!(
-                shortest_distance(&m, carbons[0], "a2".parse()?).unwrap(), // H on that C
+                shortest_distance(&m, carbons[0], "a2".parse::<Atom>()?).unwrap(), // H on that C
                 1
             );
             assert_eq!(
-                shortest_distance(&m, carbons[0], "a11".parse()?).unwrap(), // H on far side
+                shortest_distance(&m, carbons[0], "a11".parse::<Atom>()?).unwrap(), // H on far side
                 4
             );
             // H-H distances
             assert_eq!(
-                shortest_distance(&m, "a2".parse()?, "a3".parse()?).unwrap(), // Geminal
+                shortest_distance(&m, "a2".parse::<Atom>()?, "a3".parse::<Atom>()?).unwrap(), // Geminal
                 2
             );
             assert_eq!(
-                shortest_distance(&m, "a2".parse()?, "a5".parse()?).unwrap(), // Vicinal
+                shortest_distance(&m, "a2".parse::<Atom>()?, "a5".parse::<Atom>()?).unwrap(), // Vicinal
                 3
             );
             assert_eq!(
-                shortest_distance(&m, "a2".parse()?, "a11".parse()?).unwrap(), // Hs on opposite Cs
+                shortest_distance(&m, "a2".parse::<Atom>()?, "a11".parse::<Atom>()?).unwrap(), // Hs on opposite Cs
                 5
             );
             // If we break the C0-C1 bond, they are still connected but much greater distance
@@ -1448,6 +1604,95 @@ mod tests {
                 3
             );
             assert_eq!(shortest_distance(&m, carbons[0], carbons[1]).unwrap(), 5);
+            Ok(())
+        }
+    }
+
+    mod are_connected {
+        use super::*;
+
+        #[test]
+        fn simple_propane() -> MolMapResult<()> {
+            let m: AtomMap = ron::from_str(PROPANE).unwrap();
+            let h1: AnyAtomlike = "a2".parse()?;
+            let c1: AnyAtomlike = "a1".parse()?;
+            let c2: AnyAtomlike = "a5".parse()?;
+            let c3: AnyAtomlike = "a8".parse()?;
+            let h10: AnyAtomlike = "a11".parse()?;
+            // An atom is connected to itself
+            assert!(are_connected(&m, c1, c1).unwrap());
+            // Check various other connections
+            assert!(are_connected(&m, c1, c3).unwrap());
+            assert!(are_connected(&m, c1, c2).unwrap());
+            assert!(are_connected(&m, c1, h1).unwrap());
+            assert!(are_connected(&m, c2, h1).unwrap());
+            assert!(are_connected(&m, h1, "a3".parse::<Atom>()?).unwrap());
+            assert!(are_connected(&m, h10, "a6".parse::<Atom>()?).unwrap());
+            assert!(are_connected(&m, h1, h10).unwrap());
+            Ok(())
+        }
+
+        #[test]
+        fn disconnected_propane() -> MolMapResult<()> {
+            let mut m: AtomMap = ron::from_str(PROPANE).unwrap();
+            let h1: AnyAtomlike = "a2".parse()?;
+            let c1: AnyAtomlike = "a1".parse()?;
+            let c2: AnyAtomlike = "a5".parse()?;
+            let c3: AnyAtomlike = "a8".parse()?;
+            let h10: AnyAtomlike = "a11".parse()?;
+            // Delete the C1-C2 bond
+            m.delete_bond("b9".parse()?);
+            // Now repeat the tests above; should get some different results
+            // An atom is still connnected to itself
+            assert!(are_connected(&m, c1, c1).unwrap());
+            // C1 and C2 are of course now disconnected
+            assert!(!are_connected(&m, c1, c2).unwrap());
+            // The two terminal carbons are also now disconnected
+            assert!(!are_connected(&m, c1, c3).unwrap());
+            // C2 and C3 are not, however
+            assert!(are_connected(&m, c2, c3).unwrap());
+            // Terminal C and its Hs are still connected
+            assert!(are_connected(&m, c1, h1).unwrap());
+            // Central C and one of C1's Hs are not
+            assert!(!are_connected(&m, c2, h1).unwrap());
+            // Likewise for hydrogens at either end
+            assert!(!are_connected(&m, h1, h10).unwrap());
+            Ok(())
+        }
+
+        #[test]
+        fn unconnected_h2o() -> MolMapResult<()> {
+            // Two separate water molecules
+            let mut m = AtomMap::new();
+            let o1 = m.add_atom(Element::O);
+            let o2 = m.add_atom(Element::O);
+            for o in [o1, o2] {
+                for _ in 0..2 {
+                    let h = m.add_atom(Element::H);
+                    m.add_bond_unchecked(BondType::Covalent { order: 1.0 }, o, h);
+                }
+            }
+            assert!(!are_connected(&m, o1, o2)?);
+            Ok(())
+        }
+
+        #[test]
+        fn h_bond_doesnt_connect_h2o() -> MolMapResult<()> {
+            let mut m = AtomMap::new();
+            // Two water molecules
+            let (o1, o1_h_bonds) = m.add_atom_and_saturate(Element::O);
+            let o1h1 = o1_h_bonds.first().unwrap().to_owned();
+            let (o2, _bonds) = m.add_atom_and_saturate(Element::O);
+            let h1 = m
+                .view(o1h1)
+                .unwrap()
+                .partners()
+                .into_iter()
+                .find(|&x| x != o1.as_bondable()) // Find the bonding partner that isn't O1
+                .unwrap();
+            // Connect via a hydrogen bond
+            m.add_bond_unchecked(BondType::Hydrogen, o2, h1);
+            assert!(!are_connected(&m, o1, o2).unwrap());
             Ok(())
         }
     }
