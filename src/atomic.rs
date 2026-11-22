@@ -8,32 +8,15 @@
 
 //! Maps holding fundamental atomic entities connected by a network of bonds.
 
+mod common;
 mod graph;
 mod spatial;
-
-/// Traits specific to the atomic layer.
-mod traits {
-    use crate::Map;
-
-    use super::AtomMap;
-
-    /// A map that holds fundamental atomic entities, and a network of bonds between them.
-    ///
-    /// This applies to all maps, and so all map types in the crate implement this trait.
-    pub trait Atomic: Map {
-        /// Returns the the core network of atoms and bonds without any spatial positions.
-        fn into_atomic(self) -> AtomMap;
-
-        /// Provides read-only access to the core network of atoms and bonds.
-        fn as_atomic(&self) -> &AtomMap;
-    }
-}
 
 // ------------------
 // Crate-internal API
 // ------------------
 pub(crate) mod data;
-pub(crate) use spatial::SpatialAtomicCommon;
+pub(crate) use spatial::AtomicPositions;
 
 // ----------
 // Public API
@@ -42,13 +25,11 @@ pub(crate) use spatial::SpatialAtomicCommon;
 // glob import and get basically everything they need to work with an AtomMap
 pub use crate::bonding::BondType;
 pub use crate::elements::{Element, Pseudoelement};
+pub use common::Atomic;
 pub use graph::AtomMap;
 pub use spatial::{AtomMap2, AtomMap3, SpatialAtomMap};
-pub use traits::Atomic;
 
-pub mod views;
-
-/// Entity types and traits relevant when using an [`AtomMap`].
+/// Entity types and traits relevant when using an `AtomMap` or `SpatialAtomMap`.
 pub mod entities {
     // In-line entity kinds so that the mod doc page gives a neat overview of them
     #[doc(inline)]
@@ -63,4 +44,51 @@ pub mod entities {
     pub use crate::entities::{
         ResolvedAtomlike, ResolvedBondable, ResolvedEntity, ResolvedFundamental,
     };
+}
+
+/// Views into an `AtomMap` or `SpatialAtomMap`.
+pub mod views {
+    use crate::view::{View, ViewMut};
+
+    use super::{entities::*, *};
+
+    /// Views into an `AtomMap`.
+    pub mod graph {
+        use super::*;
+
+        macro_rules! generate_views {
+        ($kind:ident) => {
+            paste::paste! {
+                #[doc = concat!("An immutable view of an individual ", stringify!([<$kind:lower>]), " in an [`AtomMap`].")]
+                pub type [<$kind View>]<'m> = View<'m, AtomMap, $kind>;
+
+                #[doc = concat!("A mutable view of an individual ", stringify!([<$kind:lower>]), " in an [`AtomMap`].")]
+                pub type [<$kind ViewMut>]<'m> = ViewMut<'m, AtomMap, $kind>;
+            }
+        };
+    }
+        generate_views!(Atom);
+        generate_views!(Bond);
+        generate_views!(Pseudoatom);
+    }
+
+    /// Views into a `SpatialAtomMap`.
+    pub mod spatial {
+        use super::*;
+
+        macro_rules! generate_views {
+            ($kind:ident) => {
+                paste::paste! {
+                    #[doc = concat!("An immutable view of an individual ", stringify!([<$kind:lower>]), " in a [`SpatialAtomMap`].")]
+                    pub type [<$kind View>]<'m, const D: usize, U> = View<'m, SpatialAtomMap<D, U>, $kind>;
+
+                    #[doc = concat!("A mutable view of an individual ", stringify!([<$kind:lower>]), " in a [`SpatialAtomMap`].")]
+                    pub type [<$kind ViewMut>]<'m, const D: usize, U> = ViewMut<'m, SpatialAtomMap<D, U>, $kind>;
+                }
+            };
+        }
+        generate_views!(Atom);
+        generate_views!(Bond);
+        generate_views!(Pseudoatom);
+    }
 }

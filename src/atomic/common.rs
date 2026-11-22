@@ -6,60 +6,33 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! View methods universal to all maps, and aliases for views into an [`AtomMap`] or [`SpatialAtomMap`].
+//! The `Atomic` trait and methods universal to all `Atomic` maps (i.e. all maps).
 
 use crate::{
     bonding::BondType,
     elements::Element,
     entities::*,
     traits::{Map, Stores},
-    view::{View, ViewMut},
+    view::View,
 };
 
-use super::{Atomic, data::*};
+use super::{AtomMap, data::*};
 
-/// Aliases for views into an [`AtomMap`].
-pub mod graph {
-    use super::super::AtomMap;
-    use super::*;
+/// A map that holds fundamental atomic entities, and a network of bonds between them.
+///
+/// This applies to all maps, and so all map types in the crate implement this trait.
+pub trait Atomic: Map {
+    /// Returns the the core network of atoms and bonds without any spatial positions.
+    fn into_atomic(self) -> AtomMap;
 
-    macro_rules! generate_views {
-    ($kind:ident) => {
-        paste::paste! {
-            #[doc = concat!("An immutable view of an individual ", stringify!([<$kind:lower>]), " in an [`AtomMap`].")]
-            pub type [<$kind View>]<'m> = View<'m, AtomMap, $kind>;
-
-            #[doc = concat!("A mutable view of an individual ", stringify!([<$kind:lower>]), " in an [`AtomMap`].")]
-            pub type [<$kind ViewMut>]<'m> = ViewMut<'m, AtomMap, $kind>;
-        }
-    };
-}
-    generate_views!(Atom);
-    generate_views!(Bond);
-    generate_views!(Pseudoatom);
+    /// Provides read-only access to the core network of atoms and bonds.
+    fn as_atomic(&self) -> &AtomMap;
 }
 
-/// Aliases for views into a [`SpatialAtomMap`].
-pub mod spatial {
-    use super::super::SpatialAtomMap;
-    use super::*;
+// --- View methods ---
+// For all `Atomic` maps (i.e. all maps)
 
-    macro_rules! generate_views {
-        ($kind:ident) => {
-            paste::paste! {
-                #[doc = concat!("An immutable view of an individual ", stringify!([<$kind:lower>]), " in a [`SpatialAtomMap`].")]
-                pub type [<$kind View>]<'m, const D: usize, U> = View<'m, SpatialAtomMap<D, U>, $kind>;
-
-                #[doc = concat!("A mutable view of an individual ", stringify!([<$kind:lower>]), " in a [`SpatialAtomMap`].")]
-                pub type [<$kind ViewMut>]<'m, const D: usize, U> = ViewMut<'m, SpatialAtomMap<D, U>, $kind>;
-            }
-        };
-    }
-    generate_views!(Atom);
-    generate_views!(Bond);
-    generate_views!(Pseudoatom);
-}
-
+/// Methods on atom views common to all [`Atomic`] maps (i.e. all map types).
 impl<'m, M> View<'m, M, Atom>
 where
     M: Map + Atomic,
@@ -85,6 +58,7 @@ where
     }
 }
 
+/// Methods on pseudoatom views common to all [`Atomic`] maps (i.e. all map types).
 impl<'m, M> View<'m, M, Pseudoatom>
 where
     M: Map + Atomic,
@@ -102,6 +76,7 @@ where
     }
 }
 
+/// Methods on bond views common to all [`Atomic`] maps (i.e. all map types).
 impl<'m, M> View<'m, M, Bond>
 where
     M: Map + Atomic,

@@ -58,96 +58,6 @@ pub struct MolMap {
     substituent_parents: SecondaryMap<SubstituentKey, Molecule>,
 }
 
-impl<E> Stores<E> for MolMap
-where
-    E: Kind,
-    AtomMap: Stores<E>,
-{
-    fn slotmap(&self) -> &SlotMap<<E>::Key, <E>::Data> {
-        self.inner.slotmap()
-    }
-}
-
-impl<E> StoresMut<E> for MolMap
-where
-    E: Kind,
-    AtomMap: StoresMut<E>,
-{
-    fn slotmap_mut(&mut self) -> &mut SlotMap<<E>::Key, <E>::Data> {
-        self.inner.slotmap_mut()
-    }
-}
-
-macro_rules! impl_stores {
-    ($kind: ident, $attr: ident) => {
-        impl Stores<$kind> for MolMap {
-            fn slotmap(&self) -> &SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {
-                &self.$attr
-            }
-        }
-
-        impl StoresMut<$kind> for MolMap {
-            fn slotmap_mut(
-                &mut self,
-            ) -> &mut SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {
-                &mut self.$attr
-            }
-        }
-    };
-}
-impl_stores!(Substituent, substituents);
-impl_stores!(Molecule, molecules);
-
-impl Graph for MolMap {}
-
-impl Map for MolMap {
-    type Graph = Self;
-
-    fn into_graph(self) -> Self::Graph {
-        self
-    }
-
-    fn as_graph(&self) -> &Self {
-        self
-    }
-
-    fn contains<E: Entity>(&self, entity: E) -> bool {
-        match entity.to_resolved() {
-            ResolvedEntity::Atom(atom) => self.inner.contains(atom),
-            ResolvedEntity::Bond(bond) => self.inner.contains(bond),
-            ResolvedEntity::Pseudoatom(pseudoatom) => self.inner.contains(pseudoatom),
-            ResolvedEntity::Substituent(substituent) => {
-                <MolMap as Stores<Substituent>>::slotmap(self).contains_key(substituent.to_key())
-            }
-            ResolvedEntity::Molecule(molecule) => {
-                <MolMap as Stores<Molecule>>::slotmap(self).contains_key(molecule.to_key())
-            }
-            #[expect(unreachable_patterns)] // Unreachable for now but will be needed later
-            _ => false,
-        }
-    }
-}
-
-impl Atomic for MolMap {
-    fn into_atomic(self) -> AtomMap {
-        self.inner
-    }
-
-    fn as_atomic(&self) -> &AtomMap {
-        &self.inner
-    }
-}
-
-impl Molecular for MolMap {
-    fn into_molecular(self) -> MolMap {
-        self
-    }
-
-    fn as_molecular(&self) -> &MolMap {
-        self
-    }
-}
-
 /// Constructor methods.
 impl MolMap {
     /// Creates a new, empty `MolMap`.
@@ -1099,219 +1009,136 @@ impl MolMap {
     // }
 }
 
-/// View methods specific to `MolMap`.
-mod views {
-    use super::*;
+impl Map for MolMap {
+    type Graph = Self;
 
-    impl<'m> ViewMut<'m, MolMap, Atom> {
-        /// Removes the atom from the map, as well as any bonds to it.
-        pub fn delete(self) {
-            self.map.delete_atom(self.id);
-        }
+    fn into_graph(self) -> Self::Graph {
+        self
     }
 
-    impl<'m> ViewMut<'m, MolMap, Pseudoatom> {
-        /// Removes the pseudoatom from the map, as well as any bonds to it.
-        pub fn delete(self) {
-            self.map.delete_pseudoatom(self.id);
-        }
+    fn as_graph(&self) -> &Self {
+        self
     }
 
-    impl<'m> ViewMut<'m, MolMap, Bond> {
-        /// Removes the bond from the map (but not its bonding partners).
-        pub fn delete(self) {
-            self.map.delete_bond(self.id);
+    fn contains<E: Entity>(&self, entity: E) -> bool {
+        match entity.to_resolved() {
+            ResolvedEntity::Atom(atom) => self.inner.contains(atom),
+            ResolvedEntity::Bond(bond) => self.inner.contains(bond),
+            ResolvedEntity::Pseudoatom(pseudoatom) => self.inner.contains(pseudoatom),
+            ResolvedEntity::Substituent(substituent) => {
+                <MolMap as Stores<Substituent>>::slotmap(self).contains_key(substituent.to_key())
+            }
+            ResolvedEntity::Molecule(molecule) => {
+                <MolMap as Stores<Molecule>>::slotmap(self).contains_key(molecule.to_key())
+            }
+            #[expect(unreachable_patterns)] // Unreachable for now but will be needed later
+            _ => false,
         }
     }
+}
 
-    impl<'m> ViewMut<'m, MolMap, Substituent> {
-        /// Removes the substituent from the map, as well as all of its members.
-        pub fn delete(self) {
-            self.map.delete_substituent(self.id);
-        }
+impl Graph for MolMap {}
 
-        // /// Adds an atom, pseudoatom, or bond to the substituent.
-        // ///
-        // /// Returns whether the fundamental was newly inserted.
-        // ///
-        // /// If the fundamental is already a member of another substituent, it is removed
-        // /// from it before it is inserted into this one.
-        // ///
-        // /// # Errors
-        // ///
-        // /// Returns an error if the fundamental is invalid.
-        // pub fn insert(self, fundamental: impl Fundamental) -> Result<bool> {
-        //     if !self.map.contains(fundamental) {
-        //         return Err(InvalidId(fundamental.as_entity()));
-        //     };
-        //     Ok(self
-        //         .map
-        //         .core_mut()
-        //         .insert_into_substituent(self.id, fundamental))
-        // }
-
-        // /// Adds atoms, pseudoatoms, or bonds from an iterator to the substituent.
-        // ///
-        // /// If any of the fundamentals are already members of other substituents, they are
-        // /// removed before they are inserted into this one.
-        // ///
-        // /// # Errors
-        // ///
-        // /// Returns an error if any of the fundamentals are invalid, in which case the
-        // /// map will remain unchanged; the returned error will hold the ID of the first
-        // /// invalid fundamental encountered.
-        // pub fn extend<E, I>(self, fundamentals: I) -> Result<()>
-        // where
-        //     E: Entity + Into<AnyFundamental>,
-        //     I: IntoIterator<Item = E>,
-        //     I::IntoIter: Clone,
-        // {
-        //     let fundamentals = fundamentals.into_iter();
-        //     for f in fundamentals.clone() {
-        //         if !self.map.contains(f) {
-        //             return Err(InvalidId(f.as_entity()));
-        //         }
-        //     }
-        //     for f in fundamentals {
-        //         self.map
-        //             .core_mut()
-        //             .insert_into_substituent(self.id, f.into());
-        //     }
-        //     Ok(())
-        // }
-
-        // /// Removes an atom, pseudoatom, or bond from the substituent.
-        // ///
-        // /// Returns whether the fundamental was a member of the substituent.
-        // ///
-        // /// If the fundamental is an atomlike and is the centre of the substituent,
-        // /// the centre is adjusted accordingly; if it is the lone centre, the
-        // /// substituent becomes centreless. If it is one of two centres,
-        // /// however, the centre remains `SubstituentCentre::Multiple` rather than
-        // /// becoming `Single`.
-        // ///
-        // /// The substituent continues to exist, even if empty, as does the removed
-        // /// fundamental.
-        // pub fn remove(self, fundamental: impl Fundamental) -> bool {
-        //     self.map
-        //         .core_mut()
-        //         .remove_from_substituent(self.id, fundamental)
-        // }
-
-        // /// Empties the substituent by removing all its members, returning an iterator
-        // /// over the IDs of the former members.
-        // ///
-        // /// The substituent and all removed fundamentals continue to exist.
-        // ///
-        // /// After this operation, the substituent will be centreless.
-        // pub fn drain(self) -> impl Iterator<Item = AnyFundamental> {
-        //     self.map.core_mut().drain_substituent(self.id)
-        // }
-
-        // /// Empties the substituent by deleting all its members.
-        // ///
-        // /// The substituent itself continues to exist, and will be centreless.
-        // pub fn clear(self) {
-        //     self.map.core_mut().clear_substituent(self.id);
-        // }
-
-        // /// Empties the substituent and then removes it from the map, returning the IDs of
-        // /// the former members.
-        // ///
-        // /// All removed fundamentals continue to exist.
-        // pub fn dissolve(self) -> impl Iterator<Item = AnyFundamental> {
-        //     self.map.core_mut().dissolve_substituent(self.id)
-        // }
+impl Atomic for MolMap {
+    fn into_atomic(self) -> AtomMap {
+        self.inner
     }
 
-    impl<'m> ViewMut<'m, MolMap, Molecule> {
-        /// Removes the molecule from the map, as well as all of its members.
-        pub fn delete(self) {
-            self.map.delete_molecule(self.id);
+    fn as_atomic(&self) -> &AtomMap {
+        &self.inner
+    }
+}
+
+impl Molecular for MolMap {
+    fn into_molecular(self) -> MolMap {
+        self
+    }
+
+    fn as_molecular(&self) -> &MolMap {
+        self
+    }
+}
+
+impl<E> Stores<E> for MolMap
+where
+    E: Kind,
+    AtomMap: Stores<E>,
+{
+    fn slotmap(&self) -> &SlotMap<<E>::Key, <E>::Data> {
+        self.inner.slotmap()
+    }
+}
+
+impl<E> StoresMut<E> for MolMap
+where
+    E: Kind,
+    AtomMap: StoresMut<E>,
+{
+    fn slotmap_mut(&mut self) -> &mut SlotMap<<E>::Key, <E>::Data> {
+        self.inner.slotmap_mut()
+    }
+}
+
+macro_rules! impl_stores {
+    ($kind: ident, $attr: ident) => {
+        impl Stores<$kind> for MolMap {
+            fn slotmap(&self) -> &SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {
+                &self.$attr
+            }
         }
 
-        // /// Adds an atom, pseudoatom, or bond to the molecule.
-        // ///
-        // /// Returns whether the fundamental was newly inserted.
-        // ///
-        // /// If the fundamental is already a member of another molecule, it is removed
-        // /// from it before it is inserted into this one.
-        // ///
-        // /// # Errors
-        // ///
-        // /// Returns an error if the fundamental is invalid.
-        // pub fn insert(self, fundamental: impl Fundamental) -> Result<bool> {
-        //     if !self.map.contains(fundamental) {
-        //         return Err(InvalidId(fundamental.as_entity()));
-        //     };
-        //     Ok(self
-        //         .map
-        //         .core_mut()
-        //         .insert_into_molecule(self.id, fundamental))
-        // }
+        impl StoresMut<$kind> for MolMap {
+            fn slotmap_mut(
+                &mut self,
+            ) -> &mut SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {
+                &mut self.$attr
+            }
+        }
+    };
+}
+impl_stores!(Substituent, substituents);
+impl_stores!(Molecule, molecules);
 
-        // /// Adds atoms, pseudoatoms, or bonds from an iterator to the molecule.
-        // ///
-        // /// If any of the fundamentals are already members of other molecules, they are
-        // /// removed before they are inserted into this one.
-        // ///
-        // /// # Errors
-        // ///
-        // /// Returns an error if any of the fundamentals are invalid, in which case the
-        // /// map will remain unchanged; the returned error will hold the ID of the first
-        // /// invalid fundamental encountered.
-        // pub fn extend<E, I>(self, fundamentals: I) -> Result<()>
-        // where
-        //     E: Entity + Into<AnyFundamental>,
-        //     I: IntoIterator<Item = E>,
-        //     I::IntoIter: Clone,
-        // {
-        //     let fundamentals = fundamentals.into_iter();
-        //     for f in fundamentals.clone() {
-        //         if !self.map.contains(f) {
-        //             return Err(InvalidId(f.as_entity()));
-        //         }
-        //     }
-        //     for f in fundamentals {
-        //         self.map.core_mut().insert_into_molecule(self.id, f.into());
-        //     }
-        //     Ok(())
-        // }
+// --- View methods ---
+// Specific to `MolMap`
 
-        // /// Removes an atom, pseudoatom, or bond from the molecule.
-        // ///
-        // /// Returns whether the fundamental was a member of the molecule.
-        // ///
-        // /// The molecule continues to exist even if empty, as does the removed
-        // /// fundamental.
-        // pub fn remove(self, fundamental: impl Fundamental) -> bool {
-        //     self.map
-        //         .core_mut()
-        //         .remove_from_molecule(self.id, fundamental)
-        // }
+/// Methods on mutable atom views specific to a [`MolMap`].
+impl<'m> ViewMut<'m, MolMap, Atom> {
+    /// Removes the atom from the map, as well as any bonds to it.
+    pub fn delete(self) {
+        self.map.delete_atom(self.id);
+    }
+}
 
-        // /// Empties the molecule by removing all its members, returning an iterator
-        // /// over the IDs of the former members.
-        // ///
-        // /// The molecule and all removed fundamentals continue to exist.
-        // pub fn drain(self) -> impl Iterator<Item = AnyFundamental> {
-        //     self.map.core_mut().drain_molecule(self.id)
-        // }
+/// Methods on mutable pseudoatom views specific to a [`MolMap`].
+impl<'m> ViewMut<'m, MolMap, Pseudoatom> {
+    /// Removes the pseudoatom from the map, as well as any bonds to it.
+    pub fn delete(self) {
+        self.map.delete_pseudoatom(self.id);
+    }
+}
 
-        // /// Empties the molecule by deleting all its members.
-        // ///
-        // /// The molecule itself continues to exist.
-        // pub fn clear(self) {
-        //     self.map.core_mut().clear_molecule(self.id);
-        // }
+/// Methods on mutable bond views specific to a [`MolMap`].
+impl<'m> ViewMut<'m, MolMap, Bond> {
+    /// Removes the bond from the map (but not its bonding partners).
+    pub fn delete(self) {
+        self.map.delete_bond(self.id);
+    }
+}
 
-        // /// Empties the molecule and then removes it from the map, returning the IDs of the
-        // /// former members.
-        // ///
-        // /// All removed fundamentals continue to exist.
-        // pub fn dissolve(self) -> impl Iterator<Item = AnyFundamental> {
-        //     self.map.core_mut().dissolve_molecule(self.id)
-        // }
+/// Methods on mutable substituent views specific to a [`MolMap`].
+impl<'m> ViewMut<'m, MolMap, Substituent> {
+    /// Removes the substituent from the map, as well as all of its members.
+    pub fn delete(self) {
+        self.map.delete_substituent(self.id);
+    }
+}
+
+/// Methods on mutable molecule views specific to a [`MolMap`].
+impl<'m> ViewMut<'m, MolMap, Molecule> {
+    /// Removes the molecule from the map, as well as all of its members.
+    pub fn delete(self) {
+        self.map.delete_molecule(self.id);
     }
 }
 
