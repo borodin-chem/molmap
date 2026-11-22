@@ -68,6 +68,10 @@ impl<const D: usize, U> Map for SpatialMolMap<D, U> {
     }
 }
 
+impl<const D: usize, U: Unit> Spatial<D> for SpatialMolMap<D, U> {
+    type Unit = U;
+}
+
 impl<const D: usize, U> Atomic for SpatialMolMap<D, U> {
     fn into_atomic(self) -> AtomMap {
         self.graph.into_atomic()
@@ -86,10 +90,6 @@ impl<const D: usize, U> Molecular for SpatialMolMap<D, U> {
     fn as_molecular(&self) -> &Self::Graph {
         &self.graph
     }
-}
-
-impl<const D: usize, U: Unit> Spatial<D> for SpatialMolMap<D, U> {
-    type Unit = U;
 }
 
 impl<const D: usize, U: Unit> AtomicPositions<D> for SpatialMolMap<D, U> {
