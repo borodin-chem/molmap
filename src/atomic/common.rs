@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! The `Atomic` trait and methods universal to all `Atomic` maps (all maps).
+//! The `Atomic` trait and methods universal to all `Atomic` maps (i.e. all maps).
 
 use crate::{
     bonding::BondType,
@@ -29,6 +29,10 @@ pub trait Atomic: Map {
     fn as_atomic(&self) -> &AtomMap;
 }
 
+// --- View methods ---
+// For all `Atomic` maps (i.e. all maps)
+
+/// Methods on atom views common to all [`Atomic`] maps (i.e. all map types).
 impl<'m, M> View<'m, M, Atom>
 where
     M: Map + Atomic,
@@ -54,6 +58,7 @@ where
     }
 }
 
+/// Methods on pseudoatom views common to all [`Atomic`] maps (i.e. all map types).
 impl<'m, M> View<'m, M, Pseudoatom>
 where
     M: Map + Atomic,
@@ -71,6 +76,7 @@ where
     }
 }
 
+/// Methods on bond views common to all [`Atomic`] maps (i.e. all map types).
 impl<'m, M> View<'m, M, Bond>
 where
     M: Map + Atomic,

@@ -43,10 +43,12 @@ pub struct View<'m, M, E> {
     pub(crate) id: E,
 }
 
+/// Methods common to all views.
 impl<'m, M, E> View<'m, M, E>
 where
     E: Entity,
 {
+    /// Returns the ID of the entity that the view is of.
     pub fn id(&self) -> E {
         self.id
     }
@@ -64,10 +66,16 @@ pub struct ViewMut<'m, M, E> {
     pub(crate) id: E,
 }
 
+/// Methods common to all mutable views.
 impl<'m, M, E> ViewMut<'m, M, E>
 where
     E: Entity,
 {
+    /// Returns the ID of the entity that the view is of.
+    pub fn id(&self) -> E {
+        self.id
+    }
+
     /// Returns an immutable view of the same entity.
     #[allow(unused)]
     pub(crate) fn as_view(&'m self) -> View<'m, M, E> {

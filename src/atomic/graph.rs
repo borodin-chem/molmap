@@ -39,66 +39,6 @@ pub struct AtomMap {
     bonds: SlotMap<BondKey, BondData>,
 }
 
-macro_rules! impl_stores {
-    ($kind: ident, $attr: ident) => {
-        impl Stores<$kind> for AtomMap {
-            fn slotmap(&self) -> &SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {
-                &self.$attr
-            }
-        }
-
-        impl StoresMut<$kind> for AtomMap {
-            fn slotmap_mut(
-                &mut self,
-            ) -> &mut SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {
-                &mut self.$attr
-            }
-        }
-    };
-}
-impl_stores!(Atom, atoms);
-impl_stores!(Bond, bonds);
-impl_stores!(Pseudoatom, pseudoatoms);
-
-impl Graph for AtomMap {}
-
-impl Map for AtomMap {
-    type Graph = Self;
-
-    fn into_graph(self) -> Self::Graph {
-        self
-    }
-
-    fn as_graph(&self) -> &Self {
-        self
-    }
-
-    fn contains<E: Entity>(&self, entity: E) -> bool {
-        match entity.to_resolved() {
-            ResolvedEntity::Atom(atom) => {
-                <AtomMap as Stores<Atom>>::slotmap(self).contains_key(atom.to_key())
-            }
-            ResolvedEntity::Bond(bond) => {
-                <AtomMap as Stores<Bond>>::slotmap(self).contains_key(bond.to_key())
-            }
-            ResolvedEntity::Pseudoatom(pseudoatom) => {
-                <AtomMap as Stores<Pseudoatom>>::slotmap(self).contains_key(pseudoatom.to_key())
-            }
-            _ => false,
-        }
-    }
-}
-
-impl Atomic for AtomMap {
-    fn into_atomic(self) -> AtomMap {
-        self
-    }
-
-    fn as_atomic(&self) -> &AtomMap {
-        self
-    }
-}
-
 /// Constructor methods.
 impl AtomMap {
     /// Creates a new, empty `AtomGraph`.
@@ -325,29 +265,90 @@ impl AtomMap {
     }
 }
 
-/// View methods specific to `AtomMap`.
-mod views {
-    use super::*;
+impl Map for AtomMap {
+    type Graph = Self;
 
-    impl<'m> ViewMut<'m, AtomMap, Atom> {
-        /// Removes the atom from the map, as well as any bonds to it.
-        pub fn delete(self) {
-            self.map.delete_atom(self.id);
-        }
+    fn into_graph(self) -> Self::Graph {
+        self
     }
 
-    impl<'m> ViewMut<'m, AtomMap, Pseudoatom> {
-        /// Removes the pseudoatom from the map, as well as any bonds to it.
-        pub fn delete(self) {
-            self.map.delete_pseudoatom(self.id);
-        }
+    fn as_graph(&self) -> &Self {
+        self
     }
 
-    impl<'m> ViewMut<'m, AtomMap, Bond> {
-        /// Removes the bond from the map (but not its bonding partners).
-        pub fn delete(self) {
-            self.map.delete_bond(self.id);
+    fn contains<E: Entity>(&self, entity: E) -> bool {
+        match entity.to_resolved() {
+            ResolvedEntity::Atom(atom) => {
+                <AtomMap as Stores<Atom>>::slotmap(self).contains_key(atom.to_key())
+            }
+            ResolvedEntity::Bond(bond) => {
+                <AtomMap as Stores<Bond>>::slotmap(self).contains_key(bond.to_key())
+            }
+            ResolvedEntity::Pseudoatom(pseudoatom) => {
+                <AtomMap as Stores<Pseudoatom>>::slotmap(self).contains_key(pseudoatom.to_key())
+            }
+            _ => false,
         }
+    }
+}
+
+impl Graph for AtomMap {}
+
+impl Atomic for AtomMap {
+    fn into_atomic(self) -> AtomMap {
+        self
+    }
+
+    fn as_atomic(&self) -> &AtomMap {
+        self
+    }
+}
+
+macro_rules! impl_stores {
+    ($kind: ident, $attr: ident) => {
+        impl Stores<$kind> for AtomMap {
+            fn slotmap(&self) -> &SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {
+                &self.$attr
+            }
+        }
+
+        impl StoresMut<$kind> for AtomMap {
+            fn slotmap_mut(
+                &mut self,
+            ) -> &mut SlotMap<<$kind as Keyed>::Key, <$kind as Stored>::Data> {
+                &mut self.$attr
+            }
+        }
+    };
+}
+impl_stores!(Atom, atoms);
+impl_stores!(Bond, bonds);
+impl_stores!(Pseudoatom, pseudoatoms);
+
+// --- View methods ---
+// Specific to `AtomMap`
+
+/// Methods on mutable atom views specific to an [`AtomMap`].
+impl<'m> ViewMut<'m, AtomMap, Atom> {
+    /// Removes the atom from the map, as well as any bonds to it.
+    pub fn delete(self) {
+        self.map.delete_atom(self.id);
+    }
+}
+
+/// Methods on mutable pseudoatom views specific to an [`AtomMap`].
+impl<'m> ViewMut<'m, AtomMap, Pseudoatom> {
+    /// Removes the pseudoatom from the map, as well as any bonds to it.
+    pub fn delete(self) {
+        self.map.delete_pseudoatom(self.id);
+    }
+}
+
+/// Methods on mutable bond views specific to an [`AtomMap`].
+impl<'m> ViewMut<'m, AtomMap, Bond> {
+    /// Removes the bond from the map (but not its bonding partners).
+    pub fn delete(self) {
+        self.map.delete_bond(self.id);
     }
 }
 

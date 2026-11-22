@@ -15,7 +15,7 @@ mod spatial;
 
 pub(crate) mod data;
 #[expect(unused)]
-pub(crate) use spatial::SpatialMolecularCommon;
+pub(crate) use spatial::MolecularPositions;
 
 // ----------
 // Public API

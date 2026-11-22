@@ -26,6 +26,10 @@ pub trait Molecular: Map {
     fn as_molecular(&self) -> &MolMap;
 }
 
+// --- View methods ---
+// For all `Molecular` maps
+
+/// Methods on substituent views common to all [`Molecular`] maps.
 impl<'m, M> View<'m, M, Substituent>
 where
     M: Map + Molecular,
@@ -61,6 +65,7 @@ where
     }
 }
 
+/// Methods on mutable substituent views common to all [`Molecular`] maps.
 impl<'m, M> ViewMut<'m, M, Substituent>
 where
     M: Map + Molecular,
@@ -90,6 +95,7 @@ where
     //}
 }
 
+/// Methods on molecule views common to all [`Molecular`] maps.
 impl<'m, M> View<'m, M, Molecule>
 where
     M: Map + Molecular,

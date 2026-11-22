@@ -16,7 +16,7 @@ mod spatial;
 // Crate-internal API
 // ------------------
 pub(crate) mod data;
-pub(crate) use spatial::SpatialAtomicCommon;
+pub(crate) use spatial::AtomicPositions;
 
 // ----------
 // Public API
@@ -52,7 +52,7 @@ pub mod views {
 
     use super::{entities::*, *};
 
-    /// Views into an [`AtomMap`].
+    /// Views into an `AtomMap`.
     pub mod graph {
         use super::*;
 

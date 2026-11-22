@@ -21,9 +21,133 @@ use crate::{
     geometry::{self, Point, Vector},
     traits::{Map, Spatial, Stores},
     units::{Angstrom, Relative, Unit},
+    view::{View, ViewMut},
 };
 
 use super::{AtomMap, Atomic};
+
+/// An [`AtomMap`] extended to also hold the positions of its entities in `D`-dimensional space.
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SpatialAtomMap<const D: usize, U> {
+    graph: AtomMap,
+    atom_positions: SecondaryMap<AtomKey, Point<D>>,
+    pseudoatom_positions: SecondaryMap<PseudoatomKey, Point<D>>,
+    unit: PhantomData<U>,
+}
+
+/// An [`AtomMap`] extended to also hold the two-dimensional positions of its entities.
+pub type AtomMap2 = SpatialAtomMap<2, Relative>;
+
+/// An [`AtomMap`] extended to also hold the three-dimensional positions of its entities.
+pub type AtomMap3 = SpatialAtomMap<3, Angstrom>;
+
+/// Constructor methods.
+impl<const D: usize, U> SpatialAtomMap<D, U> {
+    pub fn new() -> Self {
+        Self {
+            graph: AtomMap::new(),
+            atom_positions: SecondaryMap::new(),
+            pseudoatom_positions: SecondaryMap::new(),
+            unit: PhantomData,
+        }
+    }
+}
+
+/// Methods for entity addition.
+impl<const D: usize, U: Unit> SpatialAtomMap<D, U> {
+    /// Adds an atom to the map at the given position.
+    pub fn add_atom(&mut self, element: Element, position: Point<D>) -> Atom {
+        let atom = self.graph.add_atom(element);
+        self.set_atom_position(atom, position);
+        atom
+    }
+
+    /// Adds a pseudoatom to the map at the given position.
+    pub fn add_pseudoatom(
+        &mut self,
+        pseudoelement: Pseudoelement,
+        position: Point<D>,
+    ) -> Pseudoatom {
+        let pseudoatom = self.graph.add_pseudoatom(pseudoelement);
+        self.set_pseudoatom_position(pseudoatom, position);
+        pseudoatom
+    }
+
+    /// Creates a new (single covalent) bond between two bondable entities.
+    ///
+    /// # Errors
+    ///
+    /// Fails if either of `start` and `end` are invalid.
+    pub fn add_bond<A, B>(&mut self, bond_type: BondType, start: A, end: B) -> Result<Bond, Error>
+    where
+        A: Bondable,
+        B: Bondable,
+    {
+        if !self.contains(start) {
+            return Err(Error::InvalidId(start.as_entity()));
+        } else if !self.contains(end) {
+            return Err(Error::InvalidId(end.as_entity()));
+        };
+        Ok(self.graph.add_bond_unchecked(bond_type, start, end))
+    }
+
+    /// Creates a new single covalent bond between two bondable entities.
+    ///
+    /// # Errors
+    ///
+    /// Fails if either of `start` and `end` are invalid.
+    pub fn add_single_bond<A, B>(&mut self, start: A, end: B) -> Result<Bond, Error>
+    where
+        A: Bondable,
+        B: Bondable,
+    {
+        self.add_bond(BondType::Covalent { order: 1.0 }, start, end)
+    }
+
+    /// Creates a new double covalent bond between two bondable entities.
+    ///
+    /// # Errors
+    ///
+    /// Fails if either of `start` and `end` are invalid.
+    pub fn add_double_bond<A, B>(&mut self, start: A, end: B) -> Result<Bond, Error>
+    where
+        A: Bondable,
+        B: Bondable,
+    {
+        self.add_bond(BondType::Covalent { order: 2.0 }, start, end)
+    }
+}
+
+impl<const D: usize, U> Map for SpatialAtomMap<D, U> {
+    type Graph = AtomMap;
+
+    fn into_graph(self) -> Self::Graph {
+        self.graph
+    }
+
+    fn as_graph(&self) -> &Self::Graph {
+        &self.graph
+    }
+
+    fn contains<E: Entity>(&self, entity: E) -> bool {
+        self.as_graph().contains(entity)
+    }
+}
+
+impl<const D: usize, U: Unit> Spatial<D> for SpatialAtomMap<D, U> {
+    type Unit = U;
+}
+
+impl<const D: usize, U> Atomic for SpatialAtomMap<D, U> {
+    fn into_atomic(self) -> AtomMap {
+        self.graph
+    }
+
+    fn as_atomic(&self) -> &AtomMap {
+        &self.graph
+    }
+}
 
 /// Methods common to all spatial maps.
 ///
@@ -39,7 +163,7 @@ use super::{AtomMap, Atomic};
 /// `pub trait SpatialAtomic<const D: usize>: Spatial<D> + Atomic + SpatialAtomicCommon<D>`
 /// should be introduced and blanket implemented for all maps that fulfil the
 /// bounds -- this trait should *not* simply be made public.
-pub(crate) trait SpatialAtomicCommon<const D: usize>: Spatial<D> + Atomic {
+pub(crate) trait AtomicPositions<const D: usize>: Spatial<D> + Atomic {
     /// Returns the position of the atom, or `None` if it is invalid.
     fn atom_position(&self, atom: Atom) -> Option<&Point<D>>;
 
@@ -204,58 +328,7 @@ pub(crate) trait SpatialAtomicCommon<const D: usize>: Spatial<D> + Atomic {
     }
 }
 
-/// An [`AtomMap`] extended to also hold the positions of its entities in `D`-dimensional space.
-#[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct SpatialAtomMap<const D: usize, U> {
-    graph: AtomMap,
-    atom_positions: SecondaryMap<AtomKey, Point<D>>,
-    pseudoatom_positions: SecondaryMap<PseudoatomKey, Point<D>>,
-    unit: PhantomData<U>,
-}
-
-impl<const D: usize, U> SpatialAtomMap<D, U> {
-    pub fn new() -> Self {
-        Self {
-            graph: AtomMap::new(),
-            atom_positions: SecondaryMap::new(),
-            pseudoatom_positions: SecondaryMap::new(),
-            unit: PhantomData,
-        }
-    }
-}
-
-impl<const D: usize, U> Map for SpatialAtomMap<D, U> {
-    type Graph = AtomMap;
-
-    fn into_graph(self) -> Self::Graph {
-        self.graph
-    }
-
-    fn as_graph(&self) -> &Self::Graph {
-        &self.graph
-    }
-
-    fn contains<E: Entity>(&self, entity: E) -> bool {
-        self.as_graph().contains(entity)
-    }
-}
-
-impl<const D: usize, U> Atomic for SpatialAtomMap<D, U> {
-    fn into_atomic(self) -> AtomMap {
-        self.graph
-    }
-
-    fn as_atomic(&self) -> &AtomMap {
-        &self.graph
-    }
-}
-
-impl<const D: usize, U: Unit> Spatial<D> for SpatialAtomMap<D, U> {
-    type Unit = U;
-}
-
-impl<const D: usize, U: Unit> SpatialAtomicCommon<D> for SpatialAtomMap<D, U> {
+impl<const D: usize, U: Unit> AtomicPositions<D> for SpatialAtomMap<D, U> {
     fn atom_position(&self, atom: Atom) -> Option<&Point<D>> {
         // When an entity is removed from the map, any spatial data is not deleted.
         // If the slot has not since been overwritten, it is possible to obtain a stale
@@ -291,162 +364,93 @@ impl<const D: usize, U: Unit> SpatialAtomicCommon<D> for SpatialAtomMap<D, U> {
     }
 }
 
-/// Methods for entity addition.
-impl<const D: usize, U: Unit> SpatialAtomMap<D, U> {
-    /// Adds an atom to the map at the given position.
-    pub fn add_atom(&mut self, element: Element, position: Point<D>) -> Atom {
-        let atom = self.graph.add_atom(element);
-        self.set_atom_position(atom, position);
-        atom
-    }
+// --- View methods ---
+// Specific to `SpatialAtomMap`
 
-    /// Adds a pseudoatom to the map at the given position.
-    pub fn add_pseudoatom(
-        &mut self,
-        pseudoelement: Pseudoelement,
-        position: Point<D>,
-    ) -> Pseudoatom {
-        let pseudoatom = self.graph.add_pseudoatom(pseudoelement);
-        self.set_pseudoatom_position(pseudoatom, position);
-        pseudoatom
-    }
-
-    /// Creates a new (single covalent) bond between two bondable entities.
-    ///
-    /// # Errors
-    ///
-    /// Fails if either of `start` and `end` are invalid.
-    pub fn add_bond<A, B>(&mut self, bond_type: BondType, start: A, end: B) -> Result<Bond, Error>
-    where
-        A: Bondable,
-        B: Bondable,
-    {
-        if !self.contains(start) {
-            return Err(Error::InvalidId(start.as_entity()));
-        } else if !self.contains(end) {
-            return Err(Error::InvalidId(end.as_entity()));
-        };
-        Ok(self.graph.add_bond_unchecked(bond_type, start, end))
-    }
-
-    /// Creates a new single covalent bond between two bondable entities.
-    ///
-    /// # Errors
-    ///
-    /// Fails if either of `start` and `end` are invalid.
-    pub fn add_single_bond<A, B>(&mut self, start: A, end: B) -> Result<Bond, Error>
-    where
-        A: Bondable,
-        B: Bondable,
-    {
-        self.add_bond(BondType::Covalent { order: 1.0 }, start, end)
-    }
-
-    /// Creates a new double covalent bond between two bondable entities.
-    ///
-    /// # Errors
-    ///
-    /// Fails if either of `start` and `end` are invalid.
-    pub fn add_double_bond<A, B>(&mut self, start: A, end: B) -> Result<Bond, Error>
-    where
-        A: Bondable,
-        B: Bondable,
-    {
-        self.add_bond(BondType::Covalent { order: 2.0 }, start, end)
+/// Methods on atom views specific to a [`SpatialAtomMap`].
+impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Atom> {
+    /// Returns the position of the atom.
+    pub fn position(&self) -> &Point<D> {
+        self.map.atom_position(self.id).unwrap()
     }
 }
 
-/// View methods specific to `SpatialAtomMap`.
-mod views {
-    use crate::{View, ViewMut};
+// For now the deletion methods are identical to the equivalents for AtomMap.
+// They may well diverge in future e.g. if we cache emergent information like
+// the bond vectors or the centroids or bounding boxes of the collections.
+//
+// It is not necessary to delete the positions from the SecondaryMap; they will
+// be overwritten.
 
-    use super::*;
-
-    impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Atom> {
-        /// Returns the position of the atom.
-        pub fn position(&self) -> &Point<D> {
-            self.map.atom_position(self.id).unwrap()
-        }
+/// Methods on mutable atom views specific to a [`SpatialAtomMap`].
+impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Atom> {
+    /// Removes the atom from the map, as well as any bonds to it.
+    pub fn delete(self) {
+        self.map.graph.delete_atom(self.id);
     }
 
-    // For now the deletion methods are identical to the equivalents for AtomMap.
-    // They may well diverge in future e.g. if we cache emergent information like
-    // the bond vectors or the centroids or bounding boxes of the collections.
-    //
-    // It is not necessary to delete the positions from the SecondaryMap; they will
-    // be overwritten.
+    // /// Sets the position of the atom to the provided value.
+    // pub fn set_position(self, position: Point<D>) {
+    //     self.map.set_position(self.id, position);
+    // }
+}
 
-    impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Atom> {
-        /// Removes the atom from the map, as well as any bonds to it.
-        pub fn delete(self) {
-            self.map.graph.delete_atom(self.id);
-        }
-
-        // /// Sets the position of the atom to the provided value.
-        // pub fn set_position(self, position: Point<D>) {
-        //     self.map.set_position(self.id, position);
-        // }
-    }
-
-    impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Pseudoatom> {
-        /// Returns the position of the pseudoatom.
-        pub fn position(&self) -> &Point<D> {
-            self.map.pseudoatom_position(self.id).unwrap()
-        }
-    }
-
-    impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Pseudoatom> {
-        /// Removes the pseudoatom from the map, as well as any bonds to it.
-        pub fn delete(self) {
-            self.map.graph.delete_pseudoatom(self.id);
-        }
-
-        // /// Sets the position of the pseudoatom to the provided value.
-        // pub fn set_position(self, position: Point<D>) {
-        //     self.map.set_position(self.id, position);
-        // }
-    }
-
-    impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Bond> {
-        /// Returns the position of the [`Bondable`] from which the bond starts.
-        pub fn origin(&self) -> &Point<D> {
-            self.map.bond_origin(self.id).unwrap()
-        }
-
-        /// Returns the position of the [`Bondable`] at which the bond ends.
-        pub fn terminus(&self) -> &Point<D> {
-            self.map.bond_terminus(self.id).unwrap()
-        }
-
-        /// Calculates the midpoint of the bond.
-        pub fn midpoint(&self) -> Point<D> {
-            self.map.bond_midpoint(self.id).unwrap()
-        }
-
-        /// Calculates the vector that the bond follows from its origin to its terminus.
-        pub fn vector(&self) -> Vector<D> {
-            self.map.bond_vector(self.id).unwrap()
-        }
-
-        /// Calculates the distance from the bond's origin to its terminus.
-        pub fn length(&self) -> f64 {
-            self.vector().magnitude()
-        }
-    }
-
-    impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Bond> {
-        /// Removes the bond from the map (but not its bonding partners).
-        pub fn delete(self) {
-            self.map.graph.delete_bond(self.id);
-        }
+/// Methods on pseudoatom views specific to a [`SpatialAtomMap`].
+impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Pseudoatom> {
+    /// Returns the position of the pseudoatom.
+    pub fn position(&self) -> &Point<D> {
+        self.map.pseudoatom_position(self.id).unwrap()
     }
 }
 
-/// An [`AtomMap`] extended to also hold the two-dimensional positions of its entities.
-pub type AtomMap2 = SpatialAtomMap<2, Relative>;
+/// Methods on mutable pseudoatom views specific to a [`SpatialAtomMap`].
+impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Pseudoatom> {
+    /// Removes the pseudoatom from the map, as well as any bonds to it.
+    pub fn delete(self) {
+        self.map.graph.delete_pseudoatom(self.id);
+    }
 
-/// An [`AtomMap`] extended to also hold the three-dimensional positions of its entities.
-pub type AtomMap3 = SpatialAtomMap<3, Angstrom>;
+    // /// Sets the position of the pseudoatom to the provided value.
+    // pub fn set_position(self, position: Point<D>) {
+    //     self.map.set_position(self.id, position);
+    // }
+}
+
+/// Methods on bond views specific to a [`SpatialAtomMap`].
+impl<'m, const D: usize, U: Unit> View<'m, SpatialAtomMap<D, U>, Bond> {
+    /// Returns the position of the [`Bondable`] from which the bond starts.
+    pub fn origin(&self) -> &Point<D> {
+        self.map.bond_origin(self.id).unwrap()
+    }
+
+    /// Returns the position of the [`Bondable`] at which the bond ends.
+    pub fn terminus(&self) -> &Point<D> {
+        self.map.bond_terminus(self.id).unwrap()
+    }
+
+    /// Calculates the midpoint of the bond.
+    pub fn midpoint(&self) -> Point<D> {
+        self.map.bond_midpoint(self.id).unwrap()
+    }
+
+    /// Calculates the vector that the bond follows from its origin to its terminus.
+    pub fn vector(&self) -> Vector<D> {
+        self.map.bond_vector(self.id).unwrap()
+    }
+
+    /// Calculates the distance from the bond's origin to its terminus.
+    pub fn length(&self) -> f64 {
+        self.vector().magnitude()
+    }
+}
+
+/// Methods on mutable bond views specific to a [`SpatialAtomMap`].
+impl<'m, const D: usize, U: Unit> ViewMut<'m, SpatialAtomMap<D, U>, Bond> {
+    /// Removes the bond from the map (but not its bonding partners).
+    pub fn delete(self) {
+        self.map.graph.delete_bond(self.id);
+    }
+}
 
 #[cfg(test)]
 #[allow(unused)]
