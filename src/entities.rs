@@ -143,13 +143,10 @@ pub trait Entity: Copy + Clone {
     /// Returns the concrete type appropriate for the specific kind of entity, wrapped
     /// in an enum where the variant corresponds to its kind.
     ///
-    /// This method achieves the same as `self.as_entity().resolve()`, but may have a
-    /// performance advantage for concrete entity types (i.e. those that implement
-    /// [`Kind`]), as they do not require any dynamic resolution of the entity's kind,
-    /// while conversion of the intermediate [`AnyEntity`] involves a runtime bitfield
-    /// check.
-    #[inline]
-    fn to_resolved(self) -> ResolvedEntity {
+    /// This method is functionally equivalent to `self.as_entity().resolve()`, but may
+    /// have a performance advantage for entity types that do not require dynamic
+    /// resolution of the entity's kind.
+    fn resolve_entity(self) -> ResolvedEntity {
         // By default go via the erased form - implementors can override if they
         // can do it more efficiently
         self.as_entity().resolve()
@@ -192,6 +189,14 @@ impl Entity for AnyEntity {
 
     fn into_inner(self, _: private::Token) -> Id {
         self.0
+    }
+
+    fn as_entity(self) -> AnyEntity {
+        self
+    }
+
+    fn resolve_entity(self) -> ResolvedEntity {
+        self.resolve()
     }
 }
 
@@ -328,7 +333,7 @@ macro_rules! new_kind {
                 }
 
                 #[inline]
-                fn to_resolved(self) -> ResolvedEntity {
+                fn resolve_entity(self) -> ResolvedEntity {
                     ResolvedEntity::$kind($kind(self.0))
                 }
             }
@@ -523,20 +528,17 @@ macro_rules! new_category {
             pub trait $category: Entity {
                 #[doc = concat!("Upcasts the specific entity type to a dynamic type representing any kind of [`", stringify!([<$category>]), "`] entity.")]
                 #[doc = ""]
-                #[doc = "The kind of the entity remains encoded in the ID itself and can be recovered dynamically at runtime using [`Entity::kind`] or [`resolve`]."]
+                #[doc = concat!("The kind of the entity remains encoded in the ID itself and can be recovered dynamically at runtime using [`Entity::kind`] or [`", stringify!([<Any $category>]), "::resolve`].")]
                 fn [<as_ $category:lower>](self) -> [<Any $category>] {
                     [<Any $category>](self.into_inner(private::Token))
                 }
 
                 #[doc = "Returns the appropriate concrete entity type wrapped in an enum where the variant corresponds to its kind."]
                 #[doc = ""]
-                #[doc = concat!("This method achieves the same as `self.", stringify!([<as_ $category:lower>]), "().resolve()`, but may have a ")]
-                #[doc = "performance advantage for concrete entity types (i.e. those that implement "]
-                #[doc = "[`Kind`]), as they do not require any dynamic resolution of the entity's kind, "]
-                #[doc = concat!("while conversion of the intermediate [`", stringify!([<Any $category>]), "`] involves a runtime bitfield ")]
-                #[doc = "check."]
+                #[doc = concat!("This method is functionally equivalent to `self.", stringify!([<as_ $category:lower>]), "().resolve()`, but may have a ")]
+                #[doc = "performance advantage for entity types that do not require dynamic resolution of the entity's kind."]
                 #[inline]
-                fn to_resolved(self) -> [<Resolved $category>] {
+                fn [<resolve_ $category:lower>](self) -> [<Resolved $category>] {
                     // By default go via the erased form - implementors can override if they
                     // can do it more efficiently
                     self.[<as_ $category:lower>]().resolve()
@@ -644,7 +646,7 @@ macro_rules! new_category {
 
             $(
                 impl $category for $kind {
-                    fn to_resolved(self) -> [<Resolved $category>] {
+                    fn [<resolve_ $category:lower>](self) -> [<Resolved $category>] {
                         // Unlike conversion of the union type, this is trivial and
                         // low-cost because we know what the kind is based on the type
                         [<Resolved $category>]::$kind(self)
@@ -654,7 +656,11 @@ macro_rules! new_category {
 
             // Also implement the trait for the erased struct type for consistency
 
-            impl $category for [<Any $category>] {}
+            impl $category for [<Any $category>] {
+                fn [<resolve_ $category:lower>](self) -> [<Resolved $category>] {
+                    self.resolve()
+                }
+            }
 
             // Infallible conversion with From for use by users.
             // These just replicate the conversions available via the trait's
@@ -674,7 +680,7 @@ macro_rules! new_category {
 
                 impl From<$kind> for [<Resolved $category>] {
                     fn from(entity: $kind) -> Self {
-                        $category::to_resolved(entity)
+                        entity.[<resolve_ $category:lower>]()
                     }
                 }
             )+
@@ -683,7 +689,7 @@ macro_rules! new_category {
 
             impl From<[<Any $category>]> for [<Resolved $category>] {
                 fn from(entity: [<Any $category>]) -> Self {
-                    $category::to_resolved(entity)
+                    entity.[<resolve_ $category:lower>]()
                 }
             }
 
@@ -992,7 +998,7 @@ mod tests {
     #[test]
     fn resolve() {
         // Mostly want to check the ergonomics of getting a tagged representation
-        match Atomlike::to_resolved(ATOM) {
+        match ATOM.resolve_atomlike() {
             ResolvedAtomlike::Atom(atom) => assert_eq!(atom, ATOM),
             ResolvedAtomlike::Pseudoatom(_) => panic!(),
         }

@@ -198,7 +198,7 @@ pub(crate) trait AtomicPositions<const D: usize>: Spatial<D> + Atomic {
 
     /// Returns the position of the atom or pseudoatom, or `None` if it is invalid.
     fn atomlike_position(&self, atomlike: impl Atomlike) -> Option<&Point<D>> {
-        match Atomlike::to_resolved(atomlike) {
+        match atomlike.resolve_atomlike() {
             ResolvedAtomlike::Atom(atom) => self.atom_position(atom),
             ResolvedAtomlike::Pseudoatom(pseudoatom) => self.pseudoatom_position(pseudoatom),
         }
@@ -219,7 +219,7 @@ pub(crate) trait AtomicPositions<const D: usize>: Spatial<D> + Atomic {
         atomlike: impl Atomlike,
         new: Point<D>,
     ) -> Option<Point<D>> {
-        match Atomlike::to_resolved(atomlike) {
+        match atomlike.resolve_atomlike() {
             ResolvedAtomlike::Atom(atom) => self.set_atom_position(atom, new),
             ResolvedAtomlike::Pseudoatom(pseudoatom) => {
                 self.set_pseudoatom_position(pseudoatom, new)
@@ -229,7 +229,7 @@ pub(crate) trait AtomicPositions<const D: usize>: Spatial<D> + Atomic {
 
     /// Returns the position of the bondable, or `None` if it is invalid.
     fn bondable_position(&self, bondable: impl Bondable) -> Option<&Point<D>> {
-        match Bondable::to_resolved(bondable) {
+        match bondable.resolve_bondable() {
             ResolvedBondable::Atom(atom) => self.atom_position(atom),
             ResolvedBondable::Pseudoatom(pseudoatom) => self.pseudoatom_position(pseudoatom),
         }
