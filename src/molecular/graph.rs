@@ -388,7 +388,7 @@ impl MolMap {
         let sub_data = self
             .data(substituent)
             .ok_or(Error::InvalidId(substituent.into()))?;
-        let is_member = match Fundamental::to_resolved(fundamental) {
+        let is_member = match fundamental.resolve_fundamental() {
             ResolvedFundamental::Atom(atom) => sub_data.atomlikes.contains(&atom.as_atomlike()),
             ResolvedFundamental::Pseudoatom(pseudoatom) => {
                 sub_data.atomlikes.contains(&pseudoatom.as_atomlike())
@@ -411,7 +411,7 @@ impl MolMap {
         let mol_data = self
             .data(molecule)
             .ok_or(Error::InvalidId(molecule.into()))?;
-        let is_member = match Fundamental::to_resolved(fundamental) {
+        let is_member = match fundamental.resolve_fundamental() {
             ResolvedFundamental::Atom(atom) => mol_data.substituents.iter().any(|sub| {
                 self.data(*sub)
                     .expect("Any substituent listed as a member should be valid")
@@ -1021,7 +1021,7 @@ impl Map for MolMap {
     }
 
     fn contains<E: Entity>(&self, entity: E) -> bool {
-        match entity.to_resolved() {
+        match entity.resolve_entity() {
             ResolvedEntity::Atom(atom) => self.inner.contains(atom),
             ResolvedEntity::Bond(bond) => self.inner.contains(bond),
             ResolvedEntity::Pseudoatom(pseudoatom) => self.inner.contains(pseudoatom),

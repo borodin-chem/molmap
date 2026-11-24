@@ -277,7 +277,7 @@ impl Map for AtomMap {
     }
 
     fn contains<E: Entity>(&self, entity: E) -> bool {
-        match entity.to_resolved() {
+        match entity.resolve_entity() {
             ResolvedEntity::Atom(atom) => {
                 <AtomMap as Stores<Atom>>::slotmap(self).contains_key(atom.to_key())
             }

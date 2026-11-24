@@ -365,8 +365,8 @@ impl TraversalQueue for BreadthFirstQueue {
 fn default_edge_sort(graph: &AtomMap, node_item: &mut NodeQueueItem) {
     node_item.edge_queue.make_contiguous().sort_by_key(|e| {
         // Lower number for priority means a higher priority
-        match e.dest.as_bondable().resolve() {
-            ResolvedBondable::Atom(atom) => {
+        match e.dest.resolve_atomlike() {
+            ResolvedAtomlike::Atom(atom) => {
                 match graph.data(atom).unwrap().element.atomic_number() {
                     1 => {
                         if e.degree == 1 {
@@ -379,7 +379,7 @@ fn default_edge_sort(graph: &AtomMap, node_item: &mut NodeQueueItem) {
                     x => x as u16 + 256, // Addition of 256 is a single bit flip 0 -> 1 with no carrying
                 }
             }
-            ResolvedBondable::Pseudoatom(_pseudoatom) => {
+            ResolvedAtomlike::Pseudoatom(_pseudoatom) => {
                 u16::MAX // Easy to compare as larger
             }
         }
